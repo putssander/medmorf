@@ -1,6 +1,10 @@
-# 🌐 In-Browser Translation Tool
+# 🌐 Medmorf - In-Browser Translation Tool
 
 A powerful web-based translation tool that runs entirely in your browser using Hugging Face's Transformers.js and the NLLB-200 translation model. Translate Excel spreadsheets and Word documents without sending your data to any server - all processing happens locally on your device!
+
+## 🚀 Live Demo
+
+**[Try it now: https://putssander.github.io/medmorf/](https://putssander.github.io/medmorf/)**
 
 ## ✨ Features
 
