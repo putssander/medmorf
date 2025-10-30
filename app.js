@@ -367,33 +367,56 @@ downloadBtn.addEventListener('click', () => {
     }
 });
 
-// Clear data button handler
-document.getElementById('clearDataBtn')?.addEventListener('click', () => {
-    if (confirm('Clear all data from memory and browser? This will remove uploaded files and translations.')) {
-        // Clear application data
-        currentFile = null;
-        workbook = null;
-        translatedData = null;
-        translator = null;
-        selectedColumns = [];
-        selectedSheet = null;
-        
-        // Clear UI
-        fileInfo.style.display = 'none';
-        excelSettings.style.display = 'none';
-        results.style.display = 'none';
-        downloadBtn.style.display = 'none';
-        translateBtn.disabled = true;
-        
-        // Reset file input
+// Automatic data clearing on page unload
+function clearAllData() {
+    console.log('[PRIVACY] Automatically clearing all data...');
+    
+    // Clear all data variables
+    currentFile = null;
+    workbook = null;
+    selectedSheet = null;
+    selectedColumns = [];
+    translatedData = null;
+    
+    // Reset file input
+    if (fileInput) {
         fileInput.value = '';
-        
-        // Call security manager
-        if (window.medmorfSecurity) {
-            window.medmorfSecurity.clearAll();
-        }
-        
-        alert('✅ All data cleared! Safe to close browser.');
+    }
+    
+    // Call security manager
+    if (window.medmorfSecurity) {
+        window.medmorfSecurity.clearAll();
+    }
+    
+    console.log('[PRIVACY] All data cleared automatically');
+}
+
+// Clear data when page is unloaded (closing tab, refreshing, navigating away)
+window.addEventListener('beforeunload', (e) => {
+    clearAllData();
+});
+
+// Clear data when page becomes hidden (switching tabs, minimizing)
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        console.log('[PRIVACY] Page hidden - keeping data in memory');
+    }
+});
+
+// Clear data when page loses focus for extended period
+let blurTimeout;
+window.addEventListener('blur', () => {
+    // Clear after 30 minutes of inactivity
+    blurTimeout = setTimeout(() => {
+        console.log('[PRIVACY] Extended inactivity - clearing data');
+        clearAllData();
+    }, 30 * 60 * 1000);
+});
+
+window.addEventListener('focus', () => {
+    // Cancel the clear timeout if user returns
+    if (blurTimeout) {
+        clearTimeout(blurTimeout);
     }
 });
 

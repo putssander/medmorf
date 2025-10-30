@@ -14,7 +14,7 @@ A powerful web-based translation tool that runs entirely in your browser using H
   - ✅ Zero tracking, cookies, or analytics
   - ✅ GDPR compliant by design
   - ✅ Suitable for HIPAA-compliant workflows
-  - ✅ Includes "Clear All Data" button for sensitive data
+  - ✅ **Automatic data clearing** when you close the tab or navigate away
 - **📊 Excel Support**: Upload `.xlsx` files and select specific sheets and columns to translate
 - **📝 Word Support**: Upload `.docx` files for full document translation
 - **🎯 Multiple Languages**: Support for Dutch, English, German, French, Spanish, Italian, Portuguese, and more
@@ -57,8 +57,8 @@ Medmorf is specifically designed for processing sensitive healthcare data:
 - **No Server Processing**: All translation happens in YOUR browser using WebAssembly
 - **No Data Transmission**: Your files never leave your device
 - **No Cloud Services**: We don't have servers - nothing to hack or breach
-- **Memory Clearing**: Data automatically cleared when you close the tab
-- **Manual Clear**: "Clear All Data" button for immediate data removal
+- **Automatic Memory Clearing**: Data automatically cleared when you close the tab, refresh, or navigate away
+- **Inactivity Protection**: Data cleared after 30 minutes of inactivity
 - **Audit Trail**: Open source code anyone can verify
 - **Privacy Verification**: Run `window.medmorfSecurity.getPrivacyReport()` in console to verify
 
@@ -67,9 +67,9 @@ Medmorf is specifically designed for processing sensitive healthcare data:
 ✅ **Recommended**:
 - Use on encrypted, password-protected devices
 - Use private/incognito browser mode
-- Clear data after each session
-- Close browser when finished
+- Close tab when finished (data clears automatically)
 - Verify HTTPS connection (🔒 in address bar)
+- No manual clearing needed - fully automated
 
 ❌ **Not Recommended**:
 - Public or shared computers
