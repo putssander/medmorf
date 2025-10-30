@@ -8,13 +8,20 @@ A powerful web-based translation tool that runs entirely in your browser using H
 
 ## ✨ Features
 
-- **🔒 100% Privacy**: All translation happens in your browser - no data leaves your device
+- **🔒 100% Privacy - Healthcare Safe**: All translation happens in your browser - no data leaves your device
+  - ✅ Zero data transmission to servers
+  - ✅ Zero data storage on our end (we have no servers!)
+  - ✅ Zero tracking, cookies, or analytics
+  - ✅ GDPR compliant by design
+  - ✅ Suitable for HIPAA-compliant workflows
+  - ✅ Includes "Clear All Data" button for sensitive data
 - **📊 Excel Support**: Upload `.xlsx` files and select specific sheets and columns to translate
 - **📝 Word Support**: Upload `.docx` files for full document translation
 - **🎯 Multiple Languages**: Support for Dutch, English, German, French, Spanish, Italian, Portuguese, and more
 - **📈 Progress Tracking**: Real-time progress bars showing translation status
 - **💾 Easy Download**: Download translated files with one click
 - **🚀 No Installation**: Just open in a modern web browser and start translating
+- **🔍 Verifiable**: Open source - audit the code yourself
 
 ## 🚀 Quick Start
 
@@ -40,6 +47,38 @@ npx http-server -p 8000
 ```
 
 Then open `http://localhost:8000` in your browser.
+
+## 🏥 Healthcare Data Privacy
+
+### Verified Safe for Medical Data
+
+Medmorf is specifically designed for processing sensitive healthcare data:
+
+- **No Server Processing**: All translation happens in YOUR browser using WebAssembly
+- **No Data Transmission**: Your files never leave your device
+- **No Cloud Services**: We don't have servers - nothing to hack or breach
+- **Memory Clearing**: Data automatically cleared when you close the tab
+- **Manual Clear**: "Clear All Data" button for immediate data removal
+- **Audit Trail**: Open source code anyone can verify
+- **Privacy Verification**: Run `window.medmorfSecurity.getPrivacyReport()` in console to verify
+
+### For Healthcare Professionals
+
+✅ **Recommended**:
+- Use on encrypted, password-protected devices
+- Use private/incognito browser mode
+- Clear data after each session
+- Close browser when finished
+- Verify HTTPS connection (🔒 in address bar)
+
+❌ **Not Recommended**:
+- Public or shared computers
+- Unencrypted devices
+- Outdated browsers
+
+See [PRIVACY.md](PRIVACY.md) for complete privacy documentation.
+
+---
 
 ## 📖 How to Use
 

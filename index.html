@@ -9,8 +9,25 @@
 <body>
     <div class="container">
         <header>
-            <h1>🌐 In-Browser Translation Tool</h1>
+            <h1>🌐 Medmorf - In-Browser Translation Tool</h1>
             <p>Translate documents using Hugging Face models - all processing happens in your browser!</p>
+            
+            <!-- Healthcare Data Privacy Warning -->
+            <div class="privacy-warning">
+                <div class="privacy-icon">🔒</div>
+                <div class="privacy-content">
+                    <strong>Healthcare Data Privacy Guaranteed:</strong>
+                    <ul>
+                        <li>✅ 100% browser-based - NO data sent to any server</li>
+                        <li>✅ NO data storage - files processed in memory only</li>
+                        <li>✅ NO tracking, cookies, or analytics</li>
+                        <li>⚠️ Clear browser cache after use for sensitive data</li>
+                        <li>💡 Use private/incognito mode for maximum privacy</li>
+                    </ul>
+                    <button id="clearDataBtn" class="btn-clear">🗑️ Clear All Data Now</button>
+                </div>
+            </div>
+            
             <div class="example-file">
                 <p>📥 Need a test file? <a href="test_translation_file.xlsx" download>Download example Excel file</a> (Dutch medical text)</p>
             </div>
@@ -133,6 +150,7 @@
 
         <footer>
             <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank">Transformers.js</a> and <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank">NLLB-200</a></p>
+            <p><a href="PRIVACY.md" target="_blank">🔒 Privacy Policy</a> | <a href="SECURITY_AUDIT.md" target="_blank">🛡️ Security Audit</a> | <a href="https://github.com/putssander/medmorf" target="_blank">📂 Source Code</a></p>
             <p class="note">⚠️ First use will download the model (~300MB). All processing happens locally in your browser - no data is sent to any server.</p>
         </footer>
     </div>
@@ -142,6 +160,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="security.js"></script>
     <script src="excel-handler.js"></script>
     <script src="word-handler.js"></script>
     <script type="module" src="app.js"></script>

@@ -56,6 +56,64 @@ header p {
     opacity: 0.9;
 }
 
+/* Privacy Warning */
+.privacy-warning {
+    margin-top: 1.5rem;
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    color: var(--text-primary);
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border: 2px solid #10b981;
+}
+
+.privacy-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+}
+
+.privacy-content {
+    flex: 1;
+}
+
+.privacy-content strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    color: #10b981;
+}
+
+.privacy-content ul {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+    font-size: 0.9rem;
+}
+
+.privacy-content li {
+    padding: 0.25rem 0;
+}
+
+.btn-clear {
+    margin-top: 0.75rem;
+    padding: 0.5rem 1rem;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.3s ease;
+}
+
+.btn-clear:hover {
+    background: #dc2626;
+}
+
 .example-file {
     margin-top: 1rem;
     padding: 0.75rem 1.5rem;

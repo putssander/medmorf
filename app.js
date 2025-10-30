@@ -367,5 +367,46 @@ downloadBtn.addEventListener('click', () => {
     }
 });
 
+// Clear data button handler
+document.getElementById('clearDataBtn')?.addEventListener('click', () => {
+    if (confirm('Clear all data from memory and browser? This will remove uploaded files and translations.')) {
+        // Clear application data
+        currentFile = null;
+        workbook = null;
+        translatedData = null;
+        translator = null;
+        selectedColumns = [];
+        selectedSheet = null;
+        
+        // Clear UI
+        fileInfo.style.display = 'none';
+        excelSettings.style.display = 'none';
+        results.style.display = 'none';
+        downloadBtn.style.display = 'none';
+        translateBtn.disabled = true;
+        
+        // Reset file input
+        fileInput.value = '';
+        
+        // Call security manager
+        if (window.medmorfSecurity) {
+            window.medmorfSecurity.clearAll();
+        }
+        
+        alert('✅ All data cleared! Safe to close browser.');
+    }
+});
+
+// Add warning when user is about to leave with data
+window.addEventListener('beforeunload', (e) => {
+    if (currentFile || translatedData) {
+        e.preventDefault();
+        e.returnValue = 'You have processed data in memory. Clear it before leaving for maximum security.';
+    }
+});
+
 // Initialize
 console.log('Translation app initialized');
+console.log('🔒 PRIVACY: All processing happens in YOUR browser only');
+console.log('🔒 PRIVACY: NO data is ever sent to any server');
+console.log('🔒 PRIVACY: Type window.medmorfSecurity.showWarnings() for privacy info');
