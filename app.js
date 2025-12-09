@@ -37,6 +37,139 @@ const sheetSelect = document.getElementById('sheetSelect');
 const columnCheckboxes = document.getElementById('columnCheckboxes');
 const sourceLanguage = document.getElementById('sourceLanguage');
 const targetLanguage = document.getElementById('targetLanguage');
+const modelCacheStatus = document.getElementById('modelCacheStatus');
+const clearModelBtn = document.getElementById('clearModelBtn');
+const systemStatusIndicator = document.querySelector('.status-indicator');
+const systemStatusText = document.getElementById('systemStatusText');
+
+function updateSystemStatus(state, message) {
+    // state: 'idle', 'loading', 'translating'
+    if (systemStatusIndicator) {
+        systemStatusIndicator.className = `status-indicator ${state}`;
+    }
+    if (systemStatusText) {
+        systemStatusText.textContent = message;
+    }
+}
+
+// Quick translate DOM elements\nconst quickInputText = document.getElementById('quickInputText');\nconst quickOutputText = document.getElementById('quickOutputText');\nconst quickSourceLang = document.getElementById('quickSourceLang');\nconst quickTargetLang = document.getElementById('quickTargetLang');\nconst quickTranslateStatus = document.getElementById('quickTranslateStatus');\nconst inputCharCount = document.getElementById('inputCharCount');\nconst copyOutputBtn = document.getElementById('copyOutputBtn');
+
+
+// Quick translate functionality
+let quickTranslateTimeout = null;
+let isQuickTranslateActive = false;
+let lastTranslatedText = '';
+
+quickInputText.addEventListener('input', () => {
+    // Update character count
+    inputCharCount.textContent = quickInputText.value.length;
+    
+    // Clear output if input is empty
+    if (!quickInputText.value.trim()) {
+        quickOutputText.value = '';
+        quickTranslateStatus.innerHTML = '';
+        quickTranslateStatus.className = 'quick-status';
+        lastTranslatedText = '';
+        return;
+    }
+    
+    // Auto-translate with longer debounce (1.5s after user stops typing)
+    clearTimeout(quickTranslateTimeout);
+    quickTranslateTimeout = setTimeout(() => {
+        // Only translate if text changed since last translation
+        const currentText = quickInputText.value.trim();
+        if (currentText && currentText !== lastTranslatedText) {
+            performQuickTranslate();
+        }
+    }, 1500);
+});
+
+async function performQuickTranslate() {
+    const text = quickInputText.value.trim();
+    if (!text) return;
+    
+    // Prevent multiple simultaneous translations
+    if (isQuickTranslateActive) return;
+    
+    const srcLang = quickSourceLang.value;
+    const tgtLang = quickTargetLang.value;
+    
+    isQuickTranslateActive = true;
+    updateSystemStatus('translating', 'Translating text...');
+    
+    // Show loading in quick translate area with progress bar
+    if (!translator) {
+        quickTranslateStatus.innerHTML = `
+            <div class="quick-status-content">
+                <span class="loading-spinner"></span>
+                <span>Loading translation model (first time only)...</span>
+            </div>
+            <div class="quick-progress-bar">
+                <div class="quick-progress-fill" id="quickProgressFill"></div>
+            </div>
+        `;
+        quickTranslateStatus.className = 'quick-status loading';
+    } else {
+        quickTranslateStatus.innerHTML = `
+            <div class="quick-status-content">
+                <span class="loading-spinner"></span>
+                <span>Translating...</span>
+            </div>
+        `;
+        quickTranslateStatus.className = 'quick-status loading';
+    }
+    
+    try {
+        await initTranslator();
+        updateSystemStatus('translating', 'Translating text...');
+        quickTranslateStatus.innerHTML = `
+            <div class="quick-status-content">
+                <span class="loading-spinner"></span>
+                <span>Translating...</span>
+            </div>
+        `;
+        const result = await translateText(text, srcLang, tgtLang);
+        quickOutputText.value = result;
+        lastTranslatedText = text;
+        quickTranslateStatus.innerHTML = '';
+        quickTranslateStatus.className = 'quick-status';
+    } catch (error) {
+        console.error('Quick translate error:', error);
+        quickTranslateStatus.innerHTML = '<div class="quick-status-content">Translation failed. Please try again.</div>';
+        quickTranslateStatus.className = 'quick-status error';
+    } finally {
+        isQuickTranslateActive = false;
+        updateSystemStatus('idle', 'System Ready (Idle)');
+    }
+}
+
+copyOutputBtn.addEventListener('click', async () => {
+    const text = quickOutputText.value;
+    if (!text) return;
+    
+    try {
+        await navigator.clipboard.writeText(text);
+        copyOutputBtn.classList.add('copied');
+        copyOutputBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Copied!
+        `;
+        setTimeout(() => {
+            copyOutputBtn.classList.remove('copied');
+            copyOutputBtn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                Copy
+            `;
+        }, 2000);
+    } catch (error) {
+        console.error('Copy failed:', error);
+    }
+});
 
 // Upload area interactions
 uploadArea.addEventListener('click', () => fileInput.click());
@@ -165,24 +298,67 @@ function updateSelectedColumns() {
 async function initTranslator() {
     if (translator) return;
     
-    modelStatus.style.display = 'block';
+    updateSystemStatus('loading', 'Loading model to memory...');
+    
+    // Show in appropriate location based on context
+    if (!isQuickTranslateActive) {
+        modelStatus.style.display = 'block';
+    }
+    
+    // Track progress of all files to show a unified progress bar
+    const fileProgress = {};
     
     try {
         translator = await pipeline('translation', 'Xenova/nllb-200-distilled-600M', {
             progress_callback: (progress) => {
-                if (progress.status === 'downloading') {
-                    const percent = Math.round((progress.loaded / progress.total) * 100);
-                    modelProgress.style.width = percent + '%';
-                    modelStatusText.textContent = `Downloading model: ${percent}%`;
-                } else if (progress.status === 'loading') {
-                    modelStatusText.textContent = 'Loading model...';
-                } else if (progress.status === 'ready') {
-                    modelStatusText.textContent = 'Model ready!';
+                if (progress.status === 'initiate') {
+                    modelStatusText.textContent = 'Starting download...';
+                    updateSystemStatus('loading', 'Starting model download...');
+                } else if (progress.status === 'progress') {
+                    // Update progress for this specific file
+                    const fileName = progress.file || 'model data';
+                    fileProgress[fileName] = {
+                        loaded: progress.loaded,
+                        total: progress.total
+                    };
+                    
+                    // Calculate total progress across all files
+                    const totalLoaded = Object.values(fileProgress).reduce((acc, curr) => acc + curr.loaded, 0);
+                    const totalSize = Object.values(fileProgress).reduce((acc, curr) => acc + curr.total, 0);
+                    
+                    if (totalSize > 0) {
+                        const totalPercent = Math.round((totalLoaded / totalSize) * 100);
+                        
+                        modelProgress.style.width = totalPercent + '%';
+                        
+                        if (isQuickTranslateActive) {
+                            const quickProgressFill = document.getElementById('quickProgressFill');
+                            if (quickProgressFill) {
+                                quickProgressFill.style.width = totalPercent + '%';
+                            }
+                        }
+                        
+                        modelStatusText.textContent = `Downloading model: ${totalPercent}%`;
+                        updateSystemStatus('loading', `Downloading model: ${totalPercent}%`);
+                        
+                        // Also update quick translate status text if active
+                        if (isQuickTranslateActive) {
+                            const statusContent = quickTranslateStatus.querySelector('.quick-status-content span:last-child');
+                            if (statusContent) {
+                                statusContent.textContent = `Downloading model: ${totalPercent}%`;
+                            }
+                        }
+                    }
+                } else if (progress.status === 'done') {
+                    modelStatusText.textContent = 'Download complete. Loading to memory...';
+                    updateSystemStatus('loading', 'Loading model to memory...');
                 }
             }
         });
         
         modelStatusText.textContent = 'Model loaded successfully! ✓';
+        updateSystemStatus('idle', 'System Ready (Idle)');
+        checkModelStatus();
         setTimeout(() => {
             modelStatus.style.display = 'none';
         }, 2000);
@@ -190,6 +366,11 @@ async function initTranslator() {
     } catch (error) {
         console.error('Error loading model:', error);
         modelStatusText.textContent = 'Error loading model: ' + error.message;
+        updateSystemStatus('idle', 'Error loading model');
+        if (isQuickTranslateActive) {
+            quickTranslateStatus.innerHTML = '<div class="quick-status-content">Error loading model: ' + error.message + '</div>';
+            quickTranslateStatus.className = 'quick-status error';
+        }
         throw error;
     }
 }
@@ -198,16 +379,34 @@ async function initTranslator() {
 async function translateText(text, srcLang, tgtLang) {
     if (!text || text.trim() === '') return text;
     
-    try {
-        const result = await translator(text, {
-            src_lang: srcLang,
-            tgt_lang: tgtLang
-        });
-        return result[0].translation_text;
-    } catch (error) {
-        console.error('Translation error:', error);
-        return text; // Return original text on error
+    // Split text into paragraphs to handle long inputs and avoid truncation
+    // The model has a limited context window, so passing a huge block of text
+    // often results in only the first part being translated.
+    const paragraphs = text.split('\n');
+    const translatedParagraphs = [];
+    
+    for (let i = 0; i < paragraphs.length; i++) {
+        const paragraph = paragraphs[i];
+        
+        if (!paragraph.trim()) {
+            translatedParagraphs.push(paragraph);
+            continue;
+        }
+        
+        try {
+            // Process paragraph
+            const result = await translator(paragraph, {
+                src_lang: srcLang,
+                tgt_lang: tgtLang
+            });
+            translatedParagraphs.push(result[0].translation_text);
+        } catch (error) {
+            console.error('Translation error:', error);
+            translatedParagraphs.push(paragraph); // Return original on error
+        }
     }
+    
+    return translatedParagraphs.join('\n');
 }
 
 // Translate button handler
@@ -219,9 +418,11 @@ translateBtn.addEventListener('click', async () => {
     results.style.display = 'none';
     translationProgress.style.display = 'block';
     startTime = Date.now();
+    updateSystemStatus('loading', 'Initializing translation...');
     
     try {
         await initTranslator();
+        updateSystemStatus('translating', 'Translating file...');
         
         const srcLang = sourceLanguage.value;
         const tgtLang = targetLanguage.value;
@@ -241,9 +442,11 @@ translateBtn.addEventListener('click', async () => {
     } catch (error) {
         console.error('Translation error:', error);
         alert('Translation failed: ' + error.message);
+        updateSystemStatus('idle', 'Translation failed');
     } finally {
         translateBtn.disabled = false;
         translationProgress.style.display = 'none';
+        updateSystemStatus('idle', 'System Ready (Idle)');
     }
 });
 
@@ -432,4 +635,55 @@ window.addEventListener('beforeunload', (e) => {
 console.log('Translation app initialized');
 console.log('🔒 PRIVACY: All processing happens in YOUR browser only');
 console.log('🔒 PRIVACY: NO data is ever sent to any server');
+
+// Model Management
+async function checkModelStatus() {
+    if (!modelCacheStatus) return;
+    
+    try {
+        const cacheExists = await caches.has('transformers-cache');
+        if (cacheExists) {
+            modelCacheStatus.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                Model is cached and ready for offline use
+            `;
+            clearModelBtn.disabled = false;
+        } else {
+            modelCacheStatus.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                Model not cached (will download on first use)
+            `;
+            clearModelBtn.disabled = true;
+        }
+    } catch (error) {
+        console.error('Error checking cache:', error);
+        modelCacheStatus.textContent = 'Could not check model status';
+    }
+}
+
+if (clearModelBtn) {
+    clearModelBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to delete the cached model? You will need to download it again (~300MB) next time you translate.')) {
+            return;
+        }
+        
+        try {
+            const deleted = await caches.delete('transformers-cache');
+            if (deleted) {
+                alert('Model cache cleared successfully.');
+                checkModelStatus();
+                // Reset translator instance
+                translator = null;
+            } else {
+                alert('No model cache found to delete.');
+            }
+        } catch (error) {
+            console.error('Error clearing cache:', error);
+            alert('Error clearing cache: ' + error.message);
+        }
+    });
+}
+
+// Check status on load
+checkModelStatus();
 console.log('🔒 PRIVACY: Type window.medmorfSecurity.showWarnings() for privacy info');

@@ -52,7 +52,65 @@
             </div>
         </header>
 
+        <!-- System Status Bar -->
+        <div id="systemStatus" class="system-status">
+            <div class="status-indicator idle"></div>
+            <span id="systemStatusText">System Ready (Idle)</span>
+        </div>
+
         <main>
+            <!-- Quick Translate Section -->
+            <section class="quick-translate-section">
+                <h2>Quick Translate</h2>
+                <div class="translate-container">
+                    <div class="translate-box">
+                        <div class="translate-header">
+                            <select id="quickSourceLang" class="lang-select">
+                                <option value="nld_Latn">Dutch</option>
+                                <option value="eng_Latn">English</option>
+                                <option value="deu_Latn">German</option>
+                                <option value="fra_Latn">French</option>
+                                <option value="spa_Latn">Spanish</option>
+                                <option value="ita_Latn">Italian</option>
+                                <option value="por_Latn">Portuguese</option>
+                            </select>
+                        </div>
+                        <textarea id="quickInputText" placeholder="Enter text to translate..." rows="6"></textarea>
+                        <div class="translate-footer">
+                            <span class="char-count"><span id="inputCharCount">0</span> characters</span>
+                        </div>
+                    </div>
+                    <div class="translate-box">
+                        <div class="translate-header">
+                            <select id="quickTargetLang" class="lang-select">
+                                <option value="eng_Latn">English</option>
+                                <option value="nld_Latn">Dutch</option>
+                                <option value="deu_Latn">German</option>
+                                <option value="fra_Latn">French</option>
+                                <option value="spa_Latn">Spanish</option>
+                                <option value="ita_Latn">Italian</option>
+                                <option value="por_Latn">Portuguese</option>
+                            </select>
+                        </div>
+                        <textarea id="quickOutputText" placeholder="Translation will appear here..." rows="6" readonly></textarea>
+                        <div class="translate-footer">
+                            <button id="copyOutputBtn" class="copy-btn" title="Copy to clipboard">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                </svg>
+                                Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div id="quickTranslateStatus" class="quick-status"></div>
+            </section>
+
+            <div class="section-divider">
+                <span>or translate files</span>
+            </div>
+
             <!-- File Upload Section -->
             <section class="upload-section">
                 <div class="upload-area" id="uploadArea">
@@ -174,6 +232,19 @@
                 <div class="results-info">
                     <p><strong>Items translated:</strong> <span id="totalTranslated"></span></p>
                     <p><strong>Time taken:</strong> <span id="timeTaken"></span></p>
+                </div>
+            </section>
+            <!-- Model Management -->
+            <section class="model-management" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div id="modelCacheStatus" style="color: var(--text-secondary); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                        Checking model status...
+                    </div>
+                    <button id="clearModelBtn" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        Clear Model Cache
+                    </button>
                 </div>
             </section>
         </main>
