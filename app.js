@@ -1,4 +1,4 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/src/transformers.js';
 
 // Configure transformers.js
 env.allowLocalModels = false;
@@ -52,13 +52,17 @@ function updateSystemStatus(state, message) {
     }
 }
 
-// Quick translate DOM elements\nconst quickInputText = document.getElementById('quickInputText');\nconst quickOutputText = document.getElementById('quickOutputText');\nconst quickSourceLang = document.getElementById('quickSourceLang');\nconst quickTargetLang = document.getElementById('quickTargetLang');\nconst quickTranslateStatus = document.getElementById('quickTranslateStatus');\nconst inputCharCount = document.getElementById('inputCharCount');\nconst copyOutputBtn = document.getElementById('copyOutputBtn');
+// Quick translate DOM elements
+const quickInputText = document.getElementById('quickInputText');
+const quickOutputText = document.getElementById('quickOutputText');
+const quickTranslateStatus = document.getElementById('quickTranslateStatus');
+const inputCharCount = document.getElementById('inputCharCount');
+const copyOutputBtn = document.getElementById('copyOutputBtn');
+const quickTranslateBtn = document.getElementById('quickTranslateBtn');
 
 
 // Quick translate functionality
-let quickTranslateTimeout = null;
 let isQuickTranslateActive = false;
-let lastTranslatedText = '';
 
 quickInputText.addEventListener('input', () => {
     // Update character count
@@ -69,19 +73,27 @@ quickInputText.addEventListener('input', () => {
         quickOutputText.value = '';
         quickTranslateStatus.innerHTML = '';
         quickTranslateStatus.className = 'quick-status';
-        lastTranslatedText = '';
         return;
     }
-    
-    // Auto-translate with longer debounce (1.5s after user stops typing)
-    clearTimeout(quickTranslateTimeout);
-    quickTranslateTimeout = setTimeout(() => {
-        // Only translate if text changed since last translation
-        const currentText = quickInputText.value.trim();
-        if (currentText && currentText !== lastTranslatedText) {
+});
+
+// Manual translate button
+quickTranslateBtn.addEventListener('click', () => {
+    const text = quickInputText.value.trim();
+    if (text && !isQuickTranslateActive) {
+        performQuickTranslate();
+    }
+});
+
+// Also translate on Enter (Ctrl+Enter or Cmd+Enter)
+quickInputText.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        const text = quickInputText.value.trim();
+        if (text && !isQuickTranslateActive) {
             performQuickTranslate();
         }
-    }, 1500);
+    }
 });
 
 async function performQuickTranslate() {
@@ -91,8 +103,8 @@ async function performQuickTranslate() {
     // Prevent multiple simultaneous translations
     if (isQuickTranslateActive) return;
     
-    const srcLang = quickSourceLang.value;
-    const tgtLang = quickTargetLang.value;
+    const srcLang = sourceLanguage.value;
+    const tgtLang = targetLanguage.value;
     
     isQuickTranslateActive = true;
     updateSystemStatus('translating', 'Translating text...');
@@ -130,7 +142,6 @@ async function performQuickTranslate() {
         `;
         const result = await translateText(text, srcLang, tgtLang);
         quickOutputText.value = result;
-        lastTranslatedText = text;
         quickTranslateStatus.innerHTML = '';
         quickTranslateStatus.className = 'quick-status';
     } catch (error) {

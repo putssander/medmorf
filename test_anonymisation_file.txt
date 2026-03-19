@@ -1,0 +1,21 @@
+ictief interview (testdataset voor anonimisatie)
+Interviewer: Goedemiddag, kunt u zichzelf voorstellen?
+Patiënt: Ja, mijn naam is Johan Pieter de Vries. Ik ben geboren op 12 maart 1981 in Utrecht. Momenteel woon ik op Kastanjelaan 58, 6221 BN Maastricht.
+Interviewer: Dank u. Wat is uw burgerservicenummer?
+Patiënt: Dat is 731245689.
+Interviewer: Kunt u ook uw contactgegevens geven?
+Patiënt: Mijn telefoonnummer is +31 6 12345678 en mijn e-mailadres is j.p.devries81@gmail.com.
+Interviewer: Wie is uw contactpersoon in noodgevallen?
+Patiënt: Dat is mijn vrouw, Sanne de Vries, bereikbaar op +31 6 87654321. Zij woont op hetzelfde adres als ik.
+Interviewer: Heeft u kinderen?
+Patiënt: Ja, twee. Lucas de Vries (geboren 2012) en Emma de Vries (geboren 2015). Ze zitten op de basisschool De Horizon in Maastricht.
+Interviewer: Wat doet u voor werk?
+Patiënt: Ik werk als IT-consultant bij TechSolutions BV, gevestigd aan Stationsstraat 12, Eindhoven. Mijn werk e-mailadres is j.devries@techsolutions.nl.
+Interviewer: Wat is uw medische voorgeschiedenis?
+Patiënt: Ik heb type 2 diabetes sinds 2018 en gebruik daarvoor metformine 500 mg. Daarnaast heb ik in 2021 een operatie gehad in het Maastricht UMC+.
+Interviewer: Wat is uw zorgverzekeraar en polisnummer?
+Patiënt: Ik ben verzekerd bij ZorgDirect met polisnummer ZD-99887766.
+Interviewer: Heeft u recente medische klachten?
+Patiënt: Ja, sinds 5 februari 2026 ervaar ik kortademigheid en vermoeidheid. Mijn huisarts, Dr. Anne Jansen van Huisartsenpraktijk Sint Pieter, heeft mij doorverwezen.
+Interviewer: Zijn er nog andere relevante gegevens?
+Patiënt: Mijn IBAN is NL91 ABNA 0417 1643 00 voor eventuele declaraties. Mijn rijbewijsnummer is R1234567.

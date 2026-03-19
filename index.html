@@ -3,261 +3,456 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>In-Browser Translation Tool</title>
+    <title>MedMorf — Translate & Anonymize</title>
     <link rel="stylesheet" href="styles.css">
+    <script type="importmap">
+    {
+        "imports": {
+            "sharp": "./stubs/null-module.js",
+            "fs": "./stubs/empty-module.js",
+            "path": "./stubs/empty-module.js",
+            "url": "./stubs/empty-module.js",
+            "onnxruntime-node": "./stubs/null-module.js",
+            "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.3/dist/index.js",
+            "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/ort.all.min.mjs",
+            "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.22.0-dev.20250409-89f8206ba4/dist/esm/index.js",
+            "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js"
+        }
+    }
+    </script>
 </head>
 <body>
     <div class="container">
         <header>
             <div class="header-content">
                 <div class="logo">
-                    <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polyline points="23 4 23 10 17 10"></polyline>
                         <polyline points="1 20 1 14 7 14"></polyline>
                         <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
                     </svg>
                     <div class="logo-text">
                         <h1>MedMorf</h1>
-                        <p class="tagline">Morph Your Data. Securely.</p>
                     </div>
                 </div>
-                <p class="header-description">Transform medical documents with privacy-first, in-browser processing. Translation is just the beginning.</p>
-            </div>
-            
-            <!-- Healthcare Data Privacy Warning -->
-            <div class="privacy-badge">
-                <div class="privacy-badge-header">
-                    <svg class="privacy-badge-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                    <strong>Healthcare-Grade Privacy</strong>
+                <div class="privacy-pills">
+                    <span class="privacy-pill">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                        100% in-browser
+                    </span>
+                    <span class="privacy-pill">Zero data transmission</span>
+                    <span class="privacy-pill">Auto-clears on exit</span>
                 </div>
-                <div class="privacy-features">
-                    <span class="privacy-feature">✓ Zero data transmission</span>
-                    <span class="privacy-feature">✓ Browser-only processing</span>
-                    <span class="privacy-feature">✓ No tracking or storage</span>
-                    <span class="privacy-feature">✓ GDPR & HIPAA ready</span>
-                    <span class="privacy-feature">✓ Auto-clears on exit</span>
-                </div>
-            </div>
-            
-            <div class="example-file-link">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="7 10 12 15 17 10"></polyline>
-                    <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span>Try it out: <a href="test_translation_file.xlsx" download>Download example file</a> (Dutch medical text)</span>
             </div>
         </header>
 
         <!-- System Status Bar -->
         <div id="systemStatus" class="system-status">
             <div class="status-indicator idle"></div>
-            <span id="systemStatusText">System Ready (Idle)</span>
+            <span id="systemStatusText">System Ready</span>
         </div>
 
+        <!-- Tab Navigation -->
+        <nav class="tab-bar">
+            <button class="tab-btn active" data-tab="translate">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path>
+                </svg>
+                Translate
+            </button>
+            <button class="tab-btn" data-tab="anonymize">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                </svg>
+                Anonymize
+            </button>
+        </nav>
+
         <main>
-            <!-- Quick Translate Section -->
-            <section class="quick-translate-section">
-                <h2>Quick Translate</h2>
-                <div class="translate-container">
-                    <div class="translate-box">
-                        <div class="translate-header">
-                            <select id="quickSourceLang" class="lang-select">
-                                <option value="nld_Latn">Dutch</option>
-                                <option value="eng_Latn">English</option>
-                                <option value="deu_Latn">German</option>
-                                <option value="fra_Latn">French</option>
-                                <option value="spa_Latn">Spanish</option>
-                                <option value="ita_Latn">Italian</option>
-                                <option value="por_Latn">Portuguese</option>
-                            </select>
-                        </div>
-                        <textarea id="quickInputText" placeholder="Enter text to translate..." rows="6"></textarea>
-                        <div class="translate-footer">
-                            <span class="char-count"><span id="inputCharCount">0</span> characters</span>
-                        </div>
-                    </div>
-                    <div class="translate-box">
-                        <div class="translate-header">
-                            <select id="quickTargetLang" class="lang-select">
-                                <option value="eng_Latn">English</option>
-                                <option value="nld_Latn">Dutch</option>
-                                <option value="deu_Latn">German</option>
-                                <option value="fra_Latn">French</option>
-                                <option value="spa_Latn">Spanish</option>
-                                <option value="ita_Latn">Italian</option>
-                                <option value="por_Latn">Portuguese</option>
-                            </select>
-                        </div>
-                        <textarea id="quickOutputText" placeholder="Translation will appear here..." rows="6" readonly></textarea>
-                        <div class="translate-footer">
-                            <button id="copyOutputBtn" class="copy-btn" title="Copy to clipboard">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                                </svg>
-                                Copy
-                            </button>
-                        </div>
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- TRANSLATE TAB                              -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel active" id="tab-translate">
+
+                <!-- Language Bar (shared for text & file translation) -->
+                <div class="translate-lang-bar">
+                    <div class="lang-pair">
+                        <select id="sourceLanguage" class="lang-select">
+                            <option value="nld_Latn">Dutch</option>
+                            <option value="eng_Latn">English</option>
+                            <option value="deu_Latn">German</option>
+                            <option value="fra_Latn">French</option>
+                            <option value="spa_Latn">Spanish</option>
+                            <option value="por_Latn">Portuguese</option>
+                            <option value="ita_Latn">Italian</option>
+                            <option value="pol_Latn">Polish</option>
+                            <option value="ron_Latn">Romanian</option>
+                            <option value="ces_Latn">Czech</option>
+                            <option value="dan_Latn">Danish</option>
+                            <option value="swe_Latn">Swedish</option>
+                            <option value="nob_Latn">Norwegian</option>
+                            <option value="fin_Latn">Finnish</option>
+                            <option value="ell_Grek">Greek</option>
+                            <option value="hun_Latn">Hungarian</option>
+                            <option value="bul_Cyrl">Bulgarian</option>
+                            <option value="hrv_Latn">Croatian</option>
+                            <option value="slk_Latn">Slovak</option>
+                            <option value="slv_Latn">Slovenian</option>
+                            <option value="est_Latn">Estonian</option>
+                            <option value="lav_Latn">Latvian</option>
+                            <option value="lit_Latn">Lithuanian</option>
+                            <option value="gle_Latn">Irish</option>
+                            <option value="mlt_Latn">Maltese</option>
+                            <option value="rus_Cyrl">Russian</option>
+                            <option value="ukr_Cyrl">Ukrainian</option>
+                            <option value="tur_Latn">Turkish</option>
+                            <option value="arb_Arab">Arabic</option>
+                            <option value="zho_Hans">Chinese (Simplified)</option>
+                            <option value="zho_Hant">Chinese (Traditional)</option>
+                            <option value="jpn_Jpan">Japanese</option>
+                            <option value="kor_Hang">Korean</option>
+                            <option value="hin_Deva">Hindi</option>
+                            <option value="ind_Latn">Indonesian</option>
+                            <option value="tha_Thai">Thai</option>
+                            <option value="vie_Latn">Vietnamese</option>
+                        </select>
+                        <svg class="lang-arrow" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        <select id="targetLanguage" class="lang-select">
+                            <option value="eng_Latn">English</option>
+                            <option value="nld_Latn">Dutch</option>
+                            <option value="deu_Latn">German</option>
+                            <option value="fra_Latn">French</option>
+                            <option value="spa_Latn">Spanish</option>
+                            <option value="por_Latn">Portuguese</option>
+                            <option value="ita_Latn">Italian</option>
+                            <option value="pol_Latn">Polish</option>
+                            <option value="ron_Latn">Romanian</option>
+                            <option value="ces_Latn">Czech</option>
+                            <option value="dan_Latn">Danish</option>
+                            <option value="swe_Latn">Swedish</option>
+                            <option value="nob_Latn">Norwegian</option>
+                            <option value="fin_Latn">Finnish</option>
+                            <option value="ell_Grek">Greek</option>
+                            <option value="hun_Latn">Hungarian</option>
+                            <option value="bul_Cyrl">Bulgarian</option>
+                            <option value="hrv_Latn">Croatian</option>
+                            <option value="slk_Latn">Slovak</option>
+                            <option value="slv_Latn">Slovenian</option>
+                            <option value="est_Latn">Estonian</option>
+                            <option value="lav_Latn">Latvian</option>
+                            <option value="lit_Latn">Lithuanian</option>
+                            <option value="gle_Latn">Irish</option>
+                            <option value="mlt_Latn">Maltese</option>
+                            <option value="rus_Cyrl">Russian</option>
+                            <option value="ukr_Cyrl">Ukrainian</option>
+                            <option value="tur_Latn">Turkish</option>
+                            <option value="arb_Arab">Arabic</option>
+                            <option value="zho_Hans">Chinese (Simplified)</option>
+                            <option value="zho_Hant">Chinese (Traditional)</option>
+                            <option value="jpn_Jpan">Japanese</option>
+                            <option value="kor_Hang">Korean</option>
+                            <option value="hin_Deva">Hindi</option>
+                            <option value="ind_Latn">Indonesian</option>
+                            <option value="tha_Thai">Thai</option>
+                            <option value="vie_Latn">Vietnamese</option>
+                        </select>
                     </div>
                 </div>
-                <div id="quickTranslateStatus" class="quick-status"></div>
-            </section>
 
-            <div class="section-divider">
-                <span>or translate files</span>
-            </div>
+                <!-- Text Translate -->
+                <section class="quick-translate-section">
+                    <div class="translate-container">
+                        <div class="translate-box">
+                            <textarea id="quickInputText" placeholder="Type or paste text to translate..." rows="5"></textarea>
+                            <div class="translate-footer">
+                                <span class="char-count"><span id="inputCharCount">0</span> chars</span>
+                                <button id="quickTranslateBtn" class="btn-translate" title="Translate">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"></path></svg>
+                                    Translate
+                                </button>
+                            </div>
+                        </div>
+                        <div class="translate-box">
+                            <textarea id="quickOutputText" placeholder="Translation will appear here..." rows="5" readonly></textarea>
+                            <div class="translate-footer">
+                                <button id="copyOutputBtn" class="copy-btn" title="Copy to clipboard">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                    </svg>
+                                    Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="quickTranslateStatus" class="quick-status"></div>
+                </section>
 
-            <!-- File Upload Section -->
-            <section class="upload-section">
-                <div class="upload-area" id="uploadArea">
-                    <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="17 8 12 3 7 8"></polyline>
-                        <line x1="12" y1="3" x2="12" y2="15"></line>
-                    </svg>
-                    <p>Drag & drop your file here or click to browse</p>
-                    <p class="file-types">Supported: .xlsx, .docx</p>
-                    <input type="file" id="fileInput" accept=".xlsx,.docx" hidden>
-                </div>
-
-                <div class="file-info" id="fileInfo" style="display: none;">
-                    <div class="file-details">
+                <!-- File Upload (compact) -->
+                <section class="file-translate-section">
+                    <div class="file-upload-row" id="uploadArea">
                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
                         </svg>
-                        <strong>Selected file:</strong> <span id="fileName"></span>
+                        <span>Drop <strong>.xlsx</strong> or <strong>.docx</strong> file here, or <u>browse</u></span>
+                        <input type="file" id="fileInput" accept=".xlsx,.docx" hidden>
                     </div>
-                </div>
-            </section>
+                    <div class="file-translate-meta">
+                        <div class="file-info" id="fileInfo" style="display: none;">
+                            <div class="file-details">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                <strong>File:</strong> <span id="fileName"></span>
+                            </div>
+                        </div>
+                        <div class="example-file-link">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            <a href="test_translation_file.xlsx" download>Download example file</a>
+                        </div>
+                    </div>
+                </section>
 
-            <!-- Translation Settings -->
-            <section class="settings-section">
-                <h2>Translation Settings</h2>
-                
-                <div class="settings-grid">
+                <!-- Excel Settings -->
+                <section class="excel-settings" id="excelSettings" style="display: none;">
                     <div class="setting-group">
-                        <label for="sourceLanguage">Source Language</label>
-                        <select id="sourceLanguage">
-                            <option value="nld_Latn">Dutch (Nederlands)</option>
-                            <option value="eng_Latn">English</option>
-                            <option value="deu_Latn">German (Deutsch)</option>
-                            <option value="fra_Latn">French (Français)</option>
-                            <option value="spa_Latn">Spanish (Español)</option>
-                            <option value="ita_Latn">Italian (Italiano)</option>
-                            <option value="por_Latn">Portuguese (Português)</option>
-                        </select>
+                        <label for="sheetSelect">Sheet</label>
+                        <select id="sheetSelect"></select>
                     </div>
-
                     <div class="setting-group">
-                        <label for="targetLanguage">Target Language</label>
-                        <select id="targetLanguage">
-                            <option value="eng_Latn">English</option>
-                            <option value="nld_Latn">Dutch (Nederlands)</option>
-                            <option value="deu_Latn">German (Deutsch)</option>
-                            <option value="fra_Latn">French (Français)</option>
-                            <option value="spa_Latn">Spanish (Español)</option>
-                            <option value="ita_Latn">Italian (Italiano)</option>
-                            <option value="por_Latn">Portuguese (Português)</option>
-                        </select>
+                        <label>Columns to Translate</label>
+                        <div id="columnCheckboxes" class="checkbox-group"></div>
                     </div>
-                </div>
-            </section>
+                </section>
 
-            <!-- Excel Column Selection (shown only for Excel files) -->
-            <section class="excel-settings" id="excelSettings" style="display: none;">
-                <h2>Excel Settings</h2>
-                
-                <div class="setting-group">
-                    <label for="sheetSelect">Select Sheet</label>
-                    <select id="sheetSelect"></select>
-                </div>
+                <!-- Model Loading -->
+                <section class="model-status" id="modelStatus" style="display: none;">
+                    <h3>Loading Translation Model...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="modelProgress"></div></div>
+                    <p class="status-text" id="modelStatusText">Initializing...</p>
+                </section>
 
-                <div class="setting-group">
-                    <label>Select Columns to Translate</label>
-                    <div id="columnCheckboxes" class="checkbox-group"></div>
-                </div>
-            </section>
+                <!-- Translation Progress -->
+                <section class="translation-progress" id="translationProgress" style="display: none;">
+                    <h3>Translating...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="translationProgressBar"></div></div>
+                    <p class="status-text"><span id="progressText">0 / 0</span> — <span id="progressPercentage">0%</span></p>
+                    <p class="status-details" id="currentItem"></p>
+                </section>
 
-            <!-- Model Loading Status -->
-            <section class="model-status" id="modelStatus" style="display: none;">
-                <h3>Loading Translation Model...</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="modelProgress"></div>
-                </div>
-                <p class="status-text" id="modelStatusText">Initializing...</p>
-            </section>
+                <!-- Actions -->
+                <section class="actions">
+                    <button id="translateBtn" class="btn btn-primary" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/></svg>
+                        Translate File
+                    </button>
+                    <button id="downloadBtn" class="btn btn-success" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                        Download Translated File
+                    </button>
+                </section>
 
-            <!-- Translation Progress -->
-            <section class="translation-progress" id="translationProgress" style="display: none;">
-                <h3>Translation Progress</h3>
-                <div class="progress-bar">
-                    <div class="progress-fill" id="translationProgressBar"></div>
-                </div>
-                <p class="status-text">
-                    <span id="progressText">0 / 0</span> - 
-                    <span id="progressPercentage">0%</span>
-                </p>
-                <p class="status-details" id="currentItem"></p>
-            </section>
+                <!-- Results -->
+                <section class="results" id="results" style="display: none;">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Translation Complete
+                    </h3>
+                    <div class="results-info">
+                        <p><strong>Items:</strong> <span id="totalTranslated"></span></p>
+                        <p><strong>Time:</strong> <span id="timeTaken"></span></p>
+                    </div>
+                </section>
 
-            <!-- Action Buttons -->
-            <section class="actions">
-                <button id="translateBtn" class="btn btn-primary" disabled>
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
-                    </svg>
-                    Start Translation
-                </button>
-                <button id="downloadBtn" class="btn btn-success" style="display: none;">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download Translated File
-                </button>
-            </section>
-
-            <!-- Results -->
-            <section class="results" id="results" style="display: none;">
-                <h3>
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>
-                    Translation Complete!
-                </h3>
-                <div class="results-info">
-                    <p><strong>Items translated:</strong> <span id="totalTranslated"></span></p>
-                    <p><strong>Time taken:</strong> <span id="timeTaken"></span></p>
-                </div>
-            </section>
-            <!-- Model Management -->
-            <section class="model-management" style="margin-top: 2rem; padding-top: 1rem; border-top: 1px solid var(--border-color);">
-                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-                    <div id="modelCacheStatus" style="color: var(--text-secondary); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem;">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                <!-- Model Management -->
+                <section class="model-management">
+                    <div id="modelCacheStatus" class="cache-status">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                         Checking model status...
                     </div>
-                    <button id="clearModelBtn" class="btn" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--bg-secondary); border: 1px solid var(--border-color); color: var(--text-secondary);">
+                    <button id="clearModelBtn" class="btn btn-small btn-ghost">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                        Clear Model Cache
+                        Clear Cache
                     </button>
+                </section>
+            </div>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- ANONYMIZE TAB                              -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-anonymize">
+
+                <div class="anon-header">
+                    <p class="section-description">Detect and replace PII in medical documents using <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> + WebGPU — entirely in your browser.</p>
+                    <div class="anon-settings-row">
+                        <div class="setting-group compact">
+                            <label for="anonPipelineSelect">Pipeline</label>
+                            <select id="anonPipelineSelect">
+                                <option value="ner+llm" selected>NER + LLM (recommended)</option>
+                                <option value="llm">LLM only</option>
+                            </select>
+                        </div>
+                        <div class="setting-group compact">
+                            <label for="anonModelSelect">LLM Model</label>
+                            <select id="anonModelSelect">
+                                <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC" selected>Qwen2.5 1.5B (~1 GB)</option>
+                                <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5 3B (~2 GB)</option>
+                                <option value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen2.5 7B (~4.5 GB)</option>
+                            </select>
+                        </div>
+                        <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
+                    </div>
+                    <div class="anon-disclaimer">
+                        <p><strong>⚠️ Disclaimer:</strong> Anonymization is not guaranteed to detect all PII. Always manually review the output before sharing documents. This tool is an aid, not a replacement for human review.</p>
+                        <details class="hw-details">
+                            <summary>Pipeline details &amp; hardware</summary>
+                            <p><strong>NER + LLM</strong> (default): An <a href="https://huggingface.co/ai4privacy/llama-ai4privacy-multilingual-categorical-anonymiser-openpii" target="_blank" rel="noopener noreferrer">ai4privacy multilingual NER model</a> (~150 MB) detects 20+ PII types including names, emails, phones, addresses, IDs, dates, and more across 8 languages including Dutch. Then a Qwen2.5 LLM pass verifies and catches any remaining PII. Best accuracy.</p>
+                            <p><strong>LLM only</strong>: Qwen2.5 alone handles all entity detection. Faster to start, but may miss some entities.</p>
+                            <ul>
+                                <li><strong>1.5B</strong> — ~2 GB VRAM. Runs on most modern laptops (integrated GPU).</li>
+                                <li><strong>3B</strong> — ~4 GB VRAM. Needs a dedicated GPU or Apple Silicon Mac.</li>
+                                <li><strong>7B</strong> — ~8 GB VRAM. Needs a dedicated GPU with ≥8 GB.</li>
+                            </ul>
+                            <p>Requires <strong>WebGPU</strong> (Chrome/Edge 113+, Safari 18+). First load downloads models; subsequent runs use the browser cache.</p>
+                        </details>
+                    </div>
                 </div>
-            </section>
+
+                <!-- Upload Grid -->
+                <div class="anon-upload-grid">
+                    <div class="anon-upload-box">
+                        <h3>Medical Document</h3>
+                        <div class="upload-area anon-upload" id="anonDocUpload">
+                            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <p>Drop document here</p>
+                            <p class="file-types">.xlsx, .docx, .txt</p>
+                            <input type="file" id="anonDocInput" accept=".xlsx,.docx,.txt" hidden>
+                        </div>
+                        <div class="file-info" id="anonDocInfo" style="display: none;">
+                            <div class="file-details">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                <strong>File:</strong> <span id="anonDocName"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="anon-upload-box">
+                        <h3>Mapping File <span class="optional-tag">Optional</span></h3>
+                        <div class="upload-area anon-upload" id="anonMappingUpload">
+                            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                                <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                            </svg>
+                            <p>Drop mapping file</p>
+                            <p class="file-types">.xlsx or .json</p>
+                            <input type="file" id="anonMappingInput" accept=".xlsx,.json" hidden>
+                        </div>
+                        <div class="file-info" id="anonMappingInfo" style="display: none;">
+                            <div class="file-details">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                                <strong>Mapping:</strong> <span id="anonMappingName"></span>
+                            </div>
+                        </div>
+                        <div class="mapping-meta">
+                            <span id="anonMappingCount">No mapping loaded</span>
+                            <button id="clearAnonMappingBtn" class="btn-link" type="button">Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="example-file-link">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    <a href="test_anonymisation_file.txt" download>Example document</a>
+                    ·
+                    <a href="test_mapping.xlsx" download>Example mapping (.xlsx)</a>
+                </div>
+
+                <!-- Excel Settings for Anonymization -->
+                <section class="excel-settings" id="anonExcelSettings" style="display: none;">
+                    <div class="setting-group">
+                        <label for="anonSheetSelect">Sheet</label>
+                        <select id="anonSheetSelect"></select>
+                    </div>
+                    <div class="setting-group">
+                        <label>Columns to Anonymize</label>
+                        <div id="anonColumnCheckboxes" class="checkbox-group"></div>
+                    </div>
+                </section>
+
+                <!-- LLM Model Loading -->
+                <section class="model-status" id="anonModelStatus" style="display: none;">
+                    <h3 id="anonModelHeading">Loading model...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="anonModelProgress"></div></div>
+                    <p class="status-text" id="anonModelStatusText">Initializing...</p>
+                </section>
+
+                <!-- Anonymization Progress -->
+                <section class="translation-progress" id="anonProgress" style="display: none;">
+                    <h3>Anonymizing...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="anonProgressBar"></div></div>
+                    <p class="status-text" id="anonProgressText">Extracting entities...</p>
+                </section>
+
+                <!-- Anonymize Button -->
+                <section class="actions">
+                    <button id="anonymizeBtn" class="btn btn-anon" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                        Anonymize
+                    </button>
+                </section>
+
+                <!-- Results -->
+                <section class="anon-results" id="anonResults" style="display: none;">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Anonymization Complete
+                    </h3>
+                    <div class="mapping-table-container">
+                        <h4>Entity Mapping</h4>
+                        <div class="mapping-table-scroll">
+                            <table id="mappingTable" class="mapping-table">
+                                <thead><tr><th>Original</th><th>Type</th><th>Replacement</th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="anon-preview-container">
+                        <h4>Preview</h4>
+                        <pre id="anonPreviewText" class="anon-preview-text"></pre>
+                    </div>
+                    <div class="actions">
+                        <button id="downloadAnonDocBtn" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Download Anonymized File
+                        </button>
+                        <button id="downloadMappingBtn" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                            Download Mapping
+                        </button>
+                        <select id="mappingExportFormat" class="format-select">
+                            <option value="xlsx" selected>.xlsx</option>
+                            <option value="json">.json</option>
+                        </select>
+                    </div>
+                </section>
+            </div>
         </main>
 
         <footer>
-            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank">Transformers.js</a> and <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank">NLLB-200</a></p>
-            <p><a href="PRIVACY.md" target="_blank">Privacy Policy</a> | <a href="SECURITY_AUDIT.md" target="_blank">Security Audit</a> | <a href="https://github.com/putssander/medmorf" target="_blank">Source Code</a></p>
-            <p class="note">⚠️ First use will download the model (~300MB). All processing happens locally in your browser - no data is sent to any server.</p>
+            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen2.5</a> + <a href="https://huggingface.co/ai4privacy" target="_blank" rel="noopener noreferrer">ai4privacy NER</a></p>
+            <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
+            <p class="note">First use downloads models (translation ~300MB, anonymization ~1GB). All processing is local.</p>
         </footer>
     </div>
 
     <!-- Scripts -->
-    <script type="module" src="https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2"></script>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -265,5 +460,17 @@
     <script src="excel-handler.js"></script>
     <script src="word-handler.js"></script>
     <script type="module" src="app.js"></script>
+    <script type="module" src="anonymize-handler.js"></script>
+    <script>
+        // Tab switching
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+            });
+        });
+    </script>
 </body>
 </html>
