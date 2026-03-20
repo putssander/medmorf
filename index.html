@@ -66,6 +66,14 @@
                 </svg>
                 Anonymize
             </button>
+            <button class="tab-btn" data-tab="storage">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                </svg>
+                Storage
+            </button>
         </nav>
 
         <main>
@@ -295,9 +303,7 @@
                         <div class="setting-group compact">
                             <label for="anonModelSelect">LLM Model</label>
                             <select id="anonModelSelect">
-                                <option value="Qwen2.5-1.5B-Instruct-q4f16_1-MLC" selected>Qwen2.5 1.5B (~1 GB)</option>
-                                <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC">Qwen2.5 3B (~2 GB)</option>
-                                <option value="Qwen2.5-7B-Instruct-q4f16_1-MLC">Qwen2.5 7B (~4.5 GB)</option>
+                                <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC" selected>Qwen2.5 3B (~2 GB)</option>
                             </select>
                         </div>
                         <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
@@ -309,9 +315,7 @@
                             <p><strong>NER + LLM</strong> (default): An <a href="https://huggingface.co/ai4privacy/llama-ai4privacy-multilingual-categorical-anonymiser-openpii" target="_blank" rel="noopener noreferrer">ai4privacy multilingual NER model</a> (~150 MB) detects 20+ PII types including names, emails, phones, addresses, IDs, dates, and more across 8 languages including Dutch. Then a Qwen2.5 LLM pass verifies and catches any remaining PII. Best accuracy.</p>
                             <p><strong>LLM only</strong>: Qwen2.5 alone handles all entity detection. Faster to start, but may miss some entities.</p>
                             <ul>
-                                <li><strong>1.5B</strong> — ~2 GB VRAM. Runs on most modern laptops (integrated GPU).</li>
-                                <li><strong>3B</strong> — ~4 GB VRAM. Needs a dedicated GPU or Apple Silicon Mac.</li>
-                                <li><strong>7B</strong> — ~8 GB VRAM. Needs a dedicated GPU with ≥8 GB.</li>
+                                <li><strong>Qwen2.5 3B</strong> — ~4 GB VRAM. Needs a dedicated GPU or Apple Silicon Mac. Best balance of accuracy and speed.</li>
                             </ul>
                             <p>Requires <strong>WebGPU</strong> (Chrome/Edge 113+, Safari 18+). First load downloads models; subsequent runs use the browser cache.</p>
                         </details>
@@ -442,12 +446,233 @@
                     </div>
                 </section>
             </div>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- STORAGE TAB                                -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-storage">
+                <div class="storage-header">
+                    <p class="section-description">Download models in advance so you can work offline when patients arrive. Inspect and manage all browser-stored data below.</p>
+                </div>
+
+                <!-- Prepare for Offline -->
+                <section class="storage-offline-prep">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Prepare for Offline Use
+                    </h3>
+                    <p class="storage-hint">Download all models now while you have internet. Once cached, everything works in airplane mode.</p>
+
+                    <div class="offline-model-grid">
+                        <!-- Translation Model -->
+                        <div class="offline-model-card" id="offlineTranslation">
+                            <div class="offline-model-info">
+                                <strong>Translation Model</strong>
+                                <span class="offline-model-meta">NLLB-200 · ~300 MB</span>
+                                <span class="offline-model-desc">Translates between 200+ languages</span>
+                            </div>
+                            <div class="offline-model-status" id="offlineTranslationStatus">
+                                <span class="offline-status-text" id="offlineTranslationText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlineTranslationProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlineTranslationBar"></div></div>
+                                <span class="offline-progress-text" id="offlineTranslationPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlineTranslationBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
+
+                        <!-- NER Model -->
+                        <div class="offline-model-card" id="offlineNER">
+                            <div class="offline-model-info">
+                                <strong>NER Model</strong>
+                                <span class="offline-model-meta">ai4privacy · ~150 MB</span>
+                                <span class="offline-model-desc">Detects names, addresses, IDs in 8+ languages</span>
+                            </div>
+                            <div class="offline-model-status" id="offlineNERStatus">
+                                <span class="offline-status-text" id="offlineNERText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlineNERProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlineNERBar"></div></div>
+                                <span class="offline-progress-text" id="offlineNERPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlineNERBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
+
+                        <!-- LLM Model -->
+                        <div class="offline-model-card" id="offlineLLM">
+                            <div class="offline-model-info">
+                                <strong>Anonymization LLM</strong>
+                                <span class="offline-model-meta">Qwen2.5 3B · ~2 GB</span>
+                                <span class="offline-model-desc">Verifies and catches remaining PII via WebGPU</span>
+                            </div>
+                            <div class="offline-model-status" id="offlineLLMStatus">
+                                <span class="offline-status-text" id="offlineLLMText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlineLLMProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlineLLMBar"></div></div>
+                                <span class="offline-progress-text" id="offlineLLMPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlineLLMBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="offlineDownloadAllBtn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                        Download All Models
+                    </button>
+                </section>
+
+                <!-- Personal Data Flow -->
+                <section class="storage-section storage-personal-data">
+                    <div class="storage-section-header">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                            Personal Data — Where It Goes
+                        </h3>
+                        <p class="storage-hint">Your documents, text and patient data are <strong>never written to disk or browser storage</strong>. They exist only in temporary JavaScript memory and are automatically removed.</p>
+                    </div>
+
+                    <div class="data-flow-diagram">
+                        <div class="data-flow-step">
+                            <div class="flow-icon flow-in">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                            </div>
+                            <div class="flow-label">
+                                <strong>You upload a file or paste text</strong>
+                                <span>File is read into JavaScript memory (RAM) only</span>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="data-flow-step">
+                            <div class="flow-icon flow-process">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
+                            </div>
+                            <div class="flow-label">
+                                <strong>AI model processes data locally</strong>
+                                <span>Translation/anonymization runs inside your browser's CPU/GPU</span>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="data-flow-step">
+                            <div class="flow-icon flow-out">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            </div>
+                            <div class="flow-label">
+                                <strong>You download the result</strong>
+                                <span>Output goes to your Downloads folder — you control it</span>
+                            </div>
+                        </div>
+                        <div class="flow-arrow">↓</div>
+                        <div class="data-flow-step">
+                            <div class="flow-icon flow-delete">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            </div>
+                            <div class="flow-label">
+                                <strong>Data is cleared from memory</strong>
+                                <span>Automatically on page close, or click the button below</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="personal-data-live" id="personalDataLive">
+                        <h4>Currently in memory</h4>
+                        <div id="personalDataList" class="personal-data-list">
+                            <p class="storage-empty">No personal data in memory</p>
+                        </div>
+                    </div>
+
+                    <div class="personal-data-actions">
+                        <button class="btn btn-danger" id="clearPersonalDataBtn">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                            Clear All Personal Data Now
+                        </button>
+                        <div class="auto-clear-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            Auto-clears when you close or refresh this page
+                        </div>
+                        <div class="auto-clear-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            Auto-clears after 30 minutes of inactivity
+                        </div>
+                        <div class="auto-clear-info">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            Never written to Cache API, IndexedDB, localStorage, or cookies
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Summary -->
+                <section class="storage-summary" id="storageSummary">
+                    <div class="storage-stat">
+                        <span class="stat-label">Total storage used</span>
+                        <span class="stat-value" id="storageTotalSize">Scanning...</span>
+                    </div>
+                    <div class="storage-stat">
+                        <span class="stat-label">Cache API entries</span>
+                        <span class="stat-value" id="storageCacheCount">—</span>
+                    </div>
+                    <div class="storage-stat">
+                        <span class="stat-label">IndexedDB databases</span>
+                        <span class="stat-value" id="storageIDBCount">—</span>
+                    </div>
+                    <button id="storageRefreshBtn" class="btn btn-small btn-ghost">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                        Refresh
+                    </button>
+                </section>
+
+                <!-- Cache API Section -->
+                <section class="storage-section" id="storageCacheSection">
+                    <div class="storage-section-header">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                            Cache API (Model Files)
+                        </h3>
+                        <p class="storage-hint">Translation and NER models are cached here. These are safe AI model weights — no personal data.</p>
+                    </div>
+                    <div id="storageCacheList" class="storage-file-list">
+                        <p class="storage-empty">Scanning...</p>
+                    </div>
+                </section>
+
+                <!-- IndexedDB Section -->
+                <section class="storage-section" id="storageIDBSection">
+                    <div class="storage-section-header">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                            IndexedDB (LLM Model Cache)
+                        </h3>
+                        <p class="storage-hint">WebLLM/MLC caches Qwen model weights here. These are safe AI model data — no personal data.</p>
+                    </div>
+                    <div id="storageIDBList" class="storage-file-list">
+                        <p class="storage-empty">Scanning...</p>
+                    </div>
+                </section>
+
+                <!-- Delete All -->
+                <section class="storage-actions">
+                    <button id="storageDeleteAllBtn" class="btn btn-danger">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                        Delete All Browser Storage
+                    </button>
+                    <p class="storage-warning">This will remove all cached models. You will need to re-download them on next use.</p>
+                </section>
+            </div>
         </main>
 
         <footer>
             <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen2.5</a> + <a href="https://huggingface.co/ai4privacy" target="_blank" rel="noopener noreferrer">ai4privacy NER</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
-            <p class="note">First use downloads models (translation ~300MB, anonymization ~1GB). All processing is local.</p>
+            <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB). All processing is local. Check the Storage tab to manage cached data.</p>
         </footer>
     </div>
 
@@ -457,10 +682,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script src="security.js"></script>
+
     <script src="excel-handler.js"></script>
     <script src="word-handler.js"></script>
     <script type="module" src="app.js"></script>
     <script type="module" src="anonymize-handler.js"></script>
+    <script type="module" src="cache-manager.js"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {

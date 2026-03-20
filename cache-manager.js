@@ -1,0 +1,690 @@
+// Cache & Storage Manager — inspect and manage browser-stored AI model data.
+// Shows Cache API entries (translation/NER models) and IndexedDB databases (WebLLM).
+// Pre-downloads models for offline use.
+// User/patient data is NEVER stored here — only AI model weights.
+
+const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';
+const NER_MODEL = 'onnx-community/llama-ai4privacy-multilingual-categorical-anonymiser-openpii-ONNX';
+const LLM_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+
+const storageTotalSize = document.getElementById('storageTotalSize');
+const storageCacheCount = document.getElementById('storageCacheCount');
+const storageIDBCount = document.getElementById('storageIDBCount');
+const storageCacheList = document.getElementById('storageCacheList');
+const storageIDBList = document.getElementById('storageIDBList');
+const storageRefreshBtn = document.getElementById('storageRefreshBtn');
+const storageDeleteAllBtn = document.getElementById('storageDeleteAllBtn');
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ── Cache API Inspection ───────────────────────────────────────────────────────
+async function scanCacheAPI() {
+    const cacheNames = await caches.keys();
+    let totalSize = 0;
+    let totalEntries = 0;
+    const cacheGroups = [];
+
+    for (const name of cacheNames) {
+        const cache = await caches.open(name);
+        const keys = await cache.keys();
+        let groupSize = 0;
+        const entries = [];
+
+        for (const request of keys) {
+            try {
+                const response = await cache.match(request);
+                const blob = await response.clone().blob();
+                const size = blob.size;
+                groupSize += size;
+                // Extract readable path from URL
+                const url = new URL(request.url);
+                const path = decodeURIComponent(url.pathname);
+                entries.push({ url: request.url, path, size });
+            } catch {
+                entries.push({ url: request.url, path: request.url, size: 0 });
+            }
+        }
+
+        totalSize += groupSize;
+        totalEntries += entries.length;
+        cacheGroups.push({ name, entries, size: groupSize });
+    }
+
+    return { cacheGroups, totalSize, totalEntries };
+}
+
+// ── IndexedDB Inspection ───────────────────────────────────────────────────────
+async function scanIndexedDB() {
+    const databases = [];
+    let totalSize = 0;
+
+    try {
+        const dbList = await indexedDB.databases();
+        for (const dbInfo of dbList) {
+            const name = dbInfo.name || '(unnamed)';
+            let size = 0;
+            let storeNames = [];
+
+            try {
+                const db = await new Promise((resolve, reject) => {
+                    const req = indexedDB.open(name);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => reject(req.error);
+                });
+
+                storeNames = Array.from(db.objectStoreNames);
+
+                // Estimate size by reading all stores
+                for (const storeName of storeNames) {
+                    try {
+                        const tx = db.transaction(storeName, 'readonly');
+                        const store = tx.objectStore(storeName);
+                        const countReq = store.count();
+                        const count = await new Promise((resolve) => {
+                            countReq.onsuccess = () => resolve(countReq.result);
+                            countReq.onerror = () => resolve(0);
+                        });
+                        // Estimate size: sample a few records
+                        if (count > 0) {
+                            const cursorReq = store.openCursor();
+                            let sampled = 0;
+                            let sampleSize = 0;
+                            await new Promise((resolve) => {
+                                cursorReq.onsuccess = (e) => {
+                                    const cursor = e.target.result;
+                                    if (cursor && sampled < 3) {
+                                        try {
+                                            const val = cursor.value;
+                                            if (val instanceof ArrayBuffer) {
+                                                sampleSize += val.byteLength;
+                                            } else if (val instanceof Blob) {
+                                                sampleSize += val.size;
+                                            } else {
+                                                sampleSize += JSON.stringify(val).length;
+                                            }
+                                        } catch { /* skip */ }
+                                        sampled++;
+                                        cursor.continue();
+                                    } else {
+                                        resolve();
+                                    }
+                                };
+                                cursorReq.onerror = () => resolve();
+                            });
+                            if (sampled > 0) {
+                                size += Math.round((sampleSize / sampled) * count);
+                            }
+                        }
+                    } catch { /* store access error, skip */ }
+                }
+
+                db.close();
+            } catch { /* db open error */ }
+
+            totalSize += size;
+            databases.push({ name, version: dbInfo.version, storeNames, size });
+        }
+    } catch {
+        // indexedDB.databases() not supported in some browsers
+    }
+
+    return { databases, totalSize };
+}
+
+// ── Storage Quota ──────────────────────────────────────────────────────────────
+async function getStorageEstimate() {
+    if (navigator.storage && navigator.storage.estimate) {
+        const est = await navigator.storage.estimate();
+        return { usage: est.usage || 0, quota: est.quota || 0 };
+    }
+    return null;
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────────
+function renderCacheGroup(group) {
+    const section = document.createElement('div');
+    section.className = 'storage-cache-group';
+
+    const header = document.createElement('div');
+    header.className = 'storage-group-header';
+    header.innerHTML = `
+        <div class="storage-group-title">
+            <strong>${escapeHTML(group.name)}</strong>
+            <span class="storage-group-meta">${group.entries.length} file${group.entries.length !== 1 ? 's' : ''} · ${formatBytes(group.size)}</span>
+        </div>
+        <button class="btn btn-small btn-danger-outline storage-delete-cache" data-cache="${escapeHTML(group.name)}" title="Delete this cache">
+            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            Delete
+        </button>
+    `;
+    section.appendChild(header);
+
+    // Collapsible entries
+    const details = document.createElement('details');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Show cached files';
+    details.appendChild(summary);
+
+    const list = document.createElement('div');
+    list.className = 'storage-entry-list';
+    for (const entry of group.entries) {
+        const row = document.createElement('div');
+        row.className = 'storage-entry';
+        row.innerHTML = `
+            <span class="storage-entry-path" title="${escapeHTML(entry.url)}">${escapeHTML(entry.path)}</span>
+            <span class="storage-entry-size">${formatBytes(entry.size)}</span>
+        `;
+        list.appendChild(row);
+    }
+    details.appendChild(list);
+    section.appendChild(details);
+
+    return section;
+}
+
+function renderIDBDatabase(db) {
+    const section = document.createElement('div');
+    section.className = 'storage-idb-group';
+
+    section.innerHTML = `
+        <div class="storage-group-header">
+            <div class="storage-group-title">
+                <strong>${escapeHTML(db.name)}</strong>
+                <span class="storage-group-meta">v${db.version || '?'} · ${db.storeNames.length} store${db.storeNames.length !== 1 ? 's' : ''} · ~${formatBytes(db.size)}</span>
+            </div>
+            <button class="btn btn-small btn-danger-outline storage-delete-idb" data-db="${escapeHTML(db.name)}" title="Delete this database">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                Delete
+            </button>
+        </div>
+        <div class="storage-idb-stores">
+            <span class="storage-hint">Stores: ${db.storeNames.map(s => escapeHTML(s)).join(', ') || '(none)'}</span>
+        </div>
+    `;
+
+    return section;
+}
+
+async function refreshStorageView() {
+    storageCacheList.innerHTML = '<p class="storage-empty">Scanning cache...</p>';
+    storageIDBList.innerHTML = '<p class="storage-empty">Scanning databases...</p>';
+    storageTotalSize.textContent = 'Scanning...';
+    storageCacheCount.textContent = '—';
+    storageIDBCount.textContent = '—';
+
+    // Run scans in parallel
+    const [cacheResult, idbResult, estimate] = await Promise.all([
+        scanCacheAPI().catch(() => ({ cacheGroups: [], totalSize: 0, totalEntries: 0 })),
+        scanIndexedDB().catch(() => ({ databases: [], totalSize: 0 })),
+        getStorageEstimate(),
+    ]);
+
+    // Summary
+    const enumeratedSize = cacheResult.totalSize + idbResult.totalSize;
+    const totalUsage = estimate ? estimate.usage : enumeratedSize;
+    storageTotalSize.textContent = formatBytes(totalUsage);
+    storageCacheCount.textContent = String(cacheResult.totalEntries);
+    storageIDBCount.textContent = String(idbResult.databases.length);
+
+    // Cache list
+    storageCacheList.innerHTML = '';
+    if (cacheResult.cacheGroups.length === 0) {
+        storageCacheList.innerHTML = '<p class="storage-empty">No cached files found. Models will be downloaded on first use.</p>';
+    } else {
+        for (const group of cacheResult.cacheGroups) {
+            storageCacheList.appendChild(renderCacheGroup(group));
+        }
+    }
+
+    // IDB list
+    storageIDBList.innerHTML = '';
+    if (idbResult.databases.length === 0) {
+        storageIDBList.innerHTML = '<p class="storage-empty">No IndexedDB databases found.</p>';
+    } else {
+        for (const db of idbResult.databases) {
+            storageIDBList.appendChild(renderIDBDatabase(db));
+        }
+    }
+
+    // Wire up delete buttons
+    storageCacheList.querySelectorAll('.storage-delete-cache').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const name = btn.dataset.cache;
+            if (!confirm(`Delete cache "${name}"? You will need to re-download these model files.`)) return;
+            try {
+                await caches.delete(name);
+                refreshStorageView();
+            } catch (e) {
+                alert('Error deleting cache: ' + e.message);
+            }
+        });
+    });
+
+    storageIDBList.querySelectorAll('.storage-delete-idb').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const name = btn.dataset.db;
+            if (!confirm(`Delete database "${name}"? You will need to re-download model data.`)) return;
+            try {
+                await new Promise((resolve, reject) => {
+                    const req = indexedDB.deleteDatabase(name);
+                    req.onsuccess = () => resolve();
+                    req.onerror = () => reject(new Error('Could not delete database'));
+                    req.onblocked = () => reject(new Error('Database is in use. Close other tabs using this site and try again.'));
+                });
+                refreshStorageView();
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+    });
+}
+
+// ── Delete All ─────────────────────────────────────────────────────────────────
+async function deleteAllStorage() {
+    if (!confirm('Delete ALL cached models? You will need to re-download them.\n\nNo personal data is stored — only AI model weights.')) return;
+
+    try {
+        // Delete all Cache API caches
+        const cacheNames = await caches.keys();
+        await Promise.all(cacheNames.map(name => caches.delete(name)));
+
+        // Delete all IndexedDB databases
+        if (indexedDB.databases) {
+            const dbs = await indexedDB.databases();
+            await Promise.all(dbs.map(db => new Promise(resolve => {
+                const req = indexedDB.deleteDatabase(db.name);
+                req.onsuccess = () => resolve();
+                req.onerror = () => resolve();
+                req.onblocked = () => resolve();
+            })));
+        }
+    } catch (e) {
+        console.error('Error clearing storage:', e);
+    }
+
+    refreshStorageView();
+    checkAllOfflineStatus();
+    window.dispatchEvent(new CustomEvent('medmorf:translation-cache-updated'));
+}
+
+// ── Event Listeners ────────────────────────────────────────────────────────────
+if (storageRefreshBtn) storageRefreshBtn.addEventListener('click', refreshStorageView);
+if (storageDeleteAllBtn) storageDeleteAllBtn.addEventListener('click', deleteAllStorage);
+
+// ── Offline Download UI Elements ───────────────────────────────────────────────
+const offlineTranslationBtn = document.getElementById('offlineTranslationBtn');
+const offlineTranslationText = document.getElementById('offlineTranslationText');
+const offlineTranslationProgress = document.getElementById('offlineTranslationProgress');
+const offlineTranslationBar = document.getElementById('offlineTranslationBar');
+const offlineTranslationPct = document.getElementById('offlineTranslationPct');
+const offlineTranslationCard = document.getElementById('offlineTranslation');
+
+const offlineNERBtn = document.getElementById('offlineNERBtn');
+const offlineNERText = document.getElementById('offlineNERText');
+const offlineNERProgress = document.getElementById('offlineNERProgress');
+const offlineNERBar = document.getElementById('offlineNERBar');
+const offlineNERPct = document.getElementById('offlineNERPct');
+const offlineNERCard = document.getElementById('offlineNER');
+
+const offlineLLMBtn = document.getElementById('offlineLLMBtn');
+const offlineLLMText = document.getElementById('offlineLLMText');
+const offlineLLMProgress = document.getElementById('offlineLLMProgress');
+const offlineLLMBar = document.getElementById('offlineLLMBar');
+const offlineLLMPct = document.getElementById('offlineLLMPct');
+const offlineLLMCard = document.getElementById('offlineLLM');
+
+const offlineDownloadAllBtn = document.getElementById('offlineDownloadAllBtn');
+
+// ── Offline Status Check ───────────────────────────────────────────────────────
+function setCardStatus(card, textEl, btn, status) {
+    // status: 'checking', 'cached', 'not-cached', 'downloading', 'done', 'error'
+    card.dataset.status = status;
+    if (status === 'cached' || status === 'done') {
+        textEl.textContent = '✓ Cached — ready for offline';
+        textEl.className = 'offline-status-text status-cached';
+        btn.textContent = 'Downloaded';
+        btn.disabled = true;
+        btn.classList.add('btn-cached');
+    } else if (status === 'not-cached') {
+        textEl.textContent = 'Not downloaded';
+        textEl.className = 'offline-status-text status-missing';
+        btn.disabled = false;
+        btn.classList.remove('btn-cached');
+    } else if (status === 'downloading') {
+        textEl.textContent = 'Downloading...';
+        textEl.className = 'offline-status-text status-downloading';
+        btn.disabled = true;
+        btn.classList.remove('btn-cached');
+    } else if (status === 'error') {
+        textEl.className = 'offline-status-text status-missing';
+        btn.disabled = false;
+        btn.classList.remove('btn-cached');
+    }
+}
+
+async function checkTranslationCached() {
+    try {
+        const names = await caches.keys();
+        for (const name of names) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            if (keys.some(r => r.url.includes('nllb-200-distilled-600M'))) {
+                setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'cached');
+                return true;
+            }
+        }
+        setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'not-cached');
+        return false;
+    } catch {
+        setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'not-cached');
+        return false;
+    }
+}
+
+async function checkNERCached() {
+    try {
+        // HF transformers v3 uses different cache names; check all caches for ai4privacy files
+        const names = await caches.keys();
+        for (const name of names) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            if (keys.some(r => r.url.includes('ai4privacy') || r.url.includes('llama-ai4privacy'))) {
+                setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'cached');
+                return true;
+            }
+        }
+        setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'not-cached');
+        return false;
+    } catch {
+        setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'not-cached');
+        return false;
+    }
+}
+
+async function checkLLMCached() {
+    try {
+        if (!indexedDB.databases) {
+            setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'not-cached');
+            return false;
+        }
+        const dbs = await indexedDB.databases();
+        // WebLLM/MLC stores in various IDB databases
+        const hasLLM = dbs.some(db => {
+            const name = (db.name || '').toLowerCase();
+            return name.includes('webllm') || name.includes('mlc') || name.includes('tvmjs')
+                || name.includes('cache') && name.includes('model');
+        });
+        if (hasLLM) {
+            setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'cached');
+            return true;
+        }
+        setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'not-cached');
+        return false;
+    } catch {
+        setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'not-cached');
+        return false;
+    }
+}
+
+async function checkAllOfflineStatus() {
+    await Promise.all([checkTranslationCached(), checkNERCached(), checkLLMCached()]);
+    updateDownloadAllBtn();
+}
+
+function updateDownloadAllBtn() {
+    const allCached = [offlineTranslationCard, offlineNERCard, offlineLLMCard]
+        .every(c => c.dataset.status === 'cached' || c.dataset.status === 'done');
+    if (allCached) {
+        offlineDownloadAllBtn.textContent = '✓ All models ready for offline use';
+        offlineDownloadAllBtn.disabled = true;
+        offlineDownloadAllBtn.classList.add('btn-cached');
+    } else {
+        offlineDownloadAllBtn.disabled = false;
+        offlineDownloadAllBtn.classList.remove('btn-cached');
+    }
+}
+
+// ── Download Functions ─────────────────────────────────────────────────────────
+let downloadingTranslation = false;
+let downloadingNER = false;
+let downloadingLLM = false;
+
+async function downloadTranslationModel() {
+    if (downloadingTranslation) return;
+    downloadingTranslation = true;
+    setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'downloading');
+    offlineTranslationProgress.style.display = 'block';
+    offlineTranslationBar.style.width = '0%';
+    offlineTranslationPct.textContent = '0%';
+
+    const fileProgress = {};
+    try {
+        const { pipeline, env } = await import('@huggingface/transformers');
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+        if (env.backends?.onnx?.wasm) {
+            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
+        }
+
+        const t = await pipeline('translation', TRANSLATION_MODEL, {
+            quantized: true,
+            progress_callback: (progress) => {
+                if (progress.status === 'progress' && progress.total > 0) {
+                    const fileName = progress.file || 'data';
+                    fileProgress[fileName] = { loaded: progress.loaded, total: progress.total };
+                    const totalLoaded = Object.values(fileProgress).reduce((a, c) => a + c.loaded, 0);
+                    const totalSize = Object.values(fileProgress).reduce((a, c) => a + c.total, 0);
+                    const pct = Math.round((totalLoaded / totalSize) * 100);
+                    offlineTranslationBar.style.width = pct + '%';
+                    offlineTranslationPct.textContent = pct + '%';
+                }
+            },
+        });
+        // Keep the pipeline alive — it shares the same ES module singleton
+        // as app.js, so disposing would corrupt the translator for the Translate tab.
+
+        offlineTranslationProgress.style.display = 'none';
+        setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'done');
+        window.dispatchEvent(new CustomEvent('medmorf:translation-cache-updated'));
+    } catch (err) {
+        console.error('Translation model download error:', err);
+        offlineTranslationText.textContent = 'Error: ' + err.message;
+        setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'error');
+        offlineTranslationText.textContent = 'Download failed — ' + err.message;
+        offlineTranslationProgress.style.display = 'none';
+    } finally {
+        downloadingTranslation = false;
+        updateDownloadAllBtn();
+    }
+}
+
+async function downloadNERModel() {
+    if (downloadingNER) return;
+    downloadingNER = true;
+    setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'downloading');
+    offlineNERProgress.style.display = 'block';
+    offlineNERBar.style.width = '0%';
+    offlineNERPct.textContent = '0%';
+
+    try {
+        const { pipeline, env } = await import('@huggingface/transformers');
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+        if (env.backends?.onnx?.wasm) {
+            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
+        }
+
+        const p = await pipeline('token-classification', NER_MODEL, {
+            dtype: 'q8',
+            progress_callback: (progress) => {
+                if (progress.status === 'progress' && progress.total > 0) {
+                    const pct = Math.round((progress.loaded / progress.total) * 100);
+                    offlineNERBar.style.width = pct + '%';
+                    offlineNERPct.textContent = pct + '%';
+                }
+            },
+        });
+        // Dispose to free memory
+        if (p && typeof p.dispose === 'function') p.dispose();
+
+        offlineNERProgress.style.display = 'none';
+        setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'done');
+    } catch (err) {
+        console.error('NER model download error:', err);
+        setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'error');
+        offlineNERText.textContent = 'Download failed — ' + err.message;
+        offlineNERProgress.style.display = 'none';
+    } finally {
+        downloadingNER = false;
+        updateDownloadAllBtn();
+    }
+}
+
+async function downloadLLMModel() {
+    if (downloadingLLM) return;
+    downloadingLLM = true;
+    setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'downloading');
+    offlineLLMProgress.style.display = 'block';
+    offlineLLMBar.style.width = '0%';
+    offlineLLMPct.textContent = '0%';
+
+    try {
+        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
+        const engine = await CreateMLCEngine(LLM_MODEL, {
+            initProgressCallback: (progress) => {
+                const text = progress.text || '';
+                const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                if (pctMatch) {
+                    offlineLLMBar.style.width = pctMatch[1] + '%';
+                    offlineLLMPct.textContent = Math.round(parseFloat(pctMatch[1])) + '%';
+                }
+                offlineLLMText.textContent = text || 'Downloading...';
+                offlineLLMText.className = 'offline-status-text status-downloading';
+            },
+        });
+        // Unload engine to free GPU/memory — model is now cached in IndexedDB
+        if (engine && typeof engine.unload === 'function') await engine.unload();
+
+        offlineLLMProgress.style.display = 'none';
+        setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'done');
+    } catch (err) {
+        console.error('LLM model download error:', err);
+        setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'error');
+        offlineLLMText.textContent = 'Download failed — ' + err.message;
+        offlineLLMProgress.style.display = 'none';
+    } finally {
+        downloadingLLM = false;
+        updateDownloadAllBtn();
+    }
+}
+
+async function downloadAllModels() {
+    // Start all downloads that aren't already cached
+    const tasks = [];
+    if (offlineTranslationCard.dataset.status !== 'cached' && offlineTranslationCard.dataset.status !== 'done') {
+        tasks.push(downloadTranslationModel());
+    }
+    if (offlineNERCard.dataset.status !== 'cached' && offlineNERCard.dataset.status !== 'done') {
+        tasks.push(downloadNERModel());
+    }
+    if (offlineLLMCard.dataset.status !== 'cached' && offlineLLMCard.dataset.status !== 'done') {
+        tasks.push(downloadLLMModel());
+    }
+    await Promise.all(tasks);
+    refreshStorageView();
+}
+
+// Wire up download buttons
+if (offlineTranslationBtn) offlineTranslationBtn.addEventListener('click', async () => {
+    await downloadTranslationModel();
+    refreshStorageView();
+    window.dispatchEvent(new CustomEvent('medmorf:translation-cache-updated'));
+});
+if (offlineNERBtn) offlineNERBtn.addEventListener('click', async () => {
+    await downloadNERModel();
+    refreshStorageView();
+});
+if (offlineLLMBtn) offlineLLMBtn.addEventListener('click', async () => {
+    await downloadLLMModel();
+    refreshStorageView();
+});
+if (offlineDownloadAllBtn) offlineDownloadAllBtn.addEventListener('click', downloadAllModels);
+
+// ── Personal Data Inspector ────────────────────────────────────────────────────
+const personalDataList = document.getElementById('personalDataList');
+const clearPersonalDataBtn = document.getElementById('clearPersonalDataBtn');
+
+function refreshPersonalDataView() {
+    if (!personalDataList) return;
+
+    const items = [];
+    const t = window.medmorfTranslationData;
+    const a = window.medmorfAnonymizeData;
+
+    if (t) {
+        if (t.hasFile()) items.push({ label: 'Translation file', detail: t.fileName(), type: 'file' });
+        if (t.hasQuickText()) items.push({ label: 'Quick translate input text', detail: 'Text in input box', type: 'text' });
+        if (t.hasQuickOutput()) items.push({ label: 'Quick translate output text', detail: 'Translated text in output box', type: 'text' });
+        if (t.hasTranslation()) items.push({ label: 'Translated file data', detail: 'In-memory translation result', type: 'data' });
+    }
+
+    if (a) {
+        if (a.hasDocument()) items.push({ label: 'Anonymization document', detail: a.documentName(), type: 'file' });
+        if (a.hasResult()) items.push({ label: 'Anonymized result', detail: 'In-memory anonymized output', type: 'data' });
+        if (a.hasMapping()) items.push({ label: 'Entity mapping', detail: `${a.mappingCount()} entities detected`, type: 'data' });
+    }
+
+    personalDataList.innerHTML = '';
+
+    if (items.length === 0) {
+        personalDataList.innerHTML = '<p class="storage-empty personal-data-clean">\u2713 No personal data in memory — all clean</p>';
+        if (clearPersonalDataBtn) clearPersonalDataBtn.disabled = true;
+        return;
+    }
+
+    if (clearPersonalDataBtn) clearPersonalDataBtn.disabled = false;
+
+    for (const item of items) {
+        const row = document.createElement('div');
+        row.className = 'personal-data-item';
+        const iconClass = item.type === 'file' ? 'pd-file' : item.type === 'text' ? 'pd-text' : 'pd-data';
+        row.innerHTML = `
+            <span class="pd-icon ${iconClass}">\u25cf</span>
+            <span class="pd-label">${escapeHTML(item.label)}</span>
+            <span class="pd-detail">${escapeHTML(item.detail || '')}</span>
+        `;
+        personalDataList.appendChild(row);
+    }
+}
+
+function clearAllPersonalData() {
+    if (window.medmorfTranslationData) window.medmorfTranslationData.clearAll();
+    if (window.medmorfAnonymizeData) window.medmorfAnonymizeData.clearAll();
+    refreshPersonalDataView();
+}
+
+if (clearPersonalDataBtn) clearPersonalDataBtn.addEventListener('click', clearAllPersonalData);
+
+// Auto-scan when the storage tab is shown
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.dataset.tab === 'storage') {
+            refreshStorageView();
+            checkAllOfflineStatus();
+            refreshPersonalDataView();
+        }
+    });
+});
+
+console.log('[STORAGE] Cache manager loaded');

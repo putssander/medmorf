@@ -2,17 +2,12 @@
 // NER: ai4privacy multilingual PII detector (ModernBERT, transformers.js v3)
 // LLM: Qwen2.5 (WebLLM/WebGPU) for additional PII verification
 // Zero data leaves the browser — all processing is local
+//
+// Model libraries are loaded lazily via dynamic import() when
+// anonymization features are actually used, to avoid downloading
+// large models at page load.
 
-import { CreateMLCEngine } from 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js';
-import { pipeline as createPipeline, env } from '@huggingface/transformers';
-
-env.allowLocalModels = false;
-env.useBrowserCache = true;
-if (env.backends?.onnx?.wasm) {
-    env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
-}
-
-const DEFAULT_MODEL = 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC';
+const DEFAULT_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
 const NER_MODEL = 'onnx-community/llama-ai4privacy-multilingual-categorical-anonymiser-openpii-ONNX';
 const MAX_CHUNK_CHARS = 1500;
 
@@ -121,6 +116,7 @@ async function initAnonModel() {
     updateStatus('loading', `Loading ${modelLabel}...`);
 
     try {
+        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
         engine = await CreateMLCEngine(selectedModel, {
             initProgressCallback: (progress) => {
                 const text = progress.text || '';
@@ -204,6 +200,13 @@ async function initNerModel() {
     updateStatus('loading', 'Loading NER model...');
 
     try {
+        const { pipeline: createPipeline, env } = await import('@huggingface/transformers');
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+        if (env.backends?.onnx?.wasm) {
+            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
+        }
+
         nerPipeline = await createPipeline('token-classification', NER_MODEL, {
             dtype: 'q8',
             progress_callback: (progress) => {
@@ -249,13 +252,13 @@ async function extractEntitiesNER(text) {
 const SYSTEM_PROMPT = `You are a medical data anonymization expert. Identify ALL personally identifiable information (PII) in the given medical/clinical text.
 
 Entity types to detect:
-- PERSON: Any person names (patients, doctors, family members, nurses)
-- LOCATION: Cities, towns, countries, regions
-- DATE: Any dates (birth dates, visit dates, admission dates)
+- PERSON: Any person names (patients, doctors, family members, nurses, children, spouses, emergency contacts)
+- LOCATION: Cities, towns, countries, regions, municipalities
+- DATE: Any dates (birth dates, visit dates, admission dates, year-only birth years like "2012" or "2015")
 - PHONE: Phone numbers, fax numbers
 - EMAIL: Email addresses
-- ADDRESS: Street addresses, postal/zip codes, house numbers
-- ORGANIZATION: Hospital names, clinic names, insurance companies, employers
+- ADDRESS: Street addresses, postal/zip codes, house numbers, standalone street names when they identify a place
+- ORGANIZATION: Hospital names, clinic names, insurance companies, employers, schools, practices, companies
 - ID_NUMBER: Patient IDs, BSN/SSN numbers, insurance numbers, medical record numbers, IBAN, driver license numbers
 - AGE: Specific ages mentioned
 
@@ -266,6 +269,10 @@ Rules:
 4. No explanations, no markdown, no thinking. ONLY the JSON array.
 5. If no PII found, return: []
 
+Important examples:
+- In "Lucas de Vries (geboren 2012) en Emma de Vries (geboren 2015). Ze zitten op de basisschool De Horizon in Maastricht.", detect "Lucas de Vries" and "Emma de Vries" as PERSON, "2012" and "2015" as DATE, "De Horizon" as ORGANIZATION, and "Maastricht" as LOCATION.
+- In "Dr. Anne Jansen van Huisartsenpraktijk Sint Pieter", detect "Anne Jansen" as PERSON and "Huisartsenpraktijk Sint Pieter" as ORGANIZATION.
+
 Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam UMC","type":"ORGANIZATION"}]`;
 
 // Focused prompt for hybrid mode: NER already found PERSON/LOCATION/ORGANIZATION,
@@ -273,10 +280,10 @@ Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam UMC","t
 const SYSTEM_PROMPT_FOCUSED = `You are a medical data anonymization expert. A NER model has attempted initial PII detection but may have missed entities. Your task is to find ALL PII in the text, especially any the NER missed.
 
 You MUST check for ALL of these entity types:
-- PERSON: ALL person names — patients, doctors, family members, nurses, contacts. This is critical.
+- PERSON: ALL person names — patients, doctors, family members, nurses, contacts, children. This is critical.
 - LOCATION: ALL cities, towns, countries, regions — e.g. "Utrecht", "Maastricht", "Eindhoven"
-- ORGANIZATION: ALL organizations — hospitals, clinics, insurance companies, employers, schools
-- DATE: Any dates (birth dates, visit dates, admission dates) — e.g. "12 maart 1981", "5 februari 2026"
+- ORGANIZATION: ALL organizations — hospitals, clinics, insurance companies, employers, schools, practices
+- DATE: Any dates (birth dates, visit dates, admission dates, year-only birth years) — e.g. "12 maart 1981", "5 februari 2026", "2012"
 - PHONE: Phone numbers, fax numbers — e.g. "+31 6 12345678"
 - EMAIL: Email addresses — e.g. "j.devries@example.nl"
 - ADDRESS: Street names, house numbers, postal codes — e.g. "Kastanjelaan 58", "6221 BN", "Stationsstraat 12"
@@ -289,6 +296,9 @@ Rules:
 3. Do NOT include diagnoses, symptoms, medications, or generic medical terms.
 4. No explanations, no markdown, no thinking. ONLY the JSON array.
 5. If no PII found, return: []
+
+Important example:
+- In "Lucas de Vries (geboren 2012) en Emma de Vries (geboren 2015). Ze zitten op de basisschool De Horizon in Maastricht.", detect "Lucas de Vries" and "Emma de Vries" as PERSON, "2012" and "2015" as DATE, "De Horizon" as ORGANIZATION, and "Maastricht" as LOCATION.
 
 Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam","type":"LOCATION"},{"entity":"12 maart 1981","type":"DATE"}]`;
 
@@ -565,13 +575,14 @@ async function anonymizeTextDocument(pipeline) {
             }
         }
 
-        // Phase 2: LLM pass (focused on types NER can't detect)
+        // Phase 2: LLM verification pass. Use the full prompt for higher recall;
+        // duplicates are deduplicated by the mapping layer.
         anonProgressText.textContent = 'LLM pass: finding remaining PII...';
         for (let i = 0; i < totalChunks; i++) {
             const pct = 25 + Math.round(((i + 1) / totalChunks) * 50);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
-            const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT_FOCUSED);
+            const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
             for (const { entity, type } of llmEntities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -637,7 +648,7 @@ async function anonymizeExcel(pipeline) {
             const pct = 25 + Math.round(((i + 1) / totalChunks) * 50);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
-            const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT_FOCUSED);
+            const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
             for (const { entity, type } of llmEntities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -822,6 +833,31 @@ if (clearAnonMappingBtn) {
 }
 
 anonymizeBtn.addEventListener('click', () => performAnonymization());
+
+// Expose in-memory data status for the Storage tab
+window.medmorfAnonymizeData = {
+    hasDocument: () => anonDocument !== null,
+    documentName: () => anonDocument ? anonDocument.name : null,
+    hasResult: () => anonymizedResult !== null,
+    hasMapping: () => Object.keys(currentMapping.entities).length > 0,
+    mappingCount: () => Object.keys(currentMapping.entities).length,
+    clearAll: () => {
+        anonDocument = null;
+        anonDocType = null;
+        anonWorkbook = null;
+        anonymizedResult = null;
+        currentMapping = { version: 1, entities: {}, counters: {} };
+        if (anonDocInput) anonDocInput.value = '';
+        if (anonMappingInput) anonMappingInput.value = '';
+        if (anonDocInfo) anonDocInfo.style.display = 'none';
+        if (anonMappingInfo) anonMappingInfo.style.display = 'none';
+        if (anonResults) anonResults.style.display = 'none';
+        if (anonExcelSettings) anonExcelSettings.style.display = 'none';
+        if (anonymizeBtn) anonymizeBtn.disabled = true;
+        updateMappingCount();
+        console.log('[PRIVACY] All anonymization data cleared');
+    }
+};
 
 // Init
 updateMappingCount();

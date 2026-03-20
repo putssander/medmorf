@@ -1,8 +1,10 @@
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/src/transformers.js';
+import { pipeline, env } from '@huggingface/transformers';
 
 // Configure transformers.js
 env.allowLocalModels = false;
 env.useBrowserCache = true;
+
+const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';
 
 // Global state
 let translator = null;
@@ -305,78 +307,58 @@ function updateSelectedColumns() {
     translateBtn.disabled = selectedColumns.length === 0;
 }
 
-// Initialize translator
+// Initialize translator — single pipeline instance for the page lifetime.
+// Re-entrancy guard: if called while already loading, callers share the same promise.
+let _initPromise = null;
 async function initTranslator() {
     if (translator) return;
-    
-    updateSystemStatus('loading', 'Loading model to memory...');
-    
-    // Show in appropriate location based on context
-    if (!isQuickTranslateActive) {
-        modelStatus.style.display = 'block';
-    }
-    
-    // Track progress of all files to show a unified progress bar
+    if (_initPromise) return _initPromise;
+    _initPromise = _loadPipeline();
+    try { await _initPromise; } finally { _initPromise = null; }
+}
+
+async function _loadPipeline() {
+    updateSystemStatus('loading', 'Loading translation model...');
+    if (!isQuickTranslateActive) modelStatus.style.display = 'block';
+
     const fileProgress = {};
-    
     try {
-        translator = await pipeline('translation', 'Xenova/nllb-200-distilled-600M', {
+        // Set ONNX WASM paths before first pipeline call
+        if (env.backends?.onnx?.wasm) {
+            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
+        }
+        translator = await pipeline('translation', TRANSLATION_MODEL, {
+            quantized: true,
             progress_callback: (progress) => {
                 if (progress.status === 'initiate') {
-                    modelStatusText.textContent = 'Starting download...';
-                    updateSystemStatus('loading', 'Starting model download...');
-                } else if (progress.status === 'progress') {
-                    // Update progress for this specific file
-                    const fileName = progress.file || 'model data';
-                    fileProgress[fileName] = {
-                        loaded: progress.loaded,
-                        total: progress.total
-                    };
-                    
-                    // Calculate total progress across all files
-                    const totalLoaded = Object.values(fileProgress).reduce((acc, curr) => acc + curr.loaded, 0);
-                    const totalSize = Object.values(fileProgress).reduce((acc, curr) => acc + curr.total, 0);
-                    
-                    if (totalSize > 0) {
-                        const totalPercent = Math.round((totalLoaded / totalSize) * 100);
-                        
-                        modelProgress.style.width = totalPercent + '%';
-                        
-                        if (isQuickTranslateActive) {
-                            const quickProgressFill = document.getElementById('quickProgressFill');
-                            if (quickProgressFill) {
-                                quickProgressFill.style.width = totalPercent + '%';
-                            }
-                        }
-                        
-                        modelStatusText.textContent = `Downloading model: ${totalPercent}%`;
-                        updateSystemStatus('loading', `Downloading model: ${totalPercent}%`);
-                        
-                        // Also update quick translate status text if active
-                        if (isQuickTranslateActive) {
-                            const statusContent = quickTranslateStatus.querySelector('.quick-status-content span:last-child');
-                            if (statusContent) {
-                                statusContent.textContent = `Downloading model: ${totalPercent}%`;
-                            }
-                        }
+                    modelStatusText.textContent = 'Loading model...';
+                } else if (progress.status === 'progress' && progress.total > 0) {
+                    const file = progress.file || 'data';
+                    fileProgress[file] = { loaded: progress.loaded, total: progress.total };
+                    const loaded = Object.values(fileProgress).reduce((a, c) => a + c.loaded, 0);
+                    const total = Object.values(fileProgress).reduce((a, c) => a + c.total, 0);
+                    const pct = Math.round((loaded / total) * 100);
+                    modelProgress.style.width = pct + '%';
+                    modelStatusText.textContent = `Loading model: ${pct}%`;
+                    updateSystemStatus('loading', `Loading model: ${pct}%`);
+                    if (isQuickTranslateActive) {
+                        const fill = document.getElementById('quickProgressFill');
+                        if (fill) fill.style.width = pct + '%';
+                        const span = quickTranslateStatus.querySelector('.quick-status-content span:last-child');
+                        if (span) span.textContent = `Loading model: ${pct}%`;
                     }
                 } else if (progress.status === 'done') {
-                    modelStatusText.textContent = 'Download complete. Loading to memory...';
-                    updateSystemStatus('loading', 'Loading model to memory...');
+                    modelStatusText.textContent = 'Initializing...';
                 }
             }
         });
-        
-        modelStatusText.textContent = 'Model loaded successfully! ✓';
+        modelStatusText.textContent = 'Model loaded ✓';
         updateSystemStatus('idle', 'System Ready (Idle)');
         checkModelStatus();
-        setTimeout(() => {
-            modelStatus.style.display = 'none';
-        }, 2000);
-        
+        setTimeout(() => { modelStatus.style.display = 'none'; }, 2000);
     } catch (error) {
         console.error('Error loading model:', error);
-        modelStatusText.textContent = 'Error loading model: ' + error.message;
+        modelStatusText.textContent = 'Error: ' + error.message;
         updateSystemStatus('idle', 'Error loading model');
         if (isQuickTranslateActive) {
             quickTranslateStatus.innerHTML = '<div class="quick-status-content">Error loading model: ' + error.message + '</div>';
@@ -389,6 +371,7 @@ async function initTranslator() {
 // Translate text
 async function translateText(text, srcLang, tgtLang) {
     if (!text || text.trim() === '') return text;
+    if (srcLang === tgtLang) return text;
     
     // Split text into paragraphs to handle long inputs and avoid truncation
     // The model has a limited context window, so passing a huge block of text
@@ -403,21 +386,52 @@ async function translateText(text, srcLang, tgtLang) {
             translatedParagraphs.push(paragraph);
             continue;
         }
-        
-        try {
-            // Process paragraph
-            const result = await translator(paragraph, {
-                src_lang: srcLang,
-                tgt_lang: tgtLang
-            });
-            translatedParagraphs.push(result[0].translation_text);
-        } catch (error) {
-            console.error('Translation error:', error);
-            translatedParagraphs.push(paragraph); // Return original on error
-        }
+
+        translatedParagraphs.push(await translateParagraph(paragraph, srcLang, tgtLang));
     }
     
     return translatedParagraphs.join('\n');
+}
+
+async function translateParagraph(paragraph, srcLang, tgtLang) {
+    const result = await translator(paragraph, {
+        src_lang: srcLang,
+        tgt_lang: tgtLang
+    });
+    const translated = extractTranslationText(result);
+    if (!translated) {
+        throw new Error('Translation model returned an empty response');
+    }
+    return translated;
+}
+
+function extractTranslationText(result) {
+    if (typeof result === 'string') {
+        return result.trim();
+    }
+
+    if (Array.isArray(result) && result.length > 0) {
+        const first = result[0];
+        if (typeof first === 'string') {
+            return first.trim();
+        }
+        if (first && typeof first.translation_text === 'string') {
+            return first.translation_text.trim();
+        }
+        if (first && typeof first.generated_text === 'string') {
+            return first.generated_text.trim();
+        }
+    }
+
+    if (result && typeof result.translation_text === 'string') {
+        return result.translation_text.trim();
+    }
+
+    if (result && typeof result.generated_text === 'string') {
+        return result.generated_text.trim();
+    }
+
+    return '';
 }
 
 // Translate button handler
@@ -581,79 +595,67 @@ downloadBtn.addEventListener('click', () => {
     }
 });
 
-// Automatic data clearing on page unload
-function clearAllData() {
-    console.log('[PRIVACY] Automatically clearing all data...');
-    
-    // Clear all data variables
+// Privacy: clear user/patient data from memory on page unload.
+// Model caches (Cache API / IndexedDB) are never touched — they hold only
+// AI model weights, never user data.
+function clearUserData() {
     currentFile = null;
     workbook = null;
     selectedSheet = null;
     selectedColumns = [];
     translatedData = null;
-    
-    // Reset file input
-    if (fileInput) {
-        fileInput.value = '';
-    }
-    
-    // Call security manager
-    if (window.medmorfSecurity) {
-        window.medmorfSecurity.clearAll();
-    }
-    
-    console.log('[PRIVACY] All data cleared automatically');
+    if (fileInput) fileInput.value = '';
+    if (quickInputText) quickInputText.value = '';
+    if (quickOutputText) quickOutputText.value = '';
 }
 
-// Clear data when page is unloaded (closing tab, refreshing, navigating away)
-window.addEventListener('beforeunload', (e) => {
-    clearAllData();
-});
+window.addEventListener('beforeunload', () => { clearUserData(); });
 
-// Clear data when page becomes hidden (switching tabs, minimizing)
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        console.log('[PRIVACY] Page hidden - keeping data in memory');
+// Expose in-memory data status for the Storage tab
+window.medmorfTranslationData = {
+    hasFile: () => currentFile !== null,
+    fileName: () => currentFile ? currentFile.name : null,
+    hasTranslation: () => translatedData !== null,
+    hasQuickText: () => !!(quickInputText && quickInputText.value.trim()),
+    hasQuickOutput: () => !!(quickOutputText && quickOutputText.value.trim()),
+    clearAll: () => {
+        currentFile = null;
+        workbook = null;
+        selectedSheet = null;
+        selectedColumns = [];
+        translatedData = null;
+        fileType = null;
+        if (fileInput) fileInput.value = '';
+        if (quickInputText) quickInputText.value = '';
+        if (quickOutputText) quickOutputText.value = '';
+        if (fileInfo) fileInfo.style.display = 'none';
+        if (results) results.style.display = 'none';
+        if (downloadBtn) downloadBtn.style.display = 'none';
+        if (inputCharCount) inputCharCount.textContent = '0';
+        console.log('[PRIVACY] All translation data cleared');
     }
-});
-
-// Clear data when page loses focus for extended period
-let blurTimeout;
-window.addEventListener('blur', () => {
-    // Clear after 30 minutes of inactivity
-    blurTimeout = setTimeout(() => {
-        console.log('[PRIVACY] Extended inactivity - clearing data');
-        clearAllData();
-    }, 30 * 60 * 1000);
-});
-
-window.addEventListener('focus', () => {
-    // Cancel the clear timeout if user returns
-    if (blurTimeout) {
-        clearTimeout(blurTimeout);
-    }
-});
-
-// Add warning when user is about to leave with data
-window.addEventListener('beforeunload', (e) => {
-    if (currentFile || translatedData) {
-        e.preventDefault();
-        e.returnValue = 'You have processed data in memory. Clear it before leaving for maximum security.';
-    }
-});
+};
 
 // Initialize
 console.log('Translation app initialized');
 console.log('🔒 PRIVACY: All processing happens in YOUR browser only');
 console.log('🔒 PRIVACY: NO data is ever sent to any server');
 
-// Model Management
+// Model Management — check if the translation model is in the Cache API
 async function checkModelStatus() {
     if (!modelCacheStatus) return;
-    
     try {
-        const cacheExists = await caches.has('transformers-cache');
-        if (cacheExists) {
+        let cached = false;
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            if (keys.some(r => r.url.includes('nllb-200-distilled-600M'))) {
+                cached = true;
+                break;
+            }
+        }
+        if (cached) {
             modelCacheStatus.innerHTML = `
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 Model is cached and ready for offline use
@@ -668,33 +670,31 @@ async function checkModelStatus() {
         }
     } catch (error) {
         console.error('Error checking cache:', error);
-        modelCacheStatus.textContent = 'Could not check model status';
     }
 }
 
+window.addEventListener('medmorf:translation-cache-updated', () => { checkModelStatus(); });
+
 if (clearModelBtn) {
     clearModelBtn.addEventListener('click', async () => {
-        if (!confirm('Are you sure you want to delete the cached model? You will need to download it again (~300MB) next time you translate.')) {
-            return;
-        }
-        
+        if (!confirm('Delete the cached translation model? You will need to re-download it (~300MB).')) return;
         try {
-            const deleted = await caches.delete('transformers-cache');
-            if (deleted) {
-                alert('Model cache cleared successfully.');
-                checkModelStatus();
-                // Reset translator instance
-                translator = null;
-            } else {
-                alert('No model cache found to delete.');
+            const cacheNames = await caches.keys();
+            for (const name of cacheNames) {
+                const cache = await caches.open(name);
+                const keys = await cache.keys();
+                const modelKeys = keys.filter(r => r.url.includes('nllb-200-distilled-600M'));
+                for (const key of modelKeys) {
+                    await cache.delete(key);
+                }
             }
+            translator = null;
+            _initPromise = null;
+            checkModelStatus();
         } catch (error) {
-            console.error('Error clearing cache:', error);
             alert('Error clearing cache: ' + error.message);
         }
     });
 }
 
-// Check status on load
 checkModelStatus();
-console.log('🔒 PRIVACY: Type window.medmorfSecurity.showWarnings() for privacy info');
