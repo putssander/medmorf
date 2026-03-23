@@ -7,14 +7,24 @@
 // anonymization features are actually used, to avoid downloading
 // large models at page load.
 
+import {
+    getActiveNERLoadLabel,
+    DEFAULT_NER_MODEL_ID,
+    NER_MODEL_OPTIONS,
+    disposeNERPipeline,
+    getActiveNERModelId,
+    getNERModelOption,
+    getNERPipeline,
+    initNERPipeline,
+    mapNEREntityType,
+} from './privacy-runtime.js?v=2026-03-23-cachefix-7';
+
 const DEFAULT_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
-const NER_MODEL = 'onnx-community/llama-ai4privacy-multilingual-categorical-anonymiser-openpii-ONNX';
 const MAX_CHUNK_CHARS = 1500;
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let engine = null;
 let loadedModelId = null;
-let nerPipeline = null;
 let isNerLoading = false;
 let currentMapping = { version: 1, entities: {}, counters: {} };
 let anonDocument = null;
@@ -23,6 +33,12 @@ let anonWorkbook = null;
 let anonymizedResult = null;
 let isAnonModelLoading = false;
 let isAnonymizing = false;
+let lastDetectionBreakdown = { pipeline: 'ner+llm', ner: [], llm: [], llmAdded: [] };
+let detectionSeen = {
+    ner: new Set(),
+    llm: new Set(),
+    llmAdded: new Set(),
+};
 
 // ── DOM Elements ───────────────────────────────────────────────────────────────
 const anonDocUpload = document.getElementById('anonDocUpload');
@@ -45,6 +61,11 @@ const anonProgressText = document.getElementById('anonProgressText');
 const anonymizeBtn = document.getElementById('anonymizeBtn');
 const anonResults = document.getElementById('anonResults');
 const mappingTableBody = document.querySelector('#mappingTable tbody');
+const nerDetectionTableBody = document.querySelector('#nerDetectionTable tbody');
+const llmDetectionTableBody = document.querySelector('#llmDetectionTable tbody');
+const llmAddedTableBody = document.querySelector('#llmAddedTable tbody');
+const anonDetectionSummary = document.getElementById('anonDetectionSummary');
+const llmAddedSection = document.getElementById('llmAddedSection');
 const anonPreviewText = document.getElementById('anonPreviewText');
 const downloadAnonDocBtn = document.getElementById('downloadAnonDocBtn');
 const downloadMappingBtn = document.getElementById('downloadMappingBtn');
@@ -53,6 +74,8 @@ const anonMappingCount = document.getElementById('anonMappingCount');
 const clearAnonMappingBtn = document.getElementById('clearAnonMappingBtn');
 const anonModelSelect = document.getElementById('anonModelSelect');
 const anonPipelineSelect = document.getElementById('anonPipelineSelect');
+const anonNerModelSelect = document.getElementById('anonNerModelSelect');
+const anonNerModelHint = document.getElementById('anonNerModelHint');
 const mappingExportFormat = document.getElementById('mappingExportFormat');
 
 const systemStatusIndicator = document.querySelector('.status-indicator');
@@ -145,49 +168,54 @@ async function initAnonModel() {
     }
 }
 
+async function disposeAnonModel() {
+    if (!engine) {
+        loadedModelId = null;
+        return;
+    }
+
+    const engineToUnload = engine;
+    engine = null;
+    loadedModelId = null;
+
+    if (typeof engineToUnload.unload === 'function') {
+        await engineToUnload.unload();
+    }
+}
+
 // ── LLM Entity Extraction (OpenAI-compatible chat API via WebLLM) ──────────────
-// NER type mapping: ai4privacy model uses fine-grained PII labels
-const NER_TYPE_MAP = {
-    GIVENNAME: 'PERSON',
-    SURNAME: 'PERSON',
-    FIRSTNAME: 'PERSON',
-    LASTNAME: 'PERSON',
-    MIDDLENAME: 'PERSON',
-    FULLNAME: 'PERSON',
-    EMAIL: 'EMAIL',
-    TELEPHONENUM: 'PHONE',
-    DATE: 'DATE',
-    TIME: 'DATE',
-    CITY: 'LOCATION',
-    STREET: 'ADDRESS',
-    BUILDINGNUM: 'ADDRESS',
-    ZIPCODE: 'ADDRESS',
-    STATE: 'LOCATION',
-    COUNTY: 'LOCATION',
-    COUNTRY: 'LOCATION',
-    AGE: 'AGE',
-    SEX: 'OTHER',
-    GENDER: 'OTHER',
-    TITLE: 'OTHER',
-    SOCIALNUM: 'ID_NUMBER',
-    IDCARDNUM: 'ID_NUMBER',
-    PASSPORTNUM: 'ID_NUMBER',
-    DRIVERLICENSENUM: 'ID_NUMBER',
-    CREDITCARDNUMBER: 'ID_NUMBER',
-    TAXNUM: 'ID_NUMBER',
-    ACCOUNTNUM: 'ID_NUMBER',
-    IBAN: 'ID_NUMBER',
-    IPV4: 'OTHER',
-    IPV6: 'OTHER',
-    USERNAME: 'OTHER',
-    URL: 'OTHER',
-    PER: 'PERSON',
-    LOC: 'LOCATION',
-    ORG: 'ORGANIZATION',
-};
+
+function getSelectedNerModelId() {
+    return anonNerModelSelect ? anonNerModelSelect.value : DEFAULT_NER_MODEL_ID;
+}
+
+function updateNerModelHint() {
+    if (!anonNerModelHint) return;
+    const option = getNERModelOption(getSelectedNerModelId());
+    const supportedLanguages = option.supportedLanguages ? option.supportedLanguages.join(', ') : 'See model card';
+    const qualityNote = option.qualityNote ? ` Quality note: ${option.qualityNote}` : '';
+    anonNerModelHint.textContent = `${option.label}: ${option.description} Supported languages: ${supportedLanguages}. Categories: ${option.categoriesLabel}.${qualityNote}`;
+}
+
+function populateNerModelSelect() {
+    if (!anonNerModelSelect) return;
+    anonNerModelSelect.innerHTML = '';
+    Object.values(NER_MODEL_OPTIONS).forEach((option) => {
+        const selectOption = document.createElement('option');
+        selectOption.value = option.id;
+        selectOption.textContent = option.label;
+        if (option.id === DEFAULT_NER_MODEL_ID) {
+            selectOption.selected = true;
+        }
+        anonNerModelSelect.appendChild(selectOption);
+    });
+    updateNerModelHint();
+}
 
 async function initNerModel() {
-    if (nerPipeline) return;
+    const selectedNerModelId = getSelectedNerModelId();
+    const loadedNerModelId = getActiveNERModelId();
+    if (getNERPipeline() && loadedNerModelId === selectedNerModelId) return;
     if (isNerLoading) return;
     isNerLoading = true;
 
@@ -195,32 +223,26 @@ async function initNerModel() {
     anonModelProgress.style.width = '0%';
 
     const anonModelHeading = document.getElementById('anonModelHeading');
-    if (anonModelHeading) anonModelHeading.textContent = 'Loading NER model...';
-    anonModelStatusText.textContent = 'Downloading NER model...';
-    updateStatus('loading', 'Loading NER model...');
+    const nerOption = getNERModelOption(selectedNerModelId);
+    if (anonModelHeading) anonModelHeading.textContent = `Loading ${nerOption.label}...`;
+    anonModelStatusText.textContent = `Downloading ${nerOption.label}...`;
+    updateStatus('loading', `Loading ${nerOption.label}...`);
 
     try {
-        const { pipeline: createPipeline, env } = await import('@huggingface/transformers');
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        if (env.backends?.onnx?.wasm) {
-            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
-        }
-
-        nerPipeline = await createPipeline('token-classification', NER_MODEL, {
-            dtype: 'q8',
-            progress_callback: (progress) => {
+        await initNERPipeline({
+            modelId: selectedNerModelId,
+            progressCallback: (progress) => {
                 if (progress.status === 'progress' && progress.total > 0) {
                     const pct = Math.round((progress.loaded / progress.total) * 100);
                     anonModelProgress.style.width = pct + '%';
-                    anonModelStatusText.textContent = `Downloading NER model: ${pct}%`;
+                    anonModelStatusText.textContent = `Downloading ${nerOption.label}: ${pct}%`;
                 }
             },
         });
 
-        anonModelStatusText.textContent = 'NER model loaded ✓';
+        anonModelStatusText.textContent = `${nerOption.label} loaded ✓`;
         anonModelProgress.style.width = '100%';
-        updateStatus('idle', 'NER model ready');
+        updateStatus('idle', `${nerOption.label} ready`);
         setTimeout(() => { anonModelStatus.style.display = 'none'; }, 1500);
     } catch (error) {
         console.error('NER model loading error:', error);
@@ -233,19 +255,95 @@ async function initNerModel() {
 }
 
 async function extractEntitiesNER(text) {
-    const results = await nerPipeline(text, { aggregation_strategy: 'simple' });
-    console.log('[NER] Raw output for chunk:', results);
-    const entities = [];
-    for (const r of results) {
-        // Strip B-/I- prefix from entity_group (e.g. "B-PER" → "PER")
-        const rawType = (r.entity_group || r.entity || '').replace(/^[BI]-/, '');
-        const type = NER_TYPE_MAP[rawType] || rawType;
-        const word = r.word?.trim();
-        const score = r.score || 0;
-        if (word && word.length > 1 && type && score > 0.3) {
-            entities.push({ entity: word, type });
+    const pipeline = getNERPipeline();
+    if (!pipeline) {
+        throw new Error('NER model is not loaded');
+    }
+    console.log('[NER] Running chunk', {
+        modelId: getActiveNERModelId(),
+        load: getActiveNERLoadLabel(),
+        length: text.length,
+        preview: text.slice(0, 200),
+    });
+    const aggregated = await pipeline(text, {
+        aggregation_strategy: 'simple',
+        ignore_labels: ['O'],
+    });
+
+    console.log('[NER] Aggregated output for chunk:', aggregated);
+    console.log('[NER] Aggregated sample:', aggregated.slice(0, 5).map(item => ({
+        entity_group: item.entity_group || item.entity,
+        word: item.word,
+        start: item.start,
+        end: item.end,
+        offsetText: Number.isInteger(item.start) && Number.isInteger(item.end) && item.end > item.start
+            ? text.slice(item.start, item.end)
+            : null,
+        score: item.score,
+    })));
+
+    // Merge adjacent entities of the same type (fixes B-B fragmentation from some models)
+    // Also merges adjacent entities whose mapped types match (e.g. GIVENNAME+SURNAME → both PERSON)
+    const merged = [];
+    for (const item of aggregated) {
+        const rawEntity = String(item.entity_group || item.entity || '').replace(/^[BI]-/, '');
+        const prev = merged.length > 0 ? merged[merged.length - 1] : null;
+        const prevRaw = prev ? String(prev.entity_group || prev.entity || '').replace(/^[BI]-/, '') : '';
+        const gap = prev && Number.isInteger(prev.end) && Number.isInteger(item.start) ? item.start - prev.end : Infinity;
+        const sameRawType = rawEntity === prevRaw;
+        const sameMappedType = prev && mapNEREntityType(rawEntity, getActiveNERModelId()) === mapNEREntityType(prevRaw, getActiveNERModelId());
+        if (prev && (sameRawType || sameMappedType) && gap <= 1) {
+            prev.end = item.end;
+            prev.word = (prev.word || '') + (item.word || '');
+            prev.score = Math.min(prev.score || 0, item.score || 0);
+        } else {
+            merged.push({ ...item });
         }
     }
+
+    const entities = [];
+    const seen = new Set();
+    for (const item of merged) {
+        const rawEntity = String(item.entity_group || item.entity || '');
+        const rawType = rawEntity.replace(/^[BI]-/, '');
+        const type = mapNEREntityType(rawType, getActiveNERModelId());
+        const score = item.score || 0;
+        const hasOffsets = Number.isInteger(item.start) && Number.isInteger(item.end) && item.end > item.start;
+        const entityFromOffsets = hasOffsets ? text.slice(item.start, item.end).trim() : '';
+        const entityFromWord = String(item.word || '')
+            .replace(/[Ġ▁]/g, ' ')
+            .replace(/##/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+        const offsetHasAlpha = /[\p{L}@]/u.test(entityFromOffsets);
+        const wordHasAlpha = /[\p{L}@]/u.test(entityFromWord);
+        const offsetLooksNumericOnly = /^[\d\s.,:/+-]+$/.test(entityFromOffsets);
+        // Prefer offset-based text when available and not purely numeric
+        const entity = (!entityFromWord)
+            ? entityFromOffsets
+            : (hasOffsets && offsetHasAlpha && !offsetLooksNumericOnly)
+                ? entityFromOffsets
+                : (offsetLooksNumericOnly && wordHasAlpha)
+                    ? entityFromWord
+                    : (!offsetHasAlpha && wordHasAlpha)
+                        ? entityFromWord
+                        : hasOffsets
+                            ? entityFromOffsets
+                            : entityFromWord;
+
+        if (!entity || entity.length < 2 || !type || score <= 0.1) {
+            continue;
+        }
+
+        const key = `${entity.toLowerCase()}::${type}`;
+        if (seen.has(key)) {
+            continue;
+        }
+
+        seen.add(key);
+        entities.push({ entity, type });
+    }
+
     console.log('[NER] Mapped entities:', entities);
     return entities;
 }
@@ -351,13 +449,70 @@ function getOrCreateReplacement(entity, type) {
     return replacement;
 }
 
+function createDetectionKey(entity, type) {
+    return `${entity.trim().toLowerCase()}::${type}`;
+}
+
+function resetDetectionBreakdown(pipeline) {
+    lastDetectionBreakdown = { pipeline, ner: [], llm: [], llmAdded: [] };
+    detectionSeen = {
+        ner: new Set(),
+        llm: new Set(),
+        llmAdded: new Set(),
+    };
+}
+
+function recordDetectedEntities(source, entities) {
+    const target = source === 'ner' ? lastDetectionBreakdown.ner : lastDetectionBreakdown.llm;
+    const seenSet = source === 'ner' ? detectionSeen.ner : detectionSeen.llm;
+
+    for (const { entity, type } of entities) {
+        const key = createDetectionKey(entity, type);
+        if (!seenSet.has(key)) {
+            seenSet.add(key);
+            target.push({ entity, type });
+        }
+        if (source === 'llm' && !detectionSeen.ner.has(key) && !detectionSeen.llmAdded.has(key)) {
+            detectionSeen.llmAdded.add(key);
+            lastDetectionBreakdown.llmAdded.push({ entity, type });
+        }
+    }
+}
+
+function renderDetectionTable(tableBody, entities, emptyMessage) {
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+
+    if (entities.length === 0) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="2">${escapeHTML(emptyMessage)}</td>`;
+        tableBody.appendChild(tr);
+        return;
+    }
+
+    entities
+        .slice()
+        .sort((a, b) => a.type.localeCompare(b.type) || a.entity.localeCompare(b.entity))
+        .forEach(({ entity, type }) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${escapeHTML(entity)}</td>
+                <td><span class="entity-tag entity-tag-${type.toLowerCase()}">${type}</span></td>
+            `;
+            tableBody.appendChild(tr);
+        });
+}
+
 function anonymizeText(text) {
     let result = text;
     const entries = Object.entries(currentMapping.entities)
         .sort((a, b) => b[0].length - a[0].length);
     for (const [entity, info] of entries) {
         const escaped = entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(escaped, 'gi');
+        // Add Unicode-aware word boundaries to prevent replacing substrings inside words
+        const prefix = /[\p{L}\p{N}]/u.test(entity.charAt(0)) ? '(?<![\\p{L}\\p{N}])' : '';
+        const suffix = /[\p{L}\p{N}]/u.test(entity.charAt(entity.length - 1)) ? '(?![\\p{L}\\p{N}])' : '';
+        const regex = new RegExp(prefix + escaped + suffix, 'giu');
         result = result.replace(regex, info.replacement);
     }
     return result;
@@ -506,6 +661,13 @@ function getSelectedPipeline() {
     return anonPipelineSelect ? anonPipelineSelect.value : 'ner+llm';
 }
 
+function updatePipelineControls() {
+    const pipeline = getSelectedPipeline();
+    if (anonModelSelect) {
+        anonModelSelect.disabled = pipeline === 'ner';
+    }
+}
+
 // ── Main Anonymization Flow ────────────────────────────────────────────────────
 async function performAnonymization() {
     if (isAnonymizing || !anonDocument) return;
@@ -513,11 +675,14 @@ async function performAnonymization() {
     anonymizeBtn.disabled = true;
     if (anonModelSelect) anonModelSelect.disabled = true;
     if (anonPipelineSelect) anonPipelineSelect.disabled = true;
+    if (anonNerModelSelect) anonNerModelSelect.disabled = true;
     anonResults.style.display = 'none';
     anonProgress.style.display = 'block';
     anonProgressBar.style.width = '0%';
 
     const pipeline = getSelectedPipeline();
+    let effectivePipeline = pipeline;
+    resetDetectionBreakdown(pipeline);
 
     try {
         // Load models based on pipeline
@@ -527,7 +692,17 @@ async function performAnonymization() {
             await initNerModel();
             anonProgressText.textContent = 'Loading LLM model...';
             updateStatus('loading', 'Loading LLM model...');
-            await initAnonModel();
+            try {
+                await initAnonModel();
+            } catch (llmError) {
+                console.warn('LLM model failed to load, falling back to NER-only:', llmError.message);
+                anonProgressText.textContent = 'LLM unavailable — using NER only...';
+                effectivePipeline = 'ner';
+            }
+        } else if (pipeline === 'ner') {
+            anonProgressText.textContent = 'Loading NER model...';
+            updateStatus('loading', 'Loading NER model...');
+            await initNerModel();
         } else {
             anonProgressText.textContent = 'Loading LLM model...';
             updateStatus('loading', 'Loading LLM model...');
@@ -535,9 +710,9 @@ async function performAnonymization() {
         }
 
         if (anonDocType === 'excel') {
-            await anonymizeExcel(pipeline);
+            await anonymizeExcel(effectivePipeline);
         } else {
-            await anonymizeTextDocument(pipeline);
+            await anonymizeTextDocument(effectivePipeline);
         }
 
         renderResults();
@@ -550,6 +725,7 @@ async function performAnonymization() {
         anonymizeBtn.disabled = false;
         if (anonModelSelect) anonModelSelect.disabled = false;
         if (anonPipelineSelect) anonPipelineSelect.disabled = false;
+        if (anonNerModelSelect) anonNerModelSelect.disabled = false;
         anonProgress.style.display = 'none';
         updateStatus('idle', 'System Ready');
     }
@@ -570,6 +746,7 @@ async function anonymizeTextDocument(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
+            recordDetectedEntities('ner', nerEntities);
             for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -583,7 +760,20 @@ async function anonymizeTextDocument(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
             const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
+            recordDetectedEntities('llm', llmEntities);
             for (const { entity, type } of llmEntities) {
+                getOrCreateReplacement(entity, type);
+            }
+        }
+    } else if (pipeline === 'ner') {
+        anonProgressText.textContent = 'NER pass: extracting entities...';
+        for (let i = 0; i < totalChunks; i++) {
+            const pct = Math.round(((i + 1) / totalChunks) * 75);
+            anonProgressBar.style.width = pct + '%';
+            anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
+            const nerEntities = await extractEntitiesNER(chunks[i]);
+            recordDetectedEntities('ner', nerEntities);
+            for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
         }
@@ -595,6 +785,7 @@ async function anonymizeTextDocument(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `Extracting entities: chunk ${i + 1}/${totalChunks}`;
             const entities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
+            recordDetectedEntities('llm', entities);
             for (const { entity, type } of entities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -638,6 +829,7 @@ async function anonymizeExcel(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
+            recordDetectedEntities('ner', nerEntities);
             for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -649,7 +841,20 @@ async function anonymizeExcel(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
             const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
+            recordDetectedEntities('llm', llmEntities);
             for (const { entity, type } of llmEntities) {
+                getOrCreateReplacement(entity, type);
+            }
+        }
+    } else if (pipeline === 'ner') {
+        anonProgressText.textContent = 'NER pass: extracting entities...';
+        for (let i = 0; i < totalChunks; i++) {
+            const pct = Math.round(((i + 1) / totalChunks) * 75);
+            anonProgressBar.style.width = pct + '%';
+            anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
+            const nerEntities = await extractEntitiesNER(chunks[i]);
+            recordDetectedEntities('ner', nerEntities);
+            for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
         }
@@ -660,6 +865,7 @@ async function anonymizeExcel(pipeline) {
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `Extracting entities: chunk ${i + 1}/${totalChunks}`;
             const entities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
+            recordDetectedEntities('llm', entities);
             for (const { entity, type } of entities) {
                 getOrCreateReplacement(entity, type);
             }
@@ -695,6 +901,26 @@ async function anonymizeExcel(pipeline) {
 // ── Results Rendering ──────────────────────────────────────────────────────────
 function renderResults() {
     anonResults.style.display = 'block';
+
+    if (anonDetectionSummary) {
+        const pipelineLabels = {
+            'ner+llm': 'NER + LLM',
+            ner: 'NER only',
+            llm: 'LLM only',
+        };
+        const activeNerOption = getNERModelOption(getSelectedNerModelId());
+        const activeLoadLabel = getActiveNERLoadLabel();
+        const modelLabel = activeLoadLabel
+            ? `${activeNerOption.label} (${activeLoadLabel})`
+            : activeNerOption.label;
+        anonDetectionSummary.textContent = `${pipelineLabels[lastDetectionBreakdown.pipeline] || lastDetectionBreakdown.pipeline} used. Active NER model: ${modelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities. LLM found ${lastDetectionBreakdown.llm.length} unique entities. LLM added ${lastDetectionBreakdown.llmAdded.length} entities beyond NER.`;
+    }
+    renderDetectionTable(nerDetectionTableBody, lastDetectionBreakdown.ner, 'No NER detections for this run.');
+    renderDetectionTable(llmDetectionTableBody, lastDetectionBreakdown.llm, 'No LLM detections for this run.');
+    renderDetectionTable(llmAddedTableBody, lastDetectionBreakdown.llmAdded, 'No extra LLM-only detections for this run.');
+    if (llmAddedSection) {
+        llmAddedSection.style.display = lastDetectionBreakdown.pipeline === 'ner+llm' ? 'block' : 'none';
+    }
 
     mappingTableBody.innerHTML = '';
     const entries = Object.entries(currentMapping.entities).sort((a, b) => a[1].type.localeCompare(b[1].type));
@@ -832,7 +1058,29 @@ if (clearAnonMappingBtn) {
     });
 }
 
+if (anonNerModelSelect) {
+    anonNerModelSelect.addEventListener('change', async () => {
+        updateNerModelHint();
+        if (getNERPipeline()) {
+            await disposeNERPipeline();
+        }
+    });
+}
+
+if (anonPipelineSelect) {
+    anonPipelineSelect.addEventListener('change', updatePipelineControls);
+}
+
 anonymizeBtn.addEventListener('click', () => performAnonymization());
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (btn.dataset.tab !== 'anonymize') {
+            await disposeNERPipeline();
+            await disposeAnonModel();
+        }
+    });
+});
 
 // Expose in-memory data status for the Storage tab
 window.medmorfAnonymizeData = {
@@ -841,12 +1089,15 @@ window.medmorfAnonymizeData = {
     hasResult: () => anonymizedResult !== null,
     hasMapping: () => Object.keys(currentMapping.entities).length > 0,
     mappingCount: () => Object.keys(currentMapping.entities).length,
-    clearAll: () => {
+    clearAll: async () => {
         anonDocument = null;
         anonDocType = null;
         anonWorkbook = null;
         anonymizedResult = null;
         currentMapping = { version: 1, entities: {}, counters: {} };
+        resetDetectionBreakdown(getSelectedPipeline());
+        await disposeNERPipeline();
+        await disposeAnonModel();
         if (anonDocInput) anonDocInput.value = '';
         if (anonMappingInput) anonMappingInput.value = '';
         if (anonDocInfo) anonDocInfo.style.display = 'none';
@@ -860,6 +1111,8 @@ window.medmorfAnonymizeData = {
 };
 
 // Init
+populateNerModelSelect();
+updatePipelineControls();
 updateMappingCount();
 console.log('[ANONYMIZE] Anonymization module loaded');
 console.log('[ANONYMIZE] Default model:', DEFAULT_MODEL);

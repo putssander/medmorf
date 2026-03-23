@@ -268,9 +268,15 @@ section h2::before {
     margin: 0;
 }
 
-/* File language bar — slightly different background to distinguish */
+/* File language bar — sits inside the actions section, right above the button */
 .file-lang-bar {
     margin-bottom: 0.75rem;
+    width: 100%;
+}
+
+.file-translate-actions {
+    flex-direction: column;
+    align-items: center;
 }
 
 /* Columns header with deselect-all link */
@@ -942,6 +948,18 @@ input[type="file"] {
     align-items: center;
     flex-wrap: wrap;
     gap: 0.75rem;
+}
+
+.model-management-statuses {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.model-management-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
 }
 
 .cache-status {

@@ -1,10 +1,21 @@
-import { pipeline, env } from '@huggingface/transformers';
+import {
+    disposeTranslationPipeline,
+    getTranslationPipeline,
+    initTranslationPipeline,
+    TRANSLATION_MODEL,
+    TRANSLATION_RUNTIME_LABEL,
+} from './translation-runtime.js?v=2026-03-23-cachefix-7';
 
-// Configure transformers.js
-env.allowLocalModels = false;
-env.useBrowserCache = true;
+const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
+console.log('[BUILD] app.js build', BUILD_ID, 'module url', import.meta.url);
+console.log('[BUILD] local assets', Array.from(document.querySelectorAll('script[src],link[rel="stylesheet"]')).map(node => node.src || node.href));
 
-const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';
+function formatLoadError(error) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return String(error);
+}
 
 // Global state
 let translator = null;
@@ -48,6 +59,8 @@ const fileTranslateStatus = document.getElementById('fileTranslateStatus');
 const fileStatusText = document.getElementById('fileStatusText');
 const cancelTranslationBtn = document.getElementById('cancelTranslationBtn');
 const deselectAllColumnsBtn = document.getElementById('deselectAllColumnsBtn');
+const freeMemoryBtn = document.getElementById('freeMemoryBtn');
+const modelMemoryStatus = document.getElementById('modelMemoryStatus');
 
 let fileTranslationCancelled = false;
 
@@ -334,24 +347,62 @@ async function initTranslator() {
     if (translator) return;
     if (_initPromise) return _initPromise;
     _initPromise = _loadPipeline();
-    try { await _initPromise; } finally { _initPromise = null; }
+    try {
+        translator = await _initPromise;
+        return translator;
+    } finally {
+        _initPromise = null;
+    }
+}
+
+// Dispose the translator pipeline to free all ONNX sessions and WASM memory.
+// The model files stay in the Cache API, so re-init is fast (no re-download).
+async function disposeTranslator() {
+    if (!translator) return;
+    try {
+        await disposeTranslationPipeline();
+    } catch (e) {
+        console.warn('Error disposing translator:', e);
+    }
+    translator = null;
+    _initPromise = null;
+    updateModelMemoryStatus(false);
+    console.log('[MEMORY] Translator disposed — WASM memory freed');
+}
+
+function updateModelMemoryStatus(loaded) {
+    if (!modelMemoryStatus) return;
+    if (loaded) {
+        modelMemoryStatus.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            Model loaded in memory (~1-2 GB RAM)
+        `;
+        freeMemoryBtn.style.display = '';
+    } else {
+        modelMemoryStatus.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Model not in memory
+        `;
+        freeMemoryBtn.style.display = 'none';
+    }
 }
 
 async function _loadPipeline() {
     updateSystemStatus('loading', 'Loading translation model...');
     if (!isQuickTranslateActive) modelStatus.style.display = 'block';
 
-    const fileProgress = {};
     try {
-        // Set ONNX WASM paths before first pipeline call
-        if (env.backends?.onnx?.wasm) {
-            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
-        }
-        translator = await pipeline('translation', TRANSLATION_MODEL, {
-            quantized: true,
-            progress_callback: (progress) => {
+        const fileProgress = {};
+        const loggedFiles = new Set();
+        console.log('[TRANSLATION] loading model', TRANSLATION_MODEL, 'with', TRANSLATION_RUNTIME_LABEL);
+        const pipelineInstance = await initTranslationPipeline({
+            progressCallback: (progress) => {
+                if (progress.file && !loggedFiles.has(progress.file)) {
+                    loggedFiles.add(progress.file);
+                    console.log('[TRANSLATION] loading file', progress.file);
+                }
                 if (progress.status === 'initiate') {
-                    modelStatusText.textContent = 'Loading model...';
+                    modelStatusText.textContent = `Loading model (${TRANSLATION_RUNTIME_LABEL})...`;
                 } else if (progress.status === 'progress' && progress.total > 0) {
                     const file = progress.file || 'data';
                     fileProgress[file] = { loaded: progress.loaded, total: progress.total };
@@ -359,32 +410,37 @@ async function _loadPipeline() {
                     const total = Object.values(fileProgress).reduce((a, c) => a + c.total, 0);
                     const pct = Math.round((loaded / total) * 100);
                     modelProgress.style.width = pct + '%';
-                    modelStatusText.textContent = `Loading model: ${pct}%`;
-                    updateSystemStatus('loading', `Loading model: ${pct}%`);
+                    modelStatusText.textContent = `Loading model (${TRANSLATION_RUNTIME_LABEL}): ${pct}%`;
+                    updateSystemStatus('loading', `Loading model (${TRANSLATION_RUNTIME_LABEL}): ${pct}%`);
                     if (isQuickTranslateActive) {
                         const fill = document.getElementById('quickProgressFill');
                         if (fill) fill.style.width = pct + '%';
                         const span = quickTranslateStatus.querySelector('.quick-status-content span:last-child');
-                        if (span) span.textContent = `Loading model: ${pct}%`;
+                        if (span) span.textContent = `Loading model (${TRANSLATION_RUNTIME_LABEL}): ${pct}%`;
                     }
                     if (fileTranslateStatus.style.display !== 'none' && fileStatusText) {
-                        fileStatusText.textContent = `Loading model: ${pct}%`;
+                        fileStatusText.textContent = `Loading model (${TRANSLATION_RUNTIME_LABEL}): ${pct}%`;
                     }
                 } else if (progress.status === 'done') {
-                    modelStatusText.textContent = 'Initializing...';
+                    modelStatusText.textContent = `Initializing (${TRANSLATION_RUNTIME_LABEL})...`;
                 }
             }
         });
-        modelStatusText.textContent = 'Model loaded ✓';
+        translator = pipelineInstance;
+        modelStatusText.textContent = `Model loaded (${TRANSLATION_RUNTIME_LABEL}) ✓`;
         updateSystemStatus('idle', 'System Ready (Idle)');
+        updateModelMemoryStatus(true);
+        console.log('[TRANSLATION] model ready', TRANSLATION_MODEL, 'using', TRANSLATION_RUNTIME_LABEL);
         checkModelStatus();
         setTimeout(() => { modelStatus.style.display = 'none'; }, 2000);
+        return pipelineInstance;
     } catch (error) {
+        const message = formatLoadError(error);
         console.error('Error loading model:', error);
-        modelStatusText.textContent = 'Error: ' + error.message;
+        modelStatusText.textContent = 'Error: ' + message;
         updateSystemStatus('idle', 'Error loading model');
         if (isQuickTranslateActive) {
-            quickTranslateStatus.innerHTML = '<div class="quick-status-content">Error loading model: ' + error.message + '</div>';
+            quickTranslateStatus.innerHTML = '<div class="quick-status-content">Error loading model: ' + message + '</div>';
             quickTranslateStatus.className = 'quick-status error';
         }
         throw error;
@@ -417,11 +473,21 @@ async function translateText(text, srcLang, tgtLang) {
 }
 
 async function translateParagraph(paragraph, srcLang, tgtLang) {
+    translator = translator || getTranslationPipeline();
     const result = await translator(paragraph, {
         src_lang: srcLang,
-        tgt_lang: tgtLang
+        tgt_lang: tgtLang,
+        max_new_tokens: 256,
     });
     const translated = extractTranslationText(result);
+    // Free ONNX output tensors to release WASM memory
+    if (Array.isArray(result)) {
+        for (const r of result) {
+            if (r && typeof r.dispose === 'function') r.dispose();
+        }
+    } else if (result && typeof result.dispose === 'function') {
+        result.dispose();
+    }
     if (!translated) {
         throw new Error('Translation model returned an empty response');
     }
@@ -507,6 +573,9 @@ translateBtn.addEventListener('click', async () => {
         translateBtn.disabled = false;
         setTimeout(() => { fileTranslateStatus.style.display = 'none'; }, 2000);
         updateSystemStatus('idle', 'System Ready (Idle)');
+        // Free the model from memory after file translation to avoid OOM.
+        // Model files stay in Cache API so re-init is fast (no re-download).
+        await disposeTranslator();
     }
 });
 
@@ -736,11 +805,28 @@ if (clearModelBtn) {
             }
             translator = null;
             _initPromise = null;
+            updateModelMemoryStatus(false);
             checkModelStatus();
         } catch (error) {
             alert('Error clearing cache: ' + error.message);
         }
     });
 }
+
+// Free memory button — dispose translator without clearing cache
+if (freeMemoryBtn) {
+    freeMemoryBtn.addEventListener('click', async () => {
+        await disposeTranslator();
+        updateSystemStatus('idle', 'Memory freed');
+    });
+}
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (btn.dataset.tab !== 'translate' && translator) {
+            await disposeTranslator();
+        }
+    });
+});
 
 checkModelStatus();

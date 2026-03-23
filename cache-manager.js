@@ -1,11 +1,26 @@
+import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-03-23-cachefix-7';
+import {
+    DEFAULT_NER_MODEL_ID,
+    getNERModelOption,
+    preloadNERModel,
+} from './privacy-runtime.js?v=2026-03-23-cachefix-7';
+
 // Cache & Storage Manager — inspect and manage browser-stored AI model data.
 // Shows Cache API entries (translation/NER models) and IndexedDB databases (WebLLM).
 // Pre-downloads models for offline use.
 // User/patient data is NEVER stored here — only AI model weights.
 
-const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';
-const NER_MODEL = 'onnx-community/llama-ai4privacy-multilingual-categorical-anonymiser-openpii-ONNX';
+const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
+console.log('[BUILD] cache-manager.js build', BUILD_ID, 'module url', import.meta.url);
+
 const LLM_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+
+function formatLoadError(error) {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    return String(error);
+}
 
 const storageTotalSize = document.getElementById('storageTotalSize');
 const storageCacheCount = document.getElementById('storageCacheCount');
@@ -336,6 +351,8 @@ const offlineNERProgress = document.getElementById('offlineNERProgress');
 const offlineNERBar = document.getElementById('offlineNERBar');
 const offlineNERPct = document.getElementById('offlineNERPct');
 const offlineNERCard = document.getElementById('offlineNER');
+const offlineNERMeta = document.getElementById('offlineNERMeta');
+const offlineNERDesc = document.getElementById('offlineNERDesc');
 
 const offlineLLMBtn = document.getElementById('offlineLLMBtn');
 const offlineLLMText = document.getElementById('offlineLLMText');
@@ -345,6 +362,29 @@ const offlineLLMPct = document.getElementById('offlineLLMPct');
 const offlineLLMCard = document.getElementById('offlineLLM');
 
 const offlineDownloadAllBtn = document.getElementById('offlineDownloadAllBtn');
+
+function getSelectedNerModelId() {
+    const select = document.getElementById('anonNerModelSelect');
+    return select ? select.value : DEFAULT_NER_MODEL_ID;
+}
+
+function getSelectedNerModelOption() {
+    return getNERModelOption(getSelectedNerModelId());
+}
+
+function refreshNerCardDetails() {
+    const option = getSelectedNerModelOption();
+    if (offlineNERMeta) {
+        const sizeLabels = {
+            multilang_pii: 'Multilingual PII NER · ~280 MB',
+            multilingual_ner: 'Multilingual BERT · ~100 MB',
+        };
+        offlineNERMeta.textContent = sizeLabels[option.id] || option.label;
+    }
+    if (offlineNERDesc) {
+        offlineNERDesc.textContent = option.description;
+    }
+}
 
 // ── Offline Status Check ───────────────────────────────────────────────────────
 function setCardStatus(card, textEl, btn, status) {
@@ -393,13 +433,13 @@ async function checkTranslationCached() {
 }
 
 async function checkNERCached() {
+    const option = getSelectedNerModelOption();
     try {
-        // HF transformers v3 uses different cache names; check all caches for ai4privacy files
         const names = await caches.keys();
         for (const name of names) {
             const cache = await caches.open(name);
             const keys = await cache.keys();
-            if (keys.some(r => r.url.includes('ai4privacy') || r.url.includes('llama-ai4privacy'))) {
+            if (keys.some(r => option.cacheMatchers.some(matcher => r.url.includes(matcher)))) {
                 setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'cached');
                 return true;
             }
@@ -468,18 +508,16 @@ async function downloadTranslationModel() {
     offlineTranslationBar.style.width = '0%';
     offlineTranslationPct.textContent = '0%';
 
-    const fileProgress = {};
     try {
-        const { pipeline, env } = await import('@huggingface/transformers');
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        if (env.backends?.onnx?.wasm) {
-            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
-        }
-
-        const t = await pipeline('translation', TRANSLATION_MODEL, {
-            quantized: true,
-            progress_callback: (progress) => {
+        console.log('[CACHE] preloading translation model', TRANSLATION_MODEL, 'with', TRANSLATION_RUNTIME_LABEL);
+        const fileProgress = {};
+        const loggedFiles = new Set();
+        await preloadTranslationModel({
+            progressCallback: (progress) => {
+                if (progress.file && !loggedFiles.has(progress.file)) {
+                    loggedFiles.add(progress.file);
+                    console.log('[CACHE] loading file', progress.file);
+                }
                 if (progress.status === 'progress' && progress.total > 0) {
                     const fileName = progress.file || 'data';
                     fileProgress[fileName] = { loaded: progress.loaded, total: progress.total };
@@ -491,17 +529,15 @@ async function downloadTranslationModel() {
                 }
             },
         });
-        // Keep the pipeline alive — it shares the same ES module singleton
-        // as app.js, so disposing would corrupt the translator for the Translate tab.
 
         offlineTranslationProgress.style.display = 'none';
         setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'done');
         window.dispatchEvent(new CustomEvent('medmorf:translation-cache-updated'));
     } catch (err) {
         console.error('Translation model download error:', err);
-        offlineTranslationText.textContent = 'Error: ' + err.message;
+        offlineTranslationText.textContent = 'Error: ' + formatLoadError(err);
         setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'error');
-        offlineTranslationText.textContent = 'Download failed — ' + err.message;
+        offlineTranslationText.textContent = 'Download failed — ' + formatLoadError(err);
         offlineTranslationProgress.style.display = 'none';
     } finally {
         downloadingTranslation = false;
@@ -518,16 +554,11 @@ async function downloadNERModel() {
     offlineNERPct.textContent = '0%';
 
     try {
-        const { pipeline, env } = await import('@huggingface/transformers');
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-        if (env.backends?.onnx?.wasm) {
-            env.backends.onnx.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
-        }
-
-        const p = await pipeline('token-classification', NER_MODEL, {
-            dtype: 'q8',
-            progress_callback: (progress) => {
+        const option = getSelectedNerModelOption();
+        console.log('[CACHE] preloading NER model', option.model);
+        await preloadNERModel({
+            modelId: option.id,
+            progressCallback: (progress) => {
                 if (progress.status === 'progress' && progress.total > 0) {
                     const pct = Math.round((progress.loaded / progress.total) * 100);
                     offlineNERBar.style.width = pct + '%';
@@ -535,8 +566,6 @@ async function downloadNERModel() {
                 }
             },
         });
-        // Dispose to free memory
-        if (p && typeof p.dispose === 'function') p.dispose();
 
         offlineNERProgress.style.display = 'none';
         setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'done');
@@ -668,18 +697,28 @@ function refreshPersonalDataView() {
     }
 }
 
-function clearAllPersonalData() {
-    if (window.medmorfTranslationData) window.medmorfTranslationData.clearAll();
-    if (window.medmorfAnonymizeData) window.medmorfAnonymizeData.clearAll();
+async function clearAllPersonalData() {
+    if (window.medmorfTranslationData) await window.medmorfTranslationData.clearAll();
+    if (window.medmorfAnonymizeData) await window.medmorfAnonymizeData.clearAll();
     refreshPersonalDataView();
 }
 
-if (clearPersonalDataBtn) clearPersonalDataBtn.addEventListener('click', clearAllPersonalData);
+if (clearPersonalDataBtn) clearPersonalDataBtn.addEventListener('click', () => { clearAllPersonalData(); });
+
+const anonNerModelSelect = document.getElementById('anonNerModelSelect');
+if (anonNerModelSelect) {
+    anonNerModelSelect.addEventListener('change', async () => {
+        refreshNerCardDetails();
+        await checkNERCached();
+        updateDownloadAllBtn();
+    });
+}
 
 // Auto-scan when the storage tab is shown
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
         if (btn.dataset.tab === 'storage') {
+            refreshNerCardDetails();
             refreshStorageView();
             checkAllOfflineStatus();
             refreshPersonalDataView();
@@ -687,4 +726,5 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
+refreshNerCardDetails();
 console.log('[STORAGE] Cache manager loaded');
