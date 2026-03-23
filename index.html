@@ -82,7 +82,10 @@
             <!-- ═══════════════════════════════════════════ -->
             <div class="tab-panel active" id="tab-translate">
 
-                <!-- Language Bar (shared for text & file translation) -->
+                <!-- Text Translation Section -->
+                <div class="translate-section-header">
+                    <h3 class="section-label">Text Translation</h3>
+                </div>
                 <div class="translate-lang-bar">
                     <div class="lang-pair">
                         <select id="sourceLanguage" class="lang-select">
@@ -167,7 +170,7 @@
                     </div>
                 </div>
 
-                <!-- Text Translate -->
+                <!-- Text Translate (inline with its language bar) -->
                 <section class="quick-translate-section">
                     <div class="translate-container">
                         <div class="translate-box">
@@ -195,6 +198,93 @@
                     </div>
                     <div id="quickTranslateStatus" class="quick-status"></div>
                 </section>
+
+                <!-- ── File Translation Section ── -->
+                <div class="section-divider"><span>File Translation</span></div>
+
+                <div class="translate-lang-bar file-lang-bar">
+                    <div class="lang-pair">
+                        <select id="fileSourceLanguage" class="lang-select">
+                            <option value="nld_Latn">Dutch</option>
+                            <option value="eng_Latn">English</option>
+                            <option value="deu_Latn">German</option>
+                            <option value="fra_Latn">French</option>
+                            <option value="spa_Latn">Spanish</option>
+                            <option value="por_Latn">Portuguese</option>
+                            <option value="ita_Latn">Italian</option>
+                            <option value="pol_Latn">Polish</option>
+                            <option value="ron_Latn">Romanian</option>
+                            <option value="ces_Latn">Czech</option>
+                            <option value="dan_Latn">Danish</option>
+                            <option value="swe_Latn">Swedish</option>
+                            <option value="nob_Latn">Norwegian</option>
+                            <option value="fin_Latn">Finnish</option>
+                            <option value="ell_Grek">Greek</option>
+                            <option value="hun_Latn">Hungarian</option>
+                            <option value="bul_Cyrl">Bulgarian</option>
+                            <option value="hrv_Latn">Croatian</option>
+                            <option value="slk_Latn">Slovak</option>
+                            <option value="slv_Latn">Slovenian</option>
+                            <option value="est_Latn">Estonian</option>
+                            <option value="lav_Latn">Latvian</option>
+                            <option value="lit_Latn">Lithuanian</option>
+                            <option value="gle_Latn">Irish</option>
+                            <option value="mlt_Latn">Maltese</option>
+                            <option value="rus_Cyrl">Russian</option>
+                            <option value="ukr_Cyrl">Ukrainian</option>
+                            <option value="tur_Latn">Turkish</option>
+                            <option value="arb_Arab">Arabic</option>
+                            <option value="zho_Hans">Chinese (Simplified)</option>
+                            <option value="zho_Hant">Chinese (Traditional)</option>
+                            <option value="jpn_Jpan">Japanese</option>
+                            <option value="kor_Hang">Korean</option>
+                            <option value="hin_Deva">Hindi</option>
+                            <option value="ind_Latn">Indonesian</option>
+                            <option value="tha_Thai">Thai</option>
+                            <option value="vie_Latn">Vietnamese</option>
+                        </select>
+                        <svg class="lang-arrow" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                        <select id="fileTargetLanguage" class="lang-select">
+                            <option value="eng_Latn">English</option>
+                            <option value="nld_Latn">Dutch</option>
+                            <option value="deu_Latn">German</option>
+                            <option value="fra_Latn">French</option>
+                            <option value="spa_Latn">Spanish</option>
+                            <option value="por_Latn">Portuguese</option>
+                            <option value="ita_Latn">Italian</option>
+                            <option value="pol_Latn">Polish</option>
+                            <option value="ron_Latn">Romanian</option>
+                            <option value="ces_Latn">Czech</option>
+                            <option value="dan_Latn">Danish</option>
+                            <option value="swe_Latn">Swedish</option>
+                            <option value="nob_Latn">Norwegian</option>
+                            <option value="fin_Latn">Finnish</option>
+                            <option value="ell_Grek">Greek</option>
+                            <option value="hun_Latn">Hungarian</option>
+                            <option value="bul_Cyrl">Bulgarian</option>
+                            <option value="hrv_Latn">Croatian</option>
+                            <option value="slk_Latn">Slovak</option>
+                            <option value="slv_Latn">Slovenian</option>
+                            <option value="est_Latn">Estonian</option>
+                            <option value="lav_Latn">Latvian</option>
+                            <option value="lit_Latn">Lithuanian</option>
+                            <option value="gle_Latn">Irish</option>
+                            <option value="mlt_Latn">Maltese</option>
+                            <option value="rus_Cyrl">Russian</option>
+                            <option value="ukr_Cyrl">Ukrainian</option>
+                            <option value="tur_Latn">Turkish</option>
+                            <option value="arb_Arab">Arabic</option>
+                            <option value="zho_Hans">Chinese (Simplified)</option>
+                            <option value="zho_Hant">Chinese (Traditional)</option>
+                            <option value="jpn_Jpan">Japanese</option>
+                            <option value="kor_Hang">Korean</option>
+                            <option value="hin_Deva">Hindi</option>
+                            <option value="ind_Latn">Indonesian</option>
+                            <option value="tha_Thai">Thai</option>
+                            <option value="vie_Latn">Vietnamese</option>
+                        </select>
+                    </div>
+                </div>
 
                 <!-- File Upload (compact) -->
                 <section class="file-translate-section">
@@ -228,7 +318,10 @@
                         <select id="sheetSelect"></select>
                     </div>
                     <div class="setting-group">
-                        <label>Columns to Translate</label>
+                        <div class="columns-header">
+                            <label>Columns to Translate</label>
+                            <button type="button" id="deselectAllColumnsBtn" class="btn-link">Deselect all</button>
+                        </div>
                         <div id="columnCheckboxes" class="checkbox-group"></div>
                     </div>
                 </section>
@@ -240,12 +333,16 @@
                     <p class="status-text" id="modelStatusText">Initializing...</p>
                 </section>
 
-                <!-- Translation Progress -->
-                <section class="translation-progress" id="translationProgress" style="display: none;">
-                    <h3>Translating...</h3>
+                <!-- File Translation Status -->
+                <section class="file-translate-status" id="fileTranslateStatus" style="display: none;">
+                    <div class="file-status-header">
+                        <span class="loading-spinner"></span>
+                        <span id="fileStatusText">Preparing...</span>
+                    </div>
                     <div class="progress-bar"><div class="progress-fill" id="translationProgressBar"></div></div>
                     <p class="status-text"><span id="progressText">0 / 0</span> — <span id="progressPercentage">0%</span></p>
                     <p class="status-details" id="currentItem"></p>
+                    <button type="button" id="cancelTranslationBtn" class="btn btn-small btn-ghost">Cancel</button>
                 </section>
 
                 <!-- Actions -->

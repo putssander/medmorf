@@ -26,7 +26,6 @@ const downloadBtn = document.getElementById('downloadBtn');
 const modelStatus = document.getElementById('modelStatus');
 const modelProgress = document.getElementById('modelProgress');
 const modelStatusText = document.getElementById('modelStatusText');
-const translationProgress = document.getElementById('translationProgress');
 const translationProgressBar = document.getElementById('translationProgressBar');
 const progressText = document.getElementById('progressText');
 const progressPercentage = document.getElementById('progressPercentage');
@@ -43,6 +42,14 @@ const modelCacheStatus = document.getElementById('modelCacheStatus');
 const clearModelBtn = document.getElementById('clearModelBtn');
 const systemStatusIndicator = document.querySelector('.status-indicator');
 const systemStatusText = document.getElementById('systemStatusText');
+const fileSourceLanguage = document.getElementById('fileSourceLanguage');
+const fileTargetLanguage = document.getElementById('fileTargetLanguage');
+const fileTranslateStatus = document.getElementById('fileTranslateStatus');
+const fileStatusText = document.getElementById('fileStatusText');
+const cancelTranslationBtn = document.getElementById('cancelTranslationBtn');
+const deselectAllColumnsBtn = document.getElementById('deselectAllColumnsBtn');
+
+let fileTranslationCancelled = false;
 
 function updateSystemStatus(state, message) {
     // state: 'idle', 'loading', 'translating'
@@ -300,6 +307,19 @@ async function loadSheetColumns(sheetName) {
     updateSelectedColumns();
 }
 
+// Deselect all columns
+deselectAllColumnsBtn.addEventListener('click', () => {
+    columnCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = false;
+    });
+    updateSelectedColumns();
+});
+
+// Cancel file translation
+cancelTranslationBtn.addEventListener('click', () => {
+    fileTranslationCancelled = true;
+});
+
 // Update selected columns array
 function updateSelectedColumns() {
     const checkboxes = columnCheckboxes.querySelectorAll('input[type="checkbox"]:checked');
@@ -346,6 +366,9 @@ async function _loadPipeline() {
                         if (fill) fill.style.width = pct + '%';
                         const span = quickTranslateStatus.querySelector('.quick-status-content span:last-child');
                         if (span) span.textContent = `Loading model: ${pct}%`;
+                    }
+                    if (fileTranslateStatus.style.display !== 'none' && fileStatusText) {
+                        fileStatusText.textContent = `Loading model: ${pct}%`;
                     }
                 } else if (progress.status === 'done') {
                     modelStatusText.textContent = 'Initializing...';
@@ -438,19 +461,23 @@ function extractTranslationText(result) {
 translateBtn.addEventListener('click', async () => {
     if (!currentFile) return;
     
+    fileTranslationCancelled = false;
     translateBtn.disabled = true;
     downloadBtn.style.display = 'none';
     results.style.display = 'none';
-    translationProgress.style.display = 'block';
+    fileTranslateStatus.style.display = 'block';
+    fileStatusText.textContent = 'Loading model...';
     startTime = Date.now();
     updateSystemStatus('loading', 'Initializing translation...');
     
     try {
         await initTranslator();
+        if (fileTranslationCancelled) throw new Error('Cancelled');
         updateSystemStatus('translating', 'Translating file...');
+        fileStatusText.textContent = 'Translating...';
         
-        const srcLang = sourceLanguage.value;
-        const tgtLang = targetLanguage.value;
+        const srcLang = fileSourceLanguage.value;
+        const tgtLang = fileTargetLanguage.value;
         
         if (fileType === 'excel') {
             await translateExcel(srcLang, tgtLang);
@@ -458,19 +485,27 @@ translateBtn.addEventListener('click', async () => {
             await translateWord(srcLang, tgtLang);
         }
         
+        if (fileTranslationCancelled) throw new Error('Cancelled');
+        
         // Show results
         const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
         timeTaken.textContent = `${elapsed} seconds`;
         results.style.display = 'block';
         downloadBtn.style.display = 'block';
+        fileStatusText.textContent = 'Done!';
         
     } catch (error) {
-        console.error('Translation error:', error);
-        alert('Translation failed: ' + error.message);
-        updateSystemStatus('idle', 'Translation failed');
+        if (error.message === 'Cancelled') {
+            fileStatusText.textContent = 'Cancelled';
+            updateSystemStatus('idle', 'Translation cancelled');
+        } else {
+            console.error('Translation error:', error);
+            alert('Translation failed: ' + error.message);
+            updateSystemStatus('idle', 'Translation failed');
+        }
     } finally {
         translateBtn.disabled = false;
-        translationProgress.style.display = 'none';
+        setTimeout(() => { fileTranslateStatus.style.display = 'none'; }, 2000);
         updateSystemStatus('idle', 'System Ready (Idle)');
     }
 });
@@ -505,9 +540,11 @@ async function translateExcel(srcLang, tgtLang) {
     const newData = [newHeaders];
     
     for (const row of dataRows) {
+        if (fileTranslationCancelled) throw new Error('Cancelled');
         const newRow = [...row];
         
         for (const colIdx of selectedColumns) {
+            if (fileTranslationCancelled) throw new Error('Cancelled');
             const text = row[colIdx];
             
             if (text && typeof text === 'string' && text.trim() !== '') {
@@ -524,6 +561,10 @@ async function translateExcel(srcLang, tgtLang) {
             translationProgressBar.style.width = percent + '%';
             progressText.textContent = `${translated} / ${totalItems}`;
             progressPercentage.textContent = `${percent}%`;
+            fileStatusText.textContent = `Translating... ${percent}%`;
+            
+            // Yield to UI to prevent freezing
+            await new Promise(r => setTimeout(r, 0));
         }
         
         newData.push(newRow);
@@ -560,6 +601,7 @@ async function translateWord(srcLang, tgtLang) {
         const translatedParagraphs = [];
         
         for (const paragraph of paragraphs) {
+            if (fileTranslationCancelled) throw new Error('Cancelled');
             currentItem.textContent = `Translating: ${paragraph.substring(0, 50)}...`;
             const translatedText = await translateText(paragraph, srcLang, tgtLang);
             translatedParagraphs.push(translatedText);
@@ -570,6 +612,10 @@ async function translateWord(srcLang, tgtLang) {
             translationProgressBar.style.width = percent + '%';
             progressText.textContent = `${translated} / ${totalItems}`;
             progressPercentage.textContent = `${percent}%`;
+            fileStatusText.textContent = `Translating... ${percent}%`;
+            
+            // Yield to UI
+            await new Promise(r => setTimeout(r, 0));
         }
         
         translatedData = translatedParagraphs.join('\n\n');

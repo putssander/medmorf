@@ -254,6 +254,69 @@ section h2::before {
     flex-shrink: 0;
 }
 
+/* Section label / header for text vs file translation */
+.translate-section-header {
+    margin-bottom: 0.5rem;
+}
+
+.section-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* File language bar — slightly different background to distinguish */
+.file-lang-bar {
+    margin-bottom: 0.75rem;
+}
+
+/* Columns header with deselect-all link */
+.columns-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.columns-header label {
+    margin-bottom: 0 !important;
+}
+
+.columns-header .btn-link {
+    color: var(--primary-color);
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.columns-header .btn-link:hover {
+    color: var(--primary-hover);
+}
+
+/* File translation status */
+.file-translate-status {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+}
+
+.file-status-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.file-translate-status .btn {
+    margin-top: 0.75rem;
+}
+
 /* Quick Translate */
 .quick-translate-section {
     margin-bottom: 0.75rem;
