@@ -1090,6 +1090,26 @@
                                 Download
                             </button>
                         </div>
+
+                        <!-- Speech Model (Whisper) -->
+                        <div class="offline-model-card" id="offlineSTT">
+                            <div class="offline-model-info">
+                                <strong>Speech Model</strong>
+                                <span class="offline-model-meta" id="offlineSTTMeta">Whisper · ~500 MB</span>
+                                <span class="offline-model-desc">Offline speech-to-text transcription</span>
+                            </div>
+                            <div class="offline-model-status" id="offlineSTTStatus">
+                                <span class="offline-status-text" id="offlineSTTText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlineSTTProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlineSTTBar"></div></div>
+                                <span class="offline-progress-text" id="offlineSTTPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlineSTTBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
                     </div>
 
                     <button class="btn btn-primary" id="offlineDownloadAllBtn">

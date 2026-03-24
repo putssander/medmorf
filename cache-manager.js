@@ -361,6 +361,14 @@ const offlineLLMBar = document.getElementById('offlineLLMBar');
 const offlineLLMPct = document.getElementById('offlineLLMPct');
 const offlineLLMCard = document.getElementById('offlineLLM');
 
+const offlineSTTBtn = document.getElementById('offlineSTTBtn');
+const offlineSTTText = document.getElementById('offlineSTTText');
+const offlineSTTProgress = document.getElementById('offlineSTTProgress');
+const offlineSTTBar = document.getElementById('offlineSTTBar');
+const offlineSTTPct = document.getElementById('offlineSTTPct');
+const offlineSTTCard = document.getElementById('offlineSTT');
+const offlineSTTMeta = document.getElementById('offlineSTTMeta');
+
 const offlineDownloadAllBtn = document.getElementById('offlineDownloadAllBtn');
 
 function getSelectedNerModelId() {
@@ -499,8 +507,35 @@ async function checkLLMCached() {
     }
 }
 
+async function checkSTTCached() {
+    if (!offlineSTTCard) return false;
+    // Update meta label with selected model
+    const stt = window.medmorfSTTData;
+    if (stt && offlineSTTMeta) {
+        const modelId = stt.getSelectedModel();
+        const shortName = modelId.split('/').pop() || 'Whisper';
+        offlineSTTMeta.textContent = `${shortName}`;
+    }
+    try {
+        const names = await caches.keys();
+        for (const name of names) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            if (keys.some(r => r.url.includes('whisper'))) {
+                setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'cached');
+                return true;
+            }
+        }
+        setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'not-cached');
+        return false;
+    } catch {
+        setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'not-cached');
+        return false;
+    }
+}
+
 async function checkAllOfflineStatus() {
-    await Promise.all([checkTranslationCached(), checkNERCached(), checkLLMCached()]);
+    await Promise.all([checkTranslationCached(), checkNERCached(), checkLLMCached(), checkSTTCached()]);
     updateDownloadAllBtn();
 }
 
@@ -514,8 +549,8 @@ async function requestPersistentStorage() {
 }
 
 function updateDownloadAllBtn() {
-    const allCached = [offlineTranslationCard, offlineNERCard, offlineLLMCard]
-        .every(c => c.dataset.status === 'cached' || c.dataset.status === 'done');
+    const cards = [offlineTranslationCard, offlineNERCard, offlineLLMCard, offlineSTTCard].filter(Boolean);
+    const allCached = cards.every(c => c.dataset.status === 'cached' || c.dataset.status === 'done');
     if (allCached) {
         offlineDownloadAllBtn.textContent = '✓ All models ready for offline use';
         offlineDownloadAllBtn.disabled = true;
@@ -666,8 +701,45 @@ async function downloadAllModels() {
     if (offlineLLMCard.dataset.status !== 'cached' && offlineLLMCard.dataset.status !== 'done') {
         tasks.push(downloadLLMModel());
     }
+    if (offlineSTTCard && offlineSTTCard.dataset.status !== 'cached' && offlineSTTCard.dataset.status !== 'done') {
+        tasks.push(downloadSTTModel());
+    }
     await Promise.all(tasks);
     refreshStorageView();
+}
+
+let downloadingSTT = false;
+async function downloadSTTModel() {
+    if (downloadingSTT) return;
+    const stt = window.medmorfSTTData;
+    if (!stt) { console.warn('[CACHE] STT module not loaded'); return; }
+    downloadingSTT = true;
+    setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'downloading');
+    offlineSTTProgress.style.display = 'block';
+    offlineSTTBar.style.width = '0%';
+    offlineSTTPct.textContent = '0%';
+
+    try {
+        await stt.preloadModel((progress) => {
+            if (progress.status === 'progress' && progress.total > 0) {
+                const pct = Math.round((progress.loaded / progress.total) * 100);
+                offlineSTTBar.style.width = pct + '%';
+                offlineSTTPct.textContent = pct + '%';
+            }
+        });
+
+        offlineSTTProgress.style.display = 'none';
+        setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'done');
+        requestPersistentStorage();
+    } catch (err) {
+        console.error('STT model download error:', err);
+        setCardStatus(offlineSTTCard, offlineSTTText, offlineSTTBtn, 'error');
+        offlineSTTText.textContent = 'Download failed — ' + err.message;
+        offlineSTTProgress.style.display = 'none';
+    } finally {
+        downloadingSTT = false;
+        updateDownloadAllBtn();
+    }
 }
 
 // Wire up download buttons
@@ -682,6 +754,10 @@ if (offlineNERBtn) offlineNERBtn.addEventListener('click', async () => {
 });
 if (offlineLLMBtn) offlineLLMBtn.addEventListener('click', async () => {
     await downloadLLMModel();
+    refreshStorageView();
+});
+if (offlineSTTBtn) offlineSTTBtn.addEventListener('click', async () => {
+    await downloadSTTModel();
     refreshStorageView();
 });
 if (offlineDownloadAllBtn) offlineDownloadAllBtn.addEventListener('click', downloadAllModels);

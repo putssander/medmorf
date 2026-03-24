@@ -244,7 +244,7 @@ function formatLoadError(error) {
     return String(error);
 }
 
-async function initSTTModel() {
+async function initSTTModel(externalProgressCb) {
     const selectedModel = getSelectedModel();
     if (pipeline && loadedModelId === selectedModel) return;
     if (isModelLoading) return;
@@ -290,6 +290,7 @@ async function initSTTModel() {
                     if (sttModelProgress) sttModelProgress.style.width = pct + '%';
                     if (sttModelStatusText) sttModelStatusText.textContent = `Loading ${modelLabel}: ${pct}%`;
                     updateStatus('loading', `Loading ${modelLabel}: ${pct}%`);
+                    if (externalProgressCb) externalProgressCb(progress);
                 } else if (progress.status === 'done') {
                     if (sttModelStatusText) sttModelStatusText.textContent = `Initializing ${modelLabel}...`;
                 }
@@ -493,6 +494,15 @@ async function startRecording() {
     if (isRecording) return;
 
     try {
+        // Load model FIRST — before starting mic/recording
+        if (sttLiveStatus) {
+            if (sttLiveTranscript) sttLiveTranscript.style.display = 'block';
+            sttLiveStatus.textContent = 'Loading model...';
+        }
+        if (sttRecordBtn) sttRecordBtn.disabled = true;
+        await initSTTModel();
+        if (sttRecordBtn) sttRecordBtn.disabled = false;
+
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
         recordedBlob = null;
@@ -527,20 +537,11 @@ async function startRecording() {
         if (sttResults) sttResults.style.display = 'none';
         if (sttLiveTranscript) sttLiveTranscript.style.display = 'block';
         if (sttLiveText) sttLiveText.textContent = '';
-        if (sttLiveStatus) sttLiveStatus.textContent = 'Loading model...';
+        if (sttLiveStatus) sttLiveStatus.textContent = 'Listening...';
         if (sttWaveformCanvas) sttWaveformCanvas.style.display = 'block';
 
-        // Preload Whisper model, then begin live transcription loop
-        try {
-            await initSTTModel();
-            if (isRecording) {
-                if (sttLiveStatus) sttLiveStatus.textContent = 'Listening...';
-                startLiveLoop();
-            }
-        } catch (err) {
-            console.error('[STT] Model preload failed:', err);
-            if (sttLiveStatus) sttLiveStatus.textContent = 'Model unavailable — transcribe after recording';
-        }
+        // Model is already loaded — start live transcription loop immediately
+        startLiveLoop();
     } catch (error) {
         console.error('Microphone access error:', error);
         alert('Could not access microphone. Please allow microphone permission.');
@@ -856,6 +857,11 @@ async function dictStartEntry() {
     if (dictaphoneRecording) return;
 
     try {
+        // Load model FIRST — before starting mic/recording
+        if (dictRecordBtn) dictRecordBtn.disabled = true;
+        await initSTTModel();
+        if (dictRecordBtn) dictRecordBtn.disabled = false;
+
         if (!dictaphoneStream) {
             dictaphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         }
@@ -1074,11 +1080,18 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     });
 });
 
-// Expose for privacy inspector
+// Expose for privacy inspector and cache-manager
 window.medmorfSTTData = {
     hasRecording: () => recordedBlob !== null,
     hasResult: () => transcriptionResult !== null,
     hasDictaphoneEntries: () => dictaphoneEntries.length > 0,
+    isModelLoaded: () => pipeline !== null,
+    getSelectedModel: () => getSelectedModel(),
+    getModelConfig: () => getModelConfig(),
+    preloadModel: async (progressCallback) => {
+        if (pipeline && loadedModelId === getSelectedModel()) return;
+        await initSTTModel(progressCallback);
+    },
     clearAll: async () => {
         if (isRecording) await stopRecording();
         await cleanupDictaphone();
