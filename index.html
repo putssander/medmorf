@@ -24,7 +24,8 @@
             "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.3/dist/index.js",
             "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/ort.all.min.mjs",
             "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.22.0-dev.20250409-89f8206ba4/dist/esm/index.js",
-            "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js"
+            "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js",
+            "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js"
         }
     }
     </script>
@@ -407,46 +408,61 @@
             <div class="tab-panel" id="tab-anonymize">
 
                 <div class="anon-header">
+                    <div class="hw-requirements-notice">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
+                        <span><strong>Hardware:</strong> Requires a modern GPU or Apple Silicon Mac with WebGPU support (Chrome/Edge 113+, Safari 18+). The default 4B model needs ~3.4 GB GPU memory; choose a smaller model on devices with limited VRAM.</span>
+                    </div>
                     <p class="section-description">Detect and replace PII in medical documents using <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> + WebGPU — entirely in your browser.</p>
                     <div class="anon-settings-row">
                         <div class="setting-group compact">
                             <label for="anonPipelineSelect">Pipeline</label>
                             <select id="anonPipelineSelect">
-                                <option value="ner+llm" selected>NER + LLM (recommended)</option>
+                                <option value="llm" selected>LLM only (recommended)</option>
+                                <option value="ner+llm">NER + LLM</option>
                                 <option value="ner">NER only</option>
-                                <option value="llm">LLM only</option>
                             </select>
                         </div>
                         <div class="setting-group compact">
                             <label for="anonNerModelSelect">NER Model</label>
                             <select id="anonNerModelSelect">
                                 <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
+                                <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
                                 <option value="multilingual_ner">Multilingual BERT NER</option>
                             </select>
                         </div>
                         <div class="setting-group compact">
                             <label for="anonModelSelect">LLM Model</label>
                             <select id="anonModelSelect">
-                                <option value="Qwen2.5-3B-Instruct-q4f16_1-MLC" selected>Qwen2.5 3B (~2 GB)</option>
+                                <!-- Populated dynamically by anonymize-handler.js -->
                             </select>
                         </div>
                         <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
+                    </div>
+                    <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
+                        <div class="setting-group compact" style="flex:1">
+                            <label for="glinerThreshold">GLiNER Threshold: <span id="glinerThresholdValue">0.3</span></label>
+                            <input type="range" id="glinerThreshold" min="0.05" max="0.95" step="0.05" value="0.3" style="width:100%">
+                            <small class="storage-hint">Lower = more entities detected (more false positives). Higher = fewer but more confident detections.</small>
+                        </div>
                     </div>
                     <p id="anonNerModelHint" class="section-description" style="margin-top: 0.75rem;"></p>
                     <div class="anon-disclaimer">
                         <p><strong>⚠️ Disclaimer:</strong> Anonymization is not guaranteed to detect all PII. Always manually review the output before sharing documents. This tool is an aid, not a replacement for human review.</p>
                         <details class="hw-details">
                             <summary>Pipeline details &amp; hardware</summary>
-                            <p><strong>NER + LLM</strong> (default): Use a selectable browser-side NER model first, then let Qwen2.5 verify and catch remaining PII. The multilingual PII model detects names, addresses, dates and IDs across multiple languages, while the BERT model is lighter and focuses on people, places and organizations.</p>
-                            <p><strong>NER only</strong>: Run just the selected NER model. Fastest way to inspect what the model itself detected, without any LLM additions.</p>
-                            <p><strong>LLM only</strong>: Qwen2.5 alone handles all entity detection. Faster to start, but may miss some entities.</p>
+                            <p><strong>LLM only</strong> (recommended): Qwen3 handles all PII detection in a single pass. Best accuracy, especially with the 4B or 8B model.</p>
+                            <p><strong>NER + LLM</strong>: Run a NER model first, then let the LLM verify and catch remaining PII. Useful for additional coverage or comparison.</p>
+                            <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
                             <ul>
-                                <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa fine-tuned on PII data. Detects names, addresses, dates, phone numbers and IDs across Dutch, English, French and German.</li>
-                                <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER for PERSON, LOCATION and ORGANIZATION.</li>
-                                <li><strong>Qwen2.5 3B</strong> — ~4 GB VRAM. Needs a dedicated GPU or Apple Silicon Mac. Best balance of accuracy and speed.</li>
+                                <li><strong>Qwen3 0.6B</strong> — ~1.4 GB VRAM. Smallest & fastest. Good for quick scans.</li>
+                                <li><strong>Qwen3 1.7B</strong> — ~2 GB VRAM. Good balance of speed and quality.</li>
+                                <li><strong>Qwen3 4B</strong> (default) — ~3.4 GB VRAM. Best quality for most devices.</li>
+                                <li><strong>Qwen3 8B</strong> — ~5.7 GB VRAM. Highest quality, needs a powerful GPU.</li>
+                                <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
+                                <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
+                                <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER.</li>
                             </ul>
-                            <p>NER model performance varies by text domain and language. This UI should be treated as assisted review, not as a guarantee.</p>
-                            <p>Requires <strong>WebGPU</strong> (Chrome/Edge 113+, Safari 18+). First load downloads models; subsequent runs use the browser cache.</p>
+                            <p>Always manually review the output. First load downloads the selected model; subsequent runs use the browser cache.</p>
                         </details>
                     </div>
                 </div>
@@ -567,6 +583,15 @@
                                 </table>
                             </div>
                         </div>
+                        <div class="mapping-table-container" id="nerFilteredSection" style="display:none">
+                            <h4>NER Filtered (False Positives Removed by LLM)</h4>
+                            <div class="mapping-table-scroll">
+                                <table id="nerFilteredTable" class="mapping-table">
+                                    <thead><tr><th>Entity</th><th>Type</th></tr></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                        </div>
                         <div class="mapping-table-container" id="llmAddedSection">
                             <h4>LLM Added Beyond NER</h4>
                             <div class="mapping-table-scroll">
@@ -668,8 +693,8 @@
                         <div class="offline-model-card" id="offlineLLM">
                             <div class="offline-model-info">
                                 <strong>Anonymization LLM</strong>
-                                <span class="offline-model-meta">Qwen2.5 3B · ~2 GB</span>
-                                <span class="offline-model-desc">Verifies and catches remaining PII via WebGPU</span>
+                                <span class="offline-model-meta">Qwen3 4B · ~3.4 GB</span>
+                                <span class="offline-model-desc">Detects and anonymizes PII via WebGPU</span>
                             </div>
                             <div class="offline-model-status" id="offlineLLMStatus">
                                 <span class="offline-status-text" id="offlineLLMText">Checking...</span>

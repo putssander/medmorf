@@ -13,7 +13,7 @@ import {
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] cache-manager.js build', BUILD_ID, 'module url', import.meta.url);
 
-const LLM_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+const LLM_MODEL = 'Qwen3-4B-q4f16_1-MLC';
 
 function formatLoadError(error) {
     if (error instanceof Error && error.message) {
@@ -377,6 +377,7 @@ function refreshNerCardDetails() {
     if (offlineNERMeta) {
         const sizeLabels = {
             multilang_pii: 'Multilingual PII NER · ~280 MB',
+            gliner_pii: 'GLiNER PII Edge · ~46 MB',
             multilingual_ner: 'Multilingual BERT · ~100 MB',
         };
         offlineNERMeta.textContent = sizeLabels[option.id] || option.label;

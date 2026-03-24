@@ -1,6 +1,6 @@
-# 🌐 Medmorf - In-Browser Translation Tool
+# 🌐 Medmorf - In-Browser Translation & Anonymization Tool
 
-A powerful web-based translation tool that runs entirely in your browser using Hugging Face's Transformers.js and the NLLB-200 translation model. Translate Excel spreadsheets and Word documents without sending your data to any server - all processing happens locally on your device!
+A powerful web-based tool for translating and anonymizing medical/sensitive documents entirely in your browser. Uses Hugging Face's Transformers.js, GLiNER NER, and WebLLM — all processing happens locally on your device. No data is ever sent to a server.
 
 ## 🚀 Live Demo
 
@@ -8,13 +8,17 @@ A powerful web-based translation tool that runs entirely in your browser using H
 
 ## ✨ Features
 
-- **🔒 100% Privacy - Healthcare Safe**: All translation happens in your browser - no data leaves your device
+- **🔒 100% Privacy - Healthcare Safe**: All processing happens in your browser - no data leaves your device
   - ✅ Zero data transmission to servers
   - ✅ Zero data storage on our end (we have no servers!)
   - ✅ Zero tracking, cookies, or analytics
   - ✅ GDPR compliant by design
   - ✅ Suitable for HIPAA-compliant workflows
   - ✅ **Automatic data clearing** when you close the tab or navigate away
+- **🛡️ Anonymization**: Detect and redact PII (names, addresses, dates, phone numbers, emails, medical IDs, etc.)
+  - ✅ Multiple NER models: XLM-RoBERTa, GLiNER (ModernBERT), mBERT
+  - ✅ Optional LLM verification (Qwen2.5-3B via WebGPU) for additional PII detection
+  - ✅ 23+ PII entity types recognized
 - **📊 Excel Support**: Upload `.xlsx` files and select specific sheets and columns to translate
 - **📝 Word Support**: Upload `.docx` files for full document translation
 - **🎯 Multiple Languages**: Support for Dutch, English, German, French, Spanish, Italian, Portuguese, and more
@@ -106,8 +110,13 @@ See [PRIVACY.md](PRIVACY.md) for complete privacy documentation.
 
 ### Technologies Used
 
-- **[Transformers.js](https://huggingface.co/docs/transformers.js)**: Run Hugging Face models in the browser
+- **[Transformers.js v2](https://github.com/xenova/transformers.js)**: Translation pipeline (`@xenova/transformers@2.17.2`)
+- **[Transformers.js v3](https://huggingface.co/docs/transformers.js)**: NER pipeline (`@huggingface/transformers@3.8.1`)
+- **[GLiNER.js](https://github.com/nicholasgriffintn/gliner.js)**: Zero-shot NER via ONNX (`gliner@0.0.19`)
+- **[WebLLM](https://webllm.mlc.ai/)**: In-browser LLM for PII verification (`@mlc-ai/web-llm`, Qwen2.5-3B, WebGPU)
+- **[ONNX Runtime Web](https://onnxruntime.ai/)**: Model inference backend
 - **[NLLB-200](https://huggingface.co/facebook/nllb-200-distilled-600M)**: Facebook's multilingual translation model (distilled version)
+- **[GLiNER PII Edge](https://huggingface.co/knowledgator/gliner-pii-edge-v1.0)**: ModernBERT-based PII detection model (32M params)
 - **[SheetJS](https://sheetjs.com/)**: Excel file reading and writing
 - **[Mammoth.js](https://github.com/mwilliamson/mammoth.js)**: Word document text extraction
 - **[FileSaver.js](https://github.com/eligrey/FileSaver.js/)**: File download functionality
@@ -128,10 +137,17 @@ The NLLB-200 model supports translation between 200+ languages. Currently config
 
 ### Model Information
 
+#### Translation
 - **Model**: `Xenova/nllb-200-distilled-600M`
 - **Size**: ~300MB (downloaded once and cached by your browser)
 - **First Use**: The first time you use the tool, it will download the model. This may take a few minutes depending on your internet connection.
 - **Subsequent Uses**: The model is cached, so translations start immediately
+
+#### Anonymization / NER
+- **GLiNER PII**: `knowledgator/gliner-pii-edge-v1.0` — ModernBERT, ~46MB, zero-shot PII detection
+- **Multilang PII**: XLM-RoBERTa token-classification, multilingual (Dutch, English, French, German)
+- **Multilingual NER**: mBERT, general-purpose named entity recognition
+- **LLM (optional)**: Qwen2.5-3B via WebGPU — additional PII verification pass
 
 ## ⚡ Performance
 
@@ -201,13 +217,105 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 
 ```
 .
-├── index.html           # Main HTML interface
-├── app.js              # Main application logic and translation
-├── styles.css          # Styling and responsive design
-├── excel-handler.js    # Excel file processing utilities
-├── word-handler.js     # Word document processing utilities
-└── README.md           # This file
+├── index.html              # Main HTML interface + import map
+├── app.js                  # Translation UI logic
+├── anonymize-handler.js    # Anonymization UI + NER/LLM pipeline
+├── privacy-runtime.js      # NER model loading, GLiNER init + patches
+├── translation-runtime.js  # Translation pipeline (Xenova v2)
+├── cache-manager.js        # Browser cache management
+├── security.js             # Runtime privacy guards
+├── excel-handler.js        # Excel file processing utilities
+├── word-handler.js         # Word document processing utilities
+├── styles.css              # Styling and responsive design
+├── stubs/                  # Browser shims for Node-only modules
+│   ├── empty-module.js
+│   └── null-module.js
+└── README.md               # This file
 ```
+
+## 🏗️ Runtime Architecture
+
+Medmorf uses **two separate Transformers.js runtimes** to balance memory efficiency and model compatibility:
+
+| Feature | Runtime | Library | Why |
+|---|---|---|---|
+| **Translation** | `translation-runtime.js` | `@xenova/transformers@2.17.2` (full CDN URL) | v3 consumed too much memory for the 600M NLLB model |
+| **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@3.8.1` (import map) | v3 supports modern model architectures (ModernBERT) |
+| **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses v3's `AutoTokenizer` via import map alias |
+| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.82` (WebGPU) | Qwen2.5 for additional PII verification |
+
+### Why Two Runtimes?
+
+The translation pipeline uses the 600M-parameter NLLB model which requires significant memory. Transformers.js v3 introduced breaking API changes and higher memory overhead that caused OOM issues with this model. The v2 runtime (`@xenova/transformers@2.17.2`) handles it efficiently.
+
+The NER pipeline requires v3 because it supports newer model architectures like ModernBERT (used by `gliner-pii-edge-v1.0`). The translation runtime loads via a **full CDN URL** (`https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2`), which bypasses the import map entirely — so both runtimes coexist without conflicts.
+
+### Import Map Configuration
+
+The `index.html` import map resolves bare specifiers:
+
+```json
+{
+  "@huggingface/transformers": "...transformers@3.8.1/dist/transformers.web.js",
+  "@xenova/transformers": "...transformers@3.8.1/dist/transformers.web.js",
+  "onnxruntime-web": "...onnxruntime-web@1.22.0-.../dist/ort.all.min.mjs"
+}
+```
+
+The `@xenova/transformers` alias is critical: `gliner@0.0.19` internally `import`s from `@xenova/transformers` (a bare specifier), so the import map redirects it to v3. Without this, gliner would bundle its own v2 copy, which can't tokenize ModernBERT models.
+
+### GLiNER Compatibility Patches
+
+`gliner@0.0.19` was built and tested with DeBERTa-v3 models. Using it with `knowledgator/gliner-pii-edge-v1.0` (ModernBERT) requires two monkey-patches applied in `privacy-runtime.js` after initialization:
+
+#### Patch 1: CLS Token ID
+
+**Problem**: gliner.js hardcodes `CLS token ID = 1` in `encodeInputs()`:
+```javascript
+let inputIds = [1];  // hardcoded — correct for DeBERTa-v3 only
+```
+For ModernBERT, `[CLS]` = token **50281**. Sending token 1 (`<|padding|>`) as CLS produces garbage embeddings.
+
+**Fix**: After initialization, probe `tokenizer.encode('a')[0]` to get the actual CLS token ID, then wrap `processor.encodeInputs` to replace the hardcoded `1`. Console output: `[GLiNER] Patched CLS token: 1 → 50281`.
+
+#### Patch 2: ONNX Logits Axis Transposition
+
+**Problem**: The ONNX model for `gliner-pii-edge` outputs logits shaped `[batch, words, entities, 3]` where `3` = start/end/inside (position as the **last** axis). But gliner.js's `TokenDecoder` iterates the flat array as `[position][batch][token][entity]` (position **first**):
+```javascript
+const positionPadding = batchSize * inputLength * numEntities;
+// position = Math.floor(id / positionPadding)  ← expects position-major layout
+```
+Without transposing, sigmoid outputs are computed from wrong values → zero entities above threshold.
+
+**Fix**: Wrap `onnxWrapper.run()` to detect the `[B, W, E, 3]` layout (last dim = 3, first dim ≠ 3) and transpose to `[3, B, W, E]` before the decoder processes it. Console output: `[GLiNER] Transposed logits: [1,N,23,3] → [3,1,N,23]`.
+
+#### Verification
+
+When GLiNER initializes correctly, you'll see these console messages:
+```
+[GLiNER] Module loaded, initializing model...
+[GLiNER] Patched CLS token: 1 → 50281
+[GLiNER] Patched ONNX logits transpose
+[GLiNER] GLiNER PII Edge (ModernBERT) initialized
+```
+
+During inference:
+```
+[GLiNER] Transposed logits: [1,245,23,3] → [3,1,245,23]
+[GLiNER] Raw results: [{spanText: "Jan de Vries", label: "name", score: 0.95}, ...]
+```
+
+### NER Model Options
+
+| Model ID | Engine | Architecture | Best For |
+|---|---|---|---|
+| `multilang_pii` | Transformers.js v3 | XLM-RoBERTa | Multilingual PII (Dutch, English, French, German) |
+| `gliner_pii` | GLiNER | ModernBERT (32M params) | Zero-shot English PII, ~46 MB |
+| `multilingual_ner` | Transformers.js v3 | mBERT | General-purpose multilingual NER |
+
+### Known Cosmetic Issues
+
+- **Source map 404s** from esm.sh (`webgpu.mjs.map`, `webgl.mjs.map`, `onnxruntime-web.mjs.map`): These are from gliner's bundled `onnxruntime-web@1.19.2`. The source map files don't exist on esm.sh's CDN. **No runtime impact** — purely cosmetic console noise. GLiNER uses `executionProvider: 'cpu'` so the webgpu/webgl modules are imported but never used.
 
 ## 🤝 Contributing
 

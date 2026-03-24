@@ -13,17 +13,47 @@ import {
     NER_MODEL_OPTIONS,
     disposeNERPipeline,
     getActiveNERModelId,
+    getActiveNERModelOption,
     getNERModelOption,
     getNERPipeline,
     initNERPipeline,
+    isGLiNERModel,
+    getGLiNERInstance,
     mapNEREntityType,
-} from './privacy-runtime.js?v=2026-03-23-cachefix-7';
+} from './privacy-runtime.js?v=2026-03-24-cachefix-9';
 
-const DEFAULT_MODEL = 'Qwen2.5-3B-Instruct-q4f16_1-MLC';
+const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
 const MAX_CHUNK_CHARS = 1500;
 
+const LLM_MODEL_OPTIONS = {
+    'Qwen3-0.6B-q4f16_1-MLC': {
+        label: 'Qwen3 0.6B',
+        size: '~1.4 GB',
+        note: 'Smallest & fastest. Requires WebGPU.',
+        engine: 'webllm',
+    },
+    'Qwen3-1.7B-q4f16_1-MLC': {
+        label: 'Qwen3 1.7B',
+        size: '~2 GB',
+        note: 'Good balance of speed and quality. Requires WebGPU.',
+        engine: 'webllm',
+    },
+    'Qwen3-4B-q4f16_1-MLC': {
+        label: 'Qwen3 4B',
+        size: '~3.4 GB',
+        note: 'Best quality. Requires WebGPU.',
+        engine: 'webllm',
+    },
+    'Qwen3-8B-q4f16_1-MLC': {
+        label: 'Qwen3 8B',
+        size: '~5.7 GB',
+        note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
+        engine: 'webllm',
+    },
+};
+
 // ── State ──────────────────────────────────────────────────────────────────────
-let engine = null;
+let engine = null;       // WebLLM engine
 let loadedModelId = null;
 let isNerLoading = false;
 let currentMapping = { version: 1, entities: {}, counters: {} };
@@ -33,7 +63,7 @@ let anonWorkbook = null;
 let anonymizedResult = null;
 let isAnonModelLoading = false;
 let isAnonymizing = false;
-let lastDetectionBreakdown = { pipeline: 'ner+llm', ner: [], llm: [], llmAdded: [] };
+let lastDetectionBreakdown = { pipeline: 'llm', ner: [], llm: [], llmAdded: [] };
 let detectionSeen = {
     ner: new Set(),
     llm: new Set(),
@@ -64,6 +94,8 @@ const mappingTableBody = document.querySelector('#mappingTable tbody');
 const nerDetectionTableBody = document.querySelector('#nerDetectionTable tbody');
 const llmDetectionTableBody = document.querySelector('#llmDetectionTable tbody');
 const llmAddedTableBody = document.querySelector('#llmAddedTable tbody');
+const nerFilteredTableBody = document.querySelector('#nerFilteredTable tbody');
+const nerFilteredSection = document.getElementById('nerFilteredSection');
 const anonDetectionSummary = document.getElementById('anonDetectionSummary');
 const llmAddedSection = document.getElementById('llmAddedSection');
 const anonPreviewText = document.getElementById('anonPreviewText');
@@ -76,6 +108,9 @@ const anonModelSelect = document.getElementById('anonModelSelect');
 const anonPipelineSelect = document.getElementById('anonPipelineSelect');
 const anonNerModelSelect = document.getElementById('anonNerModelSelect');
 const anonNerModelHint = document.getElementById('anonNerModelHint');
+const glinerThresholdRow = document.getElementById('glinerThresholdRow');
+const glinerThresholdInput = document.getElementById('glinerThreshold');
+const glinerThresholdValue = document.getElementById('glinerThresholdValue');
 const mappingExportFormat = document.getElementById('mappingExportFormat');
 
 const systemStatusIndicator = document.querySelector('.status-indicator');
@@ -87,31 +122,50 @@ function updateStatus(state, message) {
 }
 
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
+let hasWebGPU = false;
 (async function checkWebGPU() {
     if (!anonWebGPUStatus) return;
     if (navigator.gpu) {
         try {
             const adapter = await navigator.gpu.requestAdapter();
             if (adapter) {
-                anonWebGPUStatus.innerHTML = '✓ WebGPU available — optimal performance';
+                hasWebGPU = true;
+                anonWebGPUStatus.innerHTML = '✓ WebGPU available';
                 anonWebGPUStatus.className = 'webgpu-status supported';
             } else {
-                anonWebGPUStatus.innerHTML = '✗ WebGPU adapter not found — WebGPU is required for LLM anonymization';
+                anonWebGPUStatus.innerHTML = '⚠ WebGPU adapter not found — LLM anonymization requires WebGPU (Chrome/Edge 113+ or Safari 18+)';
                 anonWebGPUStatus.className = 'webgpu-status fallback';
             }
         } catch {
-            anonWebGPUStatus.innerHTML = '✗ WebGPU error — WebGPU is required for LLM anonymization';
+            anonWebGPUStatus.innerHTML = '⚠ WebGPU error — LLM anonymization requires WebGPU';
             anonWebGPUStatus.className = 'webgpu-status fallback';
         }
     } else {
-        anonWebGPUStatus.innerHTML = '✗ WebGPU not supported — please use Chrome/Edge 113+ or Safari 18+';
+        anonWebGPUStatus.innerHTML = '⚠ No WebGPU — LLM anonymization requires WebGPU (Chrome/Edge 113+ or Safari 18+)';
         anonWebGPUStatus.className = 'webgpu-status fallback';
     }
+    populateLLMModelSelect();
 })();
 
-// ── Model Loading (WebLLM / MLC Engine) ────────────────────────────────────────
+function populateLLMModelSelect() {
+    if (!anonModelSelect) return;
+    anonModelSelect.innerHTML = '';
+    for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
+        const el = document.createElement('option');
+        el.value = id;
+        el.textContent = `${opt.label} (${opt.size})`;
+        if (id === DEFAULT_MODEL) el.selected = true;
+        anonModelSelect.appendChild(el);
+    }
+}
+
+// ── Model Loading (WebLLM) ──────────────────────────────────────────────────
 function getSelectedModel() {
     return anonModelSelect ? anonModelSelect.value : DEFAULT_MODEL;
+}
+
+function getSelectedLLMOption() {
+    return LLM_MODEL_OPTIONS[getSelectedModel()] || LLM_MODEL_OPTIONS[DEFAULT_MODEL];
 }
 
 async function initAnonModel() {
@@ -119,10 +173,9 @@ async function initAnonModel() {
     if (engine && loadedModelId === selectedModel) return;
     if (isAnonModelLoading) return;
 
-    // If switching models, reset engine
+    // If switching models, dispose previous
     if (engine && loadedModelId !== selectedModel) {
-        engine = null;
-        loadedModelId = null;
+        await disposeAnonModel();
     }
 
     isAnonModelLoading = true;
@@ -130,8 +183,8 @@ async function initAnonModel() {
     anonModelStatus.style.display = 'block';
     anonModelProgress.style.width = '0%';
 
-    // Update the heading to reflect the actual model being loaded
-    const modelLabel = anonModelSelect ? anonModelSelect.options[anonModelSelect.selectedIndex].text : selectedModel;
+    const modelOption = getSelectedLLMOption();
+    const modelLabel = modelOption.label;
     const anonModelHeading = document.getElementById('anonModelHeading');
     if (anonModelHeading) anonModelHeading.textContent = `Loading ${modelLabel}...`;
 
@@ -139,18 +192,37 @@ async function initAnonModel() {
     updateStatus('loading', `Loading ${modelLabel}...`);
 
     try {
-        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
-        engine = await CreateMLCEngine(selectedModel, {
-            initProgressCallback: (progress) => {
-                const text = progress.text || '';
-                const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
-                if (pctMatch) {
-                    anonModelProgress.style.width = pctMatch[1] + '%';
+        if (modelOption.engine === 'webllm') {
+            // Pre-flight: verify we can reach the model config before handing off to WebLLM
+            const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+            try {
+                const probe = await fetch(configUrl);
+                if (!probe.ok) {
+                    throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
                 }
-                anonModelStatusText.textContent = text || 'Loading...';
-                updateStatus('loading', text || 'Loading anonymization model...');
-            },
-        });
+            } catch (fetchErr) {
+                console.error('Pre-flight fetch failed:', fetchErr);
+                throw new Error(
+                    `Cannot reach model files for ${modelLabel}. ` +
+                    (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError')
+                        ? 'Check your internet connection and ensure nothing is blocking huggingface.co (ad-blockers, VPN, firewall).'
+                        : fetchErr.message)
+                );
+            }
+
+            const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
+            engine = await CreateMLCEngine(selectedModel, {
+                initProgressCallback: (progress) => {
+                    const text = progress.text || '';
+                    const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                    if (pctMatch) {
+                        anonModelProgress.style.width = pctMatch[1] + '%';
+                    }
+                    anonModelStatusText.textContent = text || 'Loading...';
+                    updateStatus('loading', text || 'Loading anonymization model...');
+                },
+            });
+        }
 
         anonModelStatusText.textContent = 'Anonymization model loaded ✓';
         anonModelProgress.style.width = '100%';
@@ -159,7 +231,11 @@ async function initAnonModel() {
         setTimeout(() => { anonModelStatus.style.display = 'none'; }, 2000);
     } catch (error) {
         console.error('Anonymization model loading error:', error);
-        anonModelStatusText.textContent = 'Error: ' + error.message;
+        let userMsg = error.message;
+        if (userMsg.includes('Cannot fetch')) {
+            userMsg = `Model download failed. Try: (1) clear LLM cache in Storage tab, (2) hard-refresh (⌘⇧R), (3) check that nothing blocks huggingface.co. If using Safari, try Chrome/Edge instead.`;
+        }
+        anonModelStatusText.textContent = 'Error: ' + userMsg;
         updateStatus('idle', 'Model loading failed');
         engine = null;
         throw error;
@@ -174,16 +250,25 @@ async function disposeAnonModel() {
         return;
     }
 
-    const engineToUnload = engine;
+    const oldEngine = engine;
     engine = null;
     loadedModelId = null;
 
-    if (typeof engineToUnload.unload === 'function') {
-        await engineToUnload.unload();
+    if (typeof oldEngine.unload === 'function') {
+        await oldEngine.unload();
     }
 }
 
-// ── LLM Entity Extraction (OpenAI-compatible chat API via WebLLM) ──────────────
+async function llmChat(messages, options = {}) {
+    if (!engine) throw new Error('LLM engine not loaded');
+
+    const reply = await engine.chat.completions.create({
+        messages,
+        max_tokens: options.max_tokens || 2048,
+        temperature: options.temperature ?? 0,
+    });
+    return reply.choices[0].message.content || '';
+}
 
 function getSelectedNerModelId() {
     return anonNerModelSelect ? anonNerModelSelect.value : DEFAULT_NER_MODEL_ID;
@@ -195,6 +280,10 @@ function updateNerModelHint() {
     const supportedLanguages = option.supportedLanguages ? option.supportedLanguages.join(', ') : 'See model card';
     const qualityNote = option.qualityNote ? ` Quality note: ${option.qualityNote}` : '';
     anonNerModelHint.textContent = `${option.label}: ${option.description} Supported languages: ${supportedLanguages}. Categories: ${option.categoriesLabel}.${qualityNote}`;
+    // Show threshold slider only for GLiNER models
+    if (glinerThresholdRow) {
+        glinerThresholdRow.style.display = option.engine === 'gliner' ? 'flex' : 'none';
+    }
 }
 
 function populateNerModelSelect() {
@@ -255,6 +344,11 @@ async function initNerModel() {
 }
 
 async function extractEntitiesNER(text) {
+    // GLiNER models use a separate extraction path
+    if (isGLiNERModel()) {
+        return extractEntitiesGLiNER(text);
+    }
+
     const pipeline = getNERPipeline();
     if (!pipeline) {
         throw new Error('NER model is not loaded');
@@ -347,6 +441,96 @@ async function extractEntitiesNER(text) {
     console.log('[NER] Mapped entities:', entities);
     return entities;
 }
+
+function getGlinerThreshold() {
+    return glinerThresholdInput ? parseFloat(glinerThresholdInput.value) : 0.3;
+}
+
+async function extractEntitiesGLiNER(text) {
+    const gliner = getGLiNERInstance();
+    if (!gliner) {
+        throw new Error('GLiNER model is not loaded');
+    }
+    const modelOption = getActiveNERModelOption();
+    const threshold = getGlinerThreshold();
+    console.log('[GLiNER] Running inference', {
+        modelId: getActiveNERModelId(),
+        labelsCount: modelOption.piiLabels.length,
+        threshold,
+        length: text.length,
+        preview: text.slice(0, 200),
+    });
+
+    const results = await gliner.inference({
+        texts: [text],
+        entities: modelOption.piiLabels,
+        flatNer: true,
+        threshold,
+    });
+
+    console.log('[GLiNER] Raw results:', results[0]);
+
+    const entities = [];
+    const seen = new Set();
+    for (const item of (results[0] || [])) {
+        const rawLabel = item.label || '';
+        const type = mapNEREntityType(rawLabel, modelOption.id);
+        const entity = (item.spanText || '').trim();
+        if (!entity || entity.length < 2 || !type || (item.score || 0) <= 0.1) {
+            continue;
+        }
+        // Pre-filter obvious garbage before it reaches the LLM
+        if (isObviousGarbage(entity, type)) {
+            console.log(`[GLiNER] Pre-filtered garbage: "${entity}" → ${type}`);
+            continue;
+        }
+        const key = `${entity.toLowerCase()}::${type}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        entities.push({ entity, type, score: item.score });
+    }
+
+    console.log('[GLiNER] Mapped entities:', entities);
+    return entities;
+}
+
+// Pre-filter obvious GLiNER false positives that no LLM review is needed for
+function isObviousGarbage(entity, type) {
+    const lower = entity.toLowerCase().replace(/\s+/g, ' ').trim();
+
+    // Single words that are never PII regardless of type
+    const commonWords = new Set([
+        'ja', 'nee', 'ok', 'oké', 'goed', 'prima', 'dank', 'dank u', 'bedankt',
+        'hallo', 'dag', 'goedemorgen', 'goedemiddag', 'goedenavond',
+        'wat', 'wie', 'waar', 'wanneer', 'hoe', 'waarom',
+        'mij', 'mijn', 'uw', 'u', 'hij', 'zij', 'wij', 'hun', 'hem', 'haar',
+        'twee', 'drie', 'vier', 'vijf', 'zes', 'zeven', 'acht', 'negen', 'tien',
+        'patiënt', 'patiënte', 'pati', 'patient',
+        'noodgevallen', 'vermoeidheid', 'klachten', 'medicatie', 'behandeling',
+        'contactpersoon', 'contactgegevens', 'rijbewijsnummer', 'telefoonnummer',
+        'mijn vrouw', 'mijn man', 'mijn huisarts', 'mijn zoon', 'mijn dochter',
+        'mijn iban', 'mijn bsn',
+    ]);
+    if (commonWords.has(lower)) return true;
+
+    // ID_NUMBER: must contain at least one digit to be a real identifier
+    if (type === 'ID_NUMBER' && !/\d/.test(entity)) return true;
+
+    // LOCATION: must look like a place name (capitalized) or address, not a common word
+    if (type === 'LOCATION' && entity.length < 3 && !/\d/.test(entity)) return true;
+
+    // Phrases that are clearly conversational, not PII
+    if (/^(kunt u|heeft u|ik ben|ik heb|wilt u|mag ik|kan ik)\b/i.test(lower)) return true;
+
+    // Multi-word phrases that don't contain any capitalized word (likely not a name/place)
+    if ((type === 'PERSON' || type === 'ORGANIZATION') && entity.split(/\s+/).length > 1) {
+        const hasCapital = entity.split(/\s+/).some(w => /^[A-Z\u00C0-\u024F]/.test(w));
+        if (!hasCapital) return true;
+    }
+
+    return false;
+}
+
 const SYSTEM_PROMPT = `You are a medical data anonymization expert. Identify ALL personally identifiable information (PII) in the given medical/clinical text.
 
 Entity types to detect:
@@ -400,19 +584,74 @@ Important example:
 
 Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam","type":"LOCATION"},{"entity":"12 maart 1981","type":"DATE"}]`;
 
+const SYSTEM_PROMPT_VALIDATE = `You are a medical data anonymization expert. A NER model detected the entities listed below, but it produced some false positives. Your task is to identify which detected entities are FALSE POSITIVES (NOT real PII) and should be REMOVED.
+
+An entity is a FALSE POSITIVE if:
+- PERSON: Not an actual person name. E.g. "mijn huisarts", "mijn vrouw", "contactpersoon" are roles/descriptions, not names. Real names: "Jan de Vries", "Dr. Jansen".
+- LOCATION: Not an actual place name. E.g. "noodgevallen", "vermoeidheid", "mij" are common words. Real places: "Utrecht", "Maastricht".
+- ID_NUMBER: Not an actual identifier value. E.g. "Goedemiddag", "Ja", "Wat", "Dank u" are conversational words. Real IDs: "731245689", "NL91 ABNA 0417 1643 00".
+- ORGANIZATION: Not an actual organization name. E.g. "het ziekenhuis" is generic. Real: "TechSolutions BV", "Amsterdam UMC".
+- WRONG TYPE: Entity exists but has wrong type. E.g. a person name classified as LOCATION, or an address classified as PERSON.
+
+Return ONLY a JSON array of the FALSE POSITIVES to REMOVE. Each item needs "entity" (exact text) and "reason" (brief why).
+If ALL entities are valid PII, return: []
+No explanations outside the JSON. ONLY the JSON array.
+
+Example: [{"entity":"mijn huisarts","reason":"role description, not a name"},{"entity":"noodgevallen","reason":"common word, not a location"}]`;
+
+async function validateEntitiesWithLLM(entities, text) {
+    if (!entities.length || !engine) return entities;
+
+    const entityList = entities.map(e => `- "${e.entity}" → ${e.type}`).join('\n');
+    const messages = [
+        { role: 'system', content: SYSTEM_PROMPT_VALIDATE },
+        { role: 'user', content: `Original text:\n${text}\n\nEntities detected by NER:\n${entityList}\n\nReturn ONLY the false positives to REMOVE as a JSON array.` },
+    ];
+
+    let response = await llmChat(messages, { max_tokens: 2048, temperature: 0 });
+    response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    console.log('[LLM Validate] Raw response:', response);
+
+    try {
+        const jsonMatch = response.match(/\[[\s\S]*?\]/);
+        if (jsonMatch) {
+            const rejects = JSON.parse(jsonMatch[0]);
+            console.log('[LLM Validate] Entities to reject:', rejects);
+
+            const normalize = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
+            const rejectSet = new Set();
+            for (const r of rejects) {
+                if (!r) continue;
+                const txt = r.entity || r.text || r.value || r.name || '';
+                if (typeof txt === 'string' && txt.trim()) {
+                    rejectSet.add(normalize(txt));
+                }
+            }
+
+            const kept = entities.filter(e => !rejectSet.has(normalize(e.entity)));
+            const removed = entities.filter(e => rejectSet.has(normalize(e.entity)));
+
+            console.log('[LLM Validate] Kept:', kept.length, 'Removed:', removed.length);
+            if (removed.length > 0) {
+                console.log('[LLM Validate] Removed false positives:', removed);
+                lastDetectionBreakdown.nerFiltered.push(...removed);
+            }
+            return kept;
+        }
+    } catch (e) {
+        console.warn('[LLM Validate] Parse error, keeping all entities:', e);
+    }
+    // On failure, keep all entities (safer for privacy)
+    return entities;
+}
+
 async function extractEntitiesLLM(text, systemPrompt) {
     const messages = [
         { role: 'system', content: systemPrompt || SYSTEM_PROMPT },
         { role: 'user', content: `Extract all PII entities from this medical text:\n\n${text}` },
     ];
 
-    const reply = await engine.chat.completions.create({
-        messages,
-        max_tokens: 2048,
-        temperature: 0,
-    });
-
-    let response = reply.choices[0].message.content || '';
+    let response = await llmChat(messages, { max_tokens: 2048, temperature: 0 });
 
     // Strip thinking tags if present
     response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -454,7 +693,7 @@ function createDetectionKey(entity, type) {
 }
 
 function resetDetectionBreakdown(pipeline) {
-    lastDetectionBreakdown = { pipeline, ner: [], llm: [], llmAdded: [] };
+    lastDetectionBreakdown = { pipeline, ner: [], llm: [], llmAdded: [], nerFiltered: [] };
     detectionSeen = {
         ner: new Set(),
         llm: new Set(),
@@ -658,7 +897,7 @@ function updateAnonBtnState() {
 
 // ── Pipeline Selection ─────────────────────────────────────────────────────────
 function getSelectedPipeline() {
-    return anonPipelineSelect ? anonPipelineSelect.value : 'ner+llm';
+    return anonPipelineSelect ? anonPipelineSelect.value : 'llm';
 }
 
 function updatePipelineControls() {
@@ -741,22 +980,32 @@ async function anonymizeTextDocument(pipeline) {
     if (pipeline === 'ner+llm') {
         // Phase 1: NER pass
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
-            const pct = Math.round(((i + 1) / totalChunks) * 25);
+            const pct = Math.round(((i + 1) / totalChunks) * 20);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
-            recordDetectedEntities('ner', nerEntities);
-            for (const { entity, type } of nerEntities) {
+            nerChunkResults.push(nerEntities);
+        }
+
+        // Phase 2: LLM validation — filter NER false positives
+        anonProgressText.textContent = 'LLM validation: filtering false positives...';
+        for (let i = 0; i < totalChunks; i++) {
+            const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
+            anonProgressBar.style.width = pct + '%';
+            anonProgressText.textContent = `LLM validation: chunk ${i + 1}/${totalChunks}`;
+            const validated = await validateEntitiesWithLLM(nerChunkResults[i], chunks[i]);
+            recordDetectedEntities('ner', validated);
+            for (const { entity, type } of validated) {
                 getOrCreateReplacement(entity, type);
             }
         }
 
-        // Phase 2: LLM verification pass. Use the full prompt for higher recall;
-        // duplicates are deduplicated by the mapping layer.
+        // Phase 3: LLM discovery — find additional PII the NER missed
         anonProgressText.textContent = 'LLM pass: finding remaining PII...';
         for (let i = 0; i < totalChunks; i++) {
-            const pct = 25 + Math.round(((i + 1) / totalChunks) * 50);
+            const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
             const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
@@ -824,20 +1073,30 @@ async function anonymizeExcel(pipeline) {
 
     if (pipeline === 'ner+llm') {
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
-            const pct = Math.round(((i + 1) / totalChunks) * 25);
+            const pct = Math.round(((i + 1) / totalChunks) * 20);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
-            recordDetectedEntities('ner', nerEntities);
-            for (const { entity, type } of nerEntities) {
+            nerChunkResults.push(nerEntities);
+        }
+
+        anonProgressText.textContent = 'LLM validation: filtering false positives...';
+        for (let i = 0; i < totalChunks; i++) {
+            const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
+            anonProgressBar.style.width = pct + '%';
+            anonProgressText.textContent = `LLM validation: chunk ${i + 1}/${totalChunks}`;
+            const validated = await validateEntitiesWithLLM(nerChunkResults[i], chunks[i]);
+            recordDetectedEntities('ner', validated);
+            for (const { entity, type } of validated) {
                 getOrCreateReplacement(entity, type);
             }
         }
 
         anonProgressText.textContent = 'LLM pass: finding remaining PII...';
         for (let i = 0; i < totalChunks; i++) {
-            const pct = 25 + Math.round(((i + 1) / totalChunks) * 50);
+            const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
             anonProgressBar.style.width = pct + '%';
             anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
             const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
@@ -913,13 +1172,20 @@ function renderResults() {
         const modelLabel = activeLoadLabel
             ? `${activeNerOption.label} (${activeLoadLabel})`
             : activeNerOption.label;
-        anonDetectionSummary.textContent = `${pipelineLabels[lastDetectionBreakdown.pipeline] || lastDetectionBreakdown.pipeline} used. Active NER model: ${modelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities. LLM found ${lastDetectionBreakdown.llm.length} unique entities. LLM added ${lastDetectionBreakdown.llmAdded.length} entities beyond NER.`;
+        const filteredNote = lastDetectionBreakdown.nerFiltered.length > 0
+            ? ` LLM filtered ${lastDetectionBreakdown.nerFiltered.length} NER false positives.`
+            : '';
+        anonDetectionSummary.textContent = `${pipelineLabels[lastDetectionBreakdown.pipeline] || lastDetectionBreakdown.pipeline} used. Active NER model: ${modelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities.${filteredNote} LLM found ${lastDetectionBreakdown.llm.length} unique entities. LLM added ${lastDetectionBreakdown.llmAdded.length} entities beyond NER.`;
     }
     renderDetectionTable(nerDetectionTableBody, lastDetectionBreakdown.ner, 'No NER detections for this run.');
     renderDetectionTable(llmDetectionTableBody, lastDetectionBreakdown.llm, 'No LLM detections for this run.');
     renderDetectionTable(llmAddedTableBody, lastDetectionBreakdown.llmAdded, 'No extra LLM-only detections for this run.');
+    renderDetectionTable(nerFilteredTableBody, lastDetectionBreakdown.nerFiltered, 'No false positives filtered.');
     if (llmAddedSection) {
         llmAddedSection.style.display = lastDetectionBreakdown.pipeline === 'ner+llm' ? 'block' : 'none';
+    }
+    if (nerFilteredSection) {
+        nerFilteredSection.style.display = (lastDetectionBreakdown.pipeline === 'ner+llm' && lastDetectionBreakdown.nerFiltered.length > 0) ? 'block' : 'none';
     }
 
     mappingTableBody.innerHTML = '';
@@ -1063,6 +1329,14 @@ if (anonNerModelSelect) {
         updateNerModelHint();
         if (getNERPipeline()) {
             await disposeNERPipeline();
+        }
+    });
+}
+
+if (glinerThresholdInput) {
+    glinerThresholdInput.addEventListener('input', () => {
+        if (glinerThresholdValue) {
+            glinerThresholdValue.textContent = glinerThresholdInput.value;
         }
     });
 }
