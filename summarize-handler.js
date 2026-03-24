@@ -373,24 +373,99 @@ function buildSummaryPrompt(text, templateId) {
         `## ${s.title}\n${s.hints}`
     ).join('\n\n');
 
-    const system = `You are a clinical document summarization expert. Your task is to generate a structured report based on the provided medical document.
+    const system = `You are a clinical document summarization expert. Generate a structured report from the provided document.
 
-IMPORTANT: Always write your response in the same language as the source document. Detect the language of the input and match it exactly. Translate section headings to match the source language if needed.
+Write your response in the same language as the source document. Translate section headings to match if needed. If a section has no relevant information, state that briefly.
 
-Fill in each section below based on the information available in the document. If information for a section is not available, state that clearly in the source document's language.
-
-Output format:
+Sections:
 ${sectionInstructions}
 
 Rules:
-1. Write your response using the section headings shown above (translate them to the source document's language if needed).
-2. Be concise but thorough. Use bullet points where appropriate.
-3. Only include information that is present in or can be reasonably inferred from the document.
-4. Do NOT make up information. If a section cannot be filled, state that clearly.
-5. Always respond in the same language as the source document.
-6. No markdown code blocks. Just use the section headings with ## prefix.`;
+1. Use the section headings above (translated to source language).
+2. Be concise but thorough. Use bullet points.
+3. Only include information present in the document.
+4. Do NOT invent information.
+5. No markdown code blocks. Use ## for headings.
+6. Do NOT output reasoning or thinking, go straight to the report.`;
 
     const user = `Generate the structured report from this document:\n\n${text}`;
+
+    return { system, user };
+}
+
+// ── Chunked Summarization ──────────────────────────────────────────────────────
+const CHUNK_SIZE = 3000;      // chars per chunk (≈1000-1200 tokens for Dutch)
+const CHUNK_OVERLAP = 200;    // overlap to avoid cutting mid-sentence
+const SINGLE_PASS_LIMIT = 3500; // docs shorter than this go single-pass
+
+function splitIntoChunks(text) {
+    const chunks = [];
+    let start = 0;
+    while (start < text.length) {
+        let end = Math.min(start + CHUNK_SIZE, text.length);
+        // Try to break at a sentence boundary
+        if (end < text.length) {
+            const slice = text.substring(start, end);
+            const lastBreak = Math.max(slice.lastIndexOf('.\n'), slice.lastIndexOf('. '), slice.lastIndexOf('?\n'), slice.lastIndexOf('? '));
+            if (lastBreak > CHUNK_SIZE * 0.5) {
+                end = start + lastBreak + 1;
+            }
+        }
+        chunks.push(text.substring(start, end).trim());
+        start = end - CHUNK_OVERLAP;
+        if (start < 0) start = 0;
+        // Avoid infinite loop on very small remaining text
+        if (end >= text.length) break;
+    }
+    return chunks.filter(c => c.length > 50);
+}
+
+async function extractChunkFacts(chunkText, chunkIndex, totalChunks) {
+    const system = `You are a clinical document analyst. Extract all clinically relevant facts from this document fragment. Write in the same language as the source text.
+
+Output a concise bullet-point list of key facts, observations, and details. Include: symptoms, diagnoses, timeline, medications, history, relationships, risk factors, coping strategies — anything clinically relevant.
+
+Do NOT output reasoning or thinking. Go straight to the bullet points.`;
+
+    const user = `Extract key clinical facts from this text (part ${chunkIndex + 1} of ${totalChunks}):\n\n${chunkText}`;
+
+    let result = await llmChat(
+        [{ role: 'system', content: system }, { role: 'user', content: user }],
+        { max_tokens: 1500, temperature: 0.1 }
+    );
+    result = result.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    return result;
+}
+
+function buildMergePrompt(extractedFacts, templateId) {
+    const template = SUMMARIZE_TEMPLATES[templateId];
+    if (!template) {
+        return {
+            system: 'You are a clinical document summarization expert. Synthesize the extracted facts into a clear, comprehensive summary. Write in the same language as the source. Do NOT output reasoning or thinking.',
+            user: `Synthesize these extracted facts into a coherent summary:\n\n${extractedFacts}`,
+        };
+    }
+
+    const sectionInstructions = template.sections.map(s =>
+        `## ${s.title}\n${s.hints}`
+    ).join('\n\n');
+
+    const system = `You are a clinical document summarization expert. Synthesize the extracted facts below into a structured report.
+
+Write in the same language as the facts. Translate section headings to match if needed.
+
+Sections:
+${sectionInstructions}
+
+Rules:
+1. Use the section headings above (translated to source language).
+2. Be concise but thorough. Use bullet points.
+3. Only include information present in the extracted facts.
+4. Do NOT invent information. If a section has no relevant facts, state that briefly.
+5. No markdown code blocks. Use ## for headings.
+6. Do NOT output reasoning or thinking, go straight to the report.`;
+
+    const user = `Generate the structured report from these extracted clinical facts:\n\n${extractedFacts}`;
 
     return { system, user };
 }
@@ -426,27 +501,59 @@ async function performSummarization() {
         updateStatus('loading', 'Loading summarization model...');
         await initSumModel();
 
-        // Build prompt
-        sumProgressText.textContent = 'Generating summary...';
-        sumProgressBar.style.width = '30%';
-        updateStatus('translating', 'Generating summary...');
-
         const templateId = sumTemplateSelect ? sumTemplateSelect.value : 'freeform';
-        const { system, user } = buildSummaryPrompt(text, templateId);
+        let response;
 
-        // Truncate very long documents to prevent context overflow
-        const maxChars = 8000;
-        const truncatedUser = text.length > maxChars
-            ? `Generate the structured report from this document (truncated to first ${maxChars} characters):\n\n${text.substring(0, maxChars)}\n\n[... document truncated ...]`
-            : user;
+        if (text.length <= SINGLE_PASS_LIMIT) {
+            // ── Single-pass for short documents ──
+            sumProgressText.textContent = 'Generating summary...';
+            sumProgressBar.style.width = '40%';
+            updateStatus('translating', 'Generating summary...');
 
-        const messages = [
-            { role: 'system', content: system },
-            { role: 'user', content: truncatedUser },
-        ];
+            const { system, user } = buildSummaryPrompt(text, templateId);
+            const messages = [
+                { role: 'system', content: system },
+                { role: 'user', content: user },
+            ];
+            response = await llmChat(messages, { max_tokens: 4096, temperature: 0.3 });
 
-        sumProgressBar.style.width = '50%';
-        let response = await llmChat(messages, { max_tokens: 4096, temperature: 0.3 });
+        } else {
+            // ── Multi-pass for long documents ──
+            const chunks = splitIntoChunks(text);
+            const totalChunks = chunks.length;
+
+            // Pass 1: Extract facts from each chunk
+            const allFacts = [];
+            for (let i = 0; i < totalChunks; i++) {
+                const pct = 20 + Math.round((i / totalChunks) * 50);
+                sumProgressBar.style.width = pct + '%';
+                sumProgressText.textContent = `Analyzing section ${i + 1} of ${totalChunks}...`;
+                updateStatus('translating', `Analyzing section ${i + 1}/${totalChunks}...`);
+
+                const facts = await extractChunkFacts(chunks[i], i, totalChunks);
+                if (facts) allFacts.push(facts);
+            }
+
+            const combinedFacts = allFacts.join('\n\n');
+
+            // Pass 2: Merge all facts into structured report
+            sumProgressBar.style.width = '80%';
+            sumProgressText.textContent = 'Composing final report...';
+            updateStatus('translating', 'Composing final report...');
+
+            const { system, user } = buildMergePrompt(combinedFacts, templateId);
+
+            // If combined facts are still too long, truncate
+            const maxFactChars = 3500;
+            const mergeUser = combinedFacts.length > maxFactChars
+                ? `Generate the structured report from these extracted clinical facts (condensed):\n\n${combinedFacts.substring(0, maxFactChars)}`
+                : user;
+
+            response = await llmChat(
+                [{ role: 'system', content: system }, { role: 'user', content: mergeUser }],
+                { max_tokens: 4096, temperature: 0.3 }
+            );
+        }
 
         // Strip thinking tags if present
         response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
