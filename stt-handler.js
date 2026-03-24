@@ -6,31 +6,70 @@ const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] stt-handler.js build', BUILD_ID, 'module url', import.meta.url);
 
 // ── Model Options ──────────────────────────────────────────────────────────────
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+let hasWebGPU = false;
+
+// Detect WebGPU at startup (M-series Macs, modern GPUs)
+(async function detectWebGPU() {
+    if (navigator.gpu) {
+        try {
+            const adapter = await navigator.gpu.requestAdapter();
+            if (adapter) {
+                hasWebGPU = true;
+                console.log('[STT] WebGPU available — will use GPU acceleration');
+            }
+        } catch (_) {}
+    }
+    // Rebuild select once detection completes
+    populateSTTModelSelect();
+})();
+
+function getModelConfig() {
+    // WebGPU: use fp32 on GPU (fast on M-series, no quantization overhead)
+    // Mobile: q4 on WASM (smallest footprint)
+    // Desktop WASM: q8 on WASM
+    if (hasWebGPU && !isMobile) {
+        return { dtype: 'fp32', device: 'webgpu', suffix: 'GPU' };
+    } else if (isMobile) {
+        return { dtype: 'q4', device: 'wasm', suffix: 'q4' };
+    } else {
+        return { dtype: 'q8', device: 'wasm', suffix: '' };
+    }
+}
+
 const STT_MODEL_OPTIONS = {
     'onnx-community/whisper-tiny': {
         id: 'onnx-community/whisper-tiny',
         label: 'Whisper Tiny',
-        size: '~150 MB',
+        sizeWasm: '~150 MB',
+        sizeMobile: '~40 MB',
+        sizeGpu: '~150 MB',
         description: 'Fastest, lowest resource usage. Good for short recordings.',
         quality: 'Basic',
-    },
-    'onnx-community/whisper-small': {
-        id: 'onnx-community/whisper-small',
-        label: 'Whisper Small',
-        size: '~500 MB',
-        description: 'Best balance of speed and accuracy. Recommended.',
-        quality: 'Good',
     },
     'onnx-community/whisper-base': {
         id: 'onnx-community/whisper-base',
         label: 'Whisper Base',
-        size: '~300 MB',
+        sizeWasm: '~300 MB',
+        sizeMobile: '~80 MB',
+        sizeGpu: '~290 MB',
         description: 'Middle ground between tiny and small.',
         quality: 'Fair',
     },
+    'onnx-community/whisper-small': {
+        id: 'onnx-community/whisper-small',
+        label: 'Whisper Small',
+        sizeWasm: '~500 MB',
+        sizeMobile: '~170 MB',
+        sizeGpu: '~460 MB',
+        description: 'Best accuracy. Recommended with WebGPU.',
+        quality: 'Good',
+    },
 };
 
-const DEFAULT_STT_MODEL = 'onnx-community/whisper-small';
+const DEFAULT_STT_MODEL = isMobile
+    ? 'onnx-community/whisper-tiny'
+    : 'onnx-community/whisper-small';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let pipeline = null;
@@ -54,8 +93,62 @@ let liveProcessorNode = null;
 let liveInterval = null;
 let isChunkBusy = false;
 let liveSampleRate = 16000;
-const LIVE_CHUNK_INTERVAL = 10000;
-const MIN_CHUNK_SECONDS = 2;
+const MIN_CHUNK_SECONDS = 1.5;
+const MIN_COOLDOWN_MS = 2000;  // minimum pause between chunks
+let lastInferenceMs = 1000;    // adaptive: tracks how long inference takes
+
+// ── Audio Quality & Hallucination Guards ───────────────────────────────────────
+const SILENCE_RMS_THRESHOLD = 0.01;  // below this RMS the chunk is considered silent
+
+function isAudioSilent(float32Array) {
+    let sumSq = 0;
+    for (let i = 0; i < float32Array.length; i++) sumSq += float32Array[i] * float32Array[i];
+    const rms = Math.sqrt(sumSq / float32Array.length);
+    return rms < SILENCE_RMS_THRESHOLD;
+}
+
+// Known Whisper hallucination patterns (case-insensitive fragments)
+const HALLUCINATION_PATTERNS = [
+    /^\.+$/,                        // just dots/periods
+    /^(,\s*)+$/,                    // just commas
+    /^\s*$/,                        // whitespace only
+    /ondertitels/i,                 // Dutch subtitle hallucination
+    /subtitl/i,                     // subtitle hallucination
+    /gelderland/i,                  // common Dutch hallucination
+    /amara\.org/i,                  // Whisper training data leak
+    /www\./i,                       // URL hallucinations
+    /copyright/i,                   // copyright notice hallucinations
+    /thank you for watching/i,
+    /thanks for watching/i,
+    /bedankt voor het kijken/i,
+    /tot de volgende keer/i,
+];
+
+function isHallucination(text) {
+    if (!text || text.length < 2) return true;
+    // Check known hallucination patterns
+    for (const pat of HALLUCINATION_PATTERNS) {
+        if (pat.test(text)) return true;
+    }
+    // Detect heavy repetition: if any single word/token makes up >60% of the text
+    const words = text.toLowerCase().split(/\s+/).filter(w => w.length > 0);
+    if (words.length >= 3) {
+        const freq = {};
+        for (const w of words) freq[w] = (freq[w] || 0) + 1;
+        const maxFreq = Math.max(...Object.values(freq));
+        if (maxFreq / words.length > 0.6) return true;
+    }
+    // Detect repeated phrases (e.g. "hello hello hello")
+    if (words.length >= 4) {
+        // Check if the text is just 1-3 words repeated
+        for (let phraseLen = 1; phraseLen <= 3; phraseLen++) {
+            const phrase = words.slice(0, phraseLen).join(' ');
+            const repeated = Array(Math.ceil(words.length / phraseLen)).fill(phrase).join(' ');
+            if (words.join(' ') === repeated.split(/\s+/).slice(0, words.length).join(' ')) return true;
+        }
+    }
+    return false;
+}
 
 // ── Waveform State ─────────────────────────────────────────────────────────────
 let waveformAnalyser = null;
@@ -129,10 +222,13 @@ function updateStatus(state, message) {
 function populateSTTModelSelect() {
     if (!sttModelSelect) return;
     sttModelSelect.innerHTML = '';
+    const cfg = getModelConfig();
     for (const [id, opt] of Object.entries(STT_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
-        el.textContent = `${opt.label} (${opt.size})`;
+        const size = isMobile ? opt.sizeMobile : (hasWebGPU ? opt.sizeGpu : opt.sizeWasm);
+        const badge = cfg.suffix ? ` [${cfg.suffix}]` : '';
+        el.textContent = `${opt.label} (${size})${badge}`;
         if (id === DEFAULT_STT_MODEL) el.selected = true;
         sttModelSelect.appendChild(el);
     }
@@ -174,10 +270,12 @@ async function initSTTModel() {
 
         const fileProgress = {};
         const loggedFiles = new Set();
+        const { dtype: modelDtype, device: modelDevice } = getModelConfig();
+        console.log(`[STT] Using device: ${modelDevice}, dtype: ${modelDtype}`);
 
         pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
-            dtype: 'q8',
-            device: 'wasm',
+            dtype: modelDtype,
+            device: modelDevice,
             progress_callback: (progress) => {
                 if (progress.file && !loggedFiles.has(progress.file)) {
                     loggedFiles.add(progress.file);
@@ -319,18 +417,29 @@ async function transcribeLiveChunk() {
     if (newSamples < liveSampleRate * MIN_CHUNK_SECONDS) return;
 
     isChunkBusy = true;
-    if (sttLiveStatus) sttLiveStatus.textContent = 'Transcribing chunk...';
+    if (sttLiveStatus) sttLiveStatus.textContent = 'Transcribing...';
     try {
         let chunkData = collectPCMRange(lastProcessedSample, currentCount);
         if (liveSampleRate !== 16000) chunkData = resampleTo16k(chunkData, liveSampleRate);
+
+        // Skip silent chunks — avoids hallucinations on silence
+        if (isAudioSilent(chunkData)) {
+            lastProcessedSample = currentCount;
+            return;
+        }
+
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
+        // Yield to event loop so waveform keeps animating during WASM work
+        await new Promise(r => setTimeout(r, 0));
+        const t0 = performance.now();
         const result = await pipeline(chunkData, {
             language,
             task: 'transcribe',
             return_timestamps: false,
         });
+        lastInferenceMs = performance.now() - t0;
         const text = (result.text || '').trim();
-        if (text) {
+        if (text && !isHallucination(text)) {
             liveSegments.push(text);
             updateLiveDisplay();
         }
@@ -355,14 +464,22 @@ function updateLiveDisplay() {
 }
 
 function startLiveLoop() {
-    liveInterval = setInterval(() => {
-        if (!isRecording || isChunkBusy) return;
-        transcribeLiveChunk();
-    }, LIVE_CHUNK_INTERVAL);
+    // Adaptive loop: waits for inference to finish, then cools down
+    // based on how long inference took (slower machine = longer pause)
+    async function loop() {
+        if (!isRecording) return;
+        if (!isChunkBusy) {
+            await transcribeLiveChunk();
+        }
+        // Cooldown = max(MIN_COOLDOWN, inference time), so the CPU gets a breather
+        const cooldown = Math.max(MIN_COOLDOWN_MS, lastInferenceMs);
+        liveInterval = setTimeout(loop, cooldown);
+    }
+    liveInterval = setTimeout(loop, MIN_COOLDOWN_MS);
 }
 
 async function cleanupLiveCapture() {
-    if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+    if (liveInterval) { clearTimeout(liveInterval); liveInterval = null; }
     if (liveSourceNode) { try { liveSourceNode.disconnect(); } catch (_) {} liveSourceNode = null; }
     if (liveProcessorNode) { try { liveProcessorNode.disconnect(); } catch (_) {} liveProcessorNode = null; }
     if (liveAudioCtx && liveAudioCtx.state !== 'closed') {
@@ -520,8 +637,8 @@ async function performTranscription() {
         const result = await pipeline(audioData, {
             language,
             task: 'transcribe',
-            chunk_length_s: 30,
-            stride_length_s: 5,
+            chunk_length_s: isMobile ? 15 : 30,
+            stride_length_s: isMobile ? 3 : 5,
             return_timestamps: true,
         });
 
@@ -786,8 +903,10 @@ async function dictStopEntry() {
     // Stop waveform
     stopWaveform('dict');
 
-    // Get PCM audio
+    // Get PCM audio and free chunk buffers immediately
     const pcmData = collectDictaphonePCM();
+    dictaphonePcmChunks = [];
+    dictaphonePcmCount = 0;
 
     // Cleanup dictaphone audio nodes (but keep stream alive for next entry)
     if (dictaphoneSourceNode) { try { dictaphoneSourceNode.disconnect(); } catch (_) {} dictaphoneSourceNode = null; }
@@ -811,7 +930,6 @@ async function dictStopEntry() {
         endTime: entryEnd,
         duration: ((entryEnd - dictaphoneEntryStart) / 1000).toFixed(1),
         text: '(transcribing...)',
-        pcmData: pcmData,
     };
     dictaphoneEntries.push(entry);
     renderDictLog();
@@ -823,16 +941,24 @@ async function dictStopEntry() {
         const rate = 16000; // dictaphone audioCtx was created at 16kHz
         if (rate !== 16000) audioData = resampleTo16k(audioData, rate);
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
+        // Skip silent audio
+        if (isAudioSilent(audioData)) {
+            entry.text = '(no speech detected)';
+            renderDictLog();
+            return;
+        }
         const result = await pipeline(audioData, {
             language,
             task: 'transcribe',
             return_timestamps: false,
         });
-        entry.text = (result.text || '').trim() || '(no speech detected)';
+        const rawText = (result.text || '').trim();
+        entry.text = (!rawText || isHallucination(rawText)) ? '(no speech detected)' : rawText;
     } catch (err) {
         console.error('[DICT] Transcription error:', err);
         entry.text = '(transcription failed)';
     }
+    // pcmData goes out of scope here — eligible for GC
     renderDictLog();
 }
 
