@@ -455,21 +455,42 @@ async function checkNERCached() {
 
 async function checkLLMCached() {
     try {
-        if (!indexedDB.databases) {
-            setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'not-cached');
-            return false;
-        }
-        const dbs = await indexedDB.databases();
-        // WebLLM/MLC stores in various IDB databases
-        const hasLLM = dbs.some(db => {
-            const name = (db.name || '').toLowerCase();
-            return name.includes('webllm') || name.includes('mlc') || name.includes('tvmjs')
-                || name.includes('cache') && name.includes('model');
+        // WebLLM v0.2.x stores model weights in the Cache API, not IndexedDB
+        const cacheNames = await caches.keys();
+        const hasLLMCache = cacheNames.some(name => {
+            const lower = name.toLowerCase();
+            return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs')
+                || (lower.includes('cache') && lower.includes('model'));
         });
-        if (hasLLM) {
-            setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'cached');
-            return true;
+        if (hasLLMCache) {
+            // Verify at least one shard is present
+            for (const name of cacheNames) {
+                const lower = name.toLowerCase();
+                if (lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs')) {
+                    const cache = await caches.open(name);
+                    const keys = await cache.keys();
+                    if (keys.length > 0) {
+                        setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'cached');
+                        return true;
+                    }
+                }
+            }
         }
+
+        // Fallback: check IndexedDB as well (older WebLLM versions)
+        if (indexedDB.databases) {
+            const dbs = await indexedDB.databases();
+            const hasLLMIDB = dbs.some(db => {
+                const name = (db.name || '').toLowerCase();
+                return name.includes('webllm') || name.includes('mlc') || name.includes('tvmjs')
+                    || (name.includes('cache') && name.includes('model'));
+            });
+            if (hasLLMIDB) {
+                setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'cached');
+                return true;
+            }
+        }
+
         setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'not-cached');
         return false;
     } catch {
@@ -481,6 +502,15 @@ async function checkLLMCached() {
 async function checkAllOfflineStatus() {
     await Promise.all([checkTranslationCached(), checkNERCached(), checkLLMCached()]);
     updateDownloadAllBtn();
+}
+
+async function requestPersistentStorage() {
+    try {
+        if (navigator.storage && navigator.storage.persist) {
+            const granted = await navigator.storage.persist();
+            console.log('[STORAGE] Persistent storage', granted ? 'granted' : 'denied');
+        }
+    } catch { /* ignore */ }
 }
 
 function updateDownloadAllBtn() {
@@ -533,6 +563,7 @@ async function downloadTranslationModel() {
 
         offlineTranslationProgress.style.display = 'none';
         setCardStatus(offlineTranslationCard, offlineTranslationText, offlineTranslationBtn, 'done');
+        requestPersistentStorage();
         window.dispatchEvent(new CustomEvent('medmorf:translation-cache-updated'));
     } catch (err) {
         console.error('Translation model download error:', err);
@@ -570,6 +601,7 @@ async function downloadNERModel() {
 
         offlineNERProgress.style.display = 'none';
         setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'done');
+        requestPersistentStorage();
     } catch (err) {
         console.error('NER model download error:', err);
         setCardStatus(offlineNERCard, offlineNERText, offlineNERBtn, 'error');
@@ -603,8 +635,11 @@ async function downloadLLMModel() {
                 offlineLLMText.className = 'offline-status-text status-downloading';
             },
         });
-        // Unload engine to free GPU/memory — model is now cached in IndexedDB
+        // Unload engine to free GPU/memory — model is now cached
         if (engine && typeof engine.unload === 'function') await engine.unload();
+
+        // Request persistent storage so macOS/Safari won't evict the cached model
+        requestPersistentStorage();
 
         offlineLLMProgress.style.display = 'none';
         setCardStatus(offlineLLMCard, offlineLLMText, offlineLLMBtn, 'done');
@@ -728,4 +763,6 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 refreshNerCardDetails();
+// Check offline status immediately on load, not only on tab click
+checkAllOfflineStatus();
 console.log('[STORAGE] Cache manager loaded');

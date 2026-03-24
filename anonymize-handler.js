@@ -1,6 +1,6 @@
 // Medical Data Anonymization — Hybrid NER + LLM pipeline
 // NER: ai4privacy multilingual PII detector (ModernBERT, transformers.js v3)
-// LLM: Qwen2.5 (WebLLM/WebGPU) for additional PII verification
+// LLM: Qwen3 (WebLLM/WebGPU) for additional PII verification
 // Zero data leaves the browser — all processing is local
 //
 // Model libraries are loaded lazily via dynamic import() when
@@ -193,21 +193,35 @@ async function initAnonModel() {
 
     try {
         if (modelOption.engine === 'webllm') {
-            // Pre-flight: verify we can reach the model config before handing off to WebLLM
-            const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+            // Check if model is already cached (skip network probe when offline)
+            let modelCached = false;
             try {
-                const probe = await fetch(configUrl);
-                if (!probe.ok) {
-                    throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                const cacheNames = await caches.keys();
+                modelCached = cacheNames.some(name => {
+                    const lower = name.toLowerCase();
+                    return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
+                });
+            } catch { /* ignore */ }
+
+            if (!modelCached) {
+                // Not cached — verify we can reach HuggingFace before starting a large download
+                const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+                try {
+                    const probe = await fetch(configUrl);
+                    if (!probe.ok) {
+                        throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                    }
+                } catch (fetchErr) {
+                    console.error('Pre-flight fetch failed:', fetchErr);
+                    throw new Error(
+                        `Cannot reach model files for ${modelLabel}. ` +
+                        (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
+                            ? 'Check your internet connection and ensure nothing is blocking huggingface.co (ad-blockers, VPN, firewall).'
+                            : fetchErr.message)
+                    );
                 }
-            } catch (fetchErr) {
-                console.error('Pre-flight fetch failed:', fetchErr);
-                throw new Error(
-                    `Cannot reach model files for ${modelLabel}. ` +
-                    (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError')
-                        ? 'Check your internet connection and ensure nothing is blocking huggingface.co (ad-blockers, VPN, firewall).'
-                        : fetchErr.message)
-                );
+            } else {
+                console.log('[ANON] Model appears cached, skipping pre-flight fetch');
             }
 
             const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');

@@ -17,7 +17,7 @@ A powerful web-based tool for translating and anonymizing medical/sensitive docu
   - ✅ **Automatic data clearing** when you close the tab or navigate away
 - **🛡️ Anonymization**: Detect and redact PII (names, addresses, dates, phone numbers, emails, medical IDs, etc.)
   - ✅ Multiple NER models: XLM-RoBERTa, GLiNER (ModernBERT), mBERT
-  - ✅ Optional LLM verification (Qwen2.5-3B via WebGPU) for additional PII detection
+  - ✅ Optional LLM verification (Qwen3 4B via WebGPU) for additional PII detection
   - ✅ 23+ PII entity types recognized
 - **📊 Excel Support**: Upload `.xlsx` files and select specific sheets and columns to translate
 - **📝 Word Support**: Upload `.docx` files for full document translation
@@ -113,7 +113,7 @@ See [PRIVACY.md](PRIVACY.md) for complete privacy documentation.
 - **[Transformers.js v2](https://github.com/xenova/transformers.js)**: Translation pipeline (`@xenova/transformers@2.17.2`)
 - **[Transformers.js v3](https://huggingface.co/docs/transformers.js)**: NER pipeline (`@huggingface/transformers@3.8.1`)
 - **[GLiNER.js](https://github.com/nicholasgriffintn/gliner.js)**: Zero-shot NER via ONNX (`gliner@0.0.19`)
-- **[WebLLM](https://webllm.mlc.ai/)**: In-browser LLM for PII verification (`@mlc-ai/web-llm`, Qwen2.5-3B, WebGPU)
+- **[WebLLM](https://webllm.mlc.ai/)**: In-browser LLM for PII verification (`@mlc-ai/web-llm`, Qwen3-4B, WebGPU)
 - **[ONNX Runtime Web](https://onnxruntime.ai/)**: Model inference backend
 - **[NLLB-200](https://huggingface.co/facebook/nllb-200-distilled-600M)**: Facebook's multilingual translation model (distilled version)
 - **[GLiNER PII Edge](https://huggingface.co/knowledgator/gliner-pii-edge-v1.0)**: ModernBERT-based PII detection model (32M params)
@@ -147,7 +147,7 @@ The NLLB-200 model supports translation between 200+ languages. Currently config
 - **GLiNER PII**: `knowledgator/gliner-pii-edge-v1.0` — ModernBERT, ~46MB, zero-shot PII detection
 - **Multilang PII**: XLM-RoBERTa token-classification, multilingual (Dutch, English, French, German)
 - **Multilingual NER**: mBERT, general-purpose named entity recognition
-- **LLM (optional)**: Qwen2.5-3B via WebGPU — additional PII verification pass
+- **LLM (optional)**: Qwen3 4B via WebGPU — additional PII verification pass
 
 ## ⚡ Performance
 
@@ -224,6 +224,7 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 ├── translation-runtime.js  # Translation pipeline (Xenova v2)
 ├── cache-manager.js        # Browser cache management
 ├── security.js             # Runtime privacy guards
+├── sw.js                   # Service Worker for offline support
 ├── excel-handler.js        # Excel file processing utilities
 ├── word-handler.js         # Word document processing utilities
 ├── styles.css              # Styling and responsive design
@@ -242,7 +243,7 @@ Medmorf uses **two separate Transformers.js runtimes** to balance memory efficie
 | **Translation** | `translation-runtime.js` | `@xenova/transformers@2.17.2` (full CDN URL) | v3 consumed too much memory for the 600M NLLB model |
 | **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@3.8.1` (import map) | v3 supports modern model architectures (ModernBERT) |
 | **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses v3's `AutoTokenizer` via import map alias |
-| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.82` (WebGPU) | Qwen2.5 for additional PII verification |
+| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.82` (WebGPU) | Qwen3 for additional PII verification |
 
 ### Why Two Runtimes?
 

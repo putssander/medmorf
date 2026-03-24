@@ -855,7 +855,7 @@
         </main>
 
         <footer>
-            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen2.5</a></p>
+            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
             <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB). All processing is local. Check the Storage tab to manage cached data.</p>
         </footer>
@@ -867,6 +867,14 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
     <script src="security.js?v=2026-03-23-cachefix-8"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./sw.js').then(
+                reg => console.log('[SW] registered, scope:', reg.scope),
+                err => console.warn('[SW] registration failed:', err)
+            );
+        }
+    </script>
 
     <script src="excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="word-handler.js?v=2026-03-23-cachefix-8"></script>
