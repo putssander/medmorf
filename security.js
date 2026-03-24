@@ -30,6 +30,8 @@ function initializeSecurity() {
             clearInMemoryData();
             if (window.medmorfTranslationData) window.medmorfTranslationData.clearAll();
             if (window.medmorfAnonymizeData) window.medmorfAnonymizeData.clearAll();
+            if (window.medmorfSummarizeData) window.medmorfSummarizeData.clearAll();
+            if (window.medmorfSTTData) window.medmorfSTTData.clearAll();
         }
     };
 }

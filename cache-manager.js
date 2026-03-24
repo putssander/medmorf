@@ -710,6 +710,18 @@ function refreshPersonalDataView() {
         if (a.hasMapping()) items.push({ label: 'Entity mapping', detail: `${a.mappingCount()} entities detected`, type: 'data' });
     }
 
+    const s = window.medmorfSummarizeData;
+    if (s) {
+        if (s.hasDocument()) items.push({ label: 'Summarization document', detail: s.documentName(), type: 'file' });
+        if (s.hasResult()) items.push({ label: 'Summary result', detail: 'In-memory summary output', type: 'data' });
+    }
+
+    const stt = window.medmorfSTTData;
+    if (stt) {
+        if (stt.hasRecording()) items.push({ label: 'Audio recording', detail: 'In-memory audio data', type: 'file' });
+        if (stt.hasResult()) items.push({ label: 'Transcription result', detail: 'In-memory transcription text', type: 'data' });
+    }
+
     personalDataList.innerHTML = '';
 
     if (items.length === 0) {
@@ -736,6 +748,8 @@ function refreshPersonalDataView() {
 async function clearAllPersonalData() {
     if (window.medmorfTranslationData) await window.medmorfTranslationData.clearAll();
     if (window.medmorfAnonymizeData) await window.medmorfAnonymizeData.clearAll();
+    if (window.medmorfSummarizeData) await window.medmorfSummarizeData.clearAll();
+    if (window.medmorfSTTData) await window.medmorfSTTData.clearAll();
     refreshPersonalDataView();
 }
 

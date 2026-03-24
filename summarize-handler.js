@@ -1,0 +1,590 @@
+// Medical Document Summarization — LLM-powered structured report generation
+// Uses the same Qwen3 models available for anonymization (WebLLM/WebGPU).
+// Templates guide the LLM to fill in specific report sections.
+// Zero data leaves the browser — all processing is local.
+
+const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
+console.log('[BUILD] summarize-handler.js build', BUILD_ID, 'module url', import.meta.url);
+
+// ── Templates ──────────────────────────────────────────────────────────────────
+const SUMMARIZE_TEMPLATES = {
+    psychology: {
+        id: 'psychology',
+        label: 'Psychologisch Verslag',
+        language: 'nl',
+        description: 'Psychologisch verslag met kernonderdelen volgens standaard GGZ structuur.',
+        sections: [
+            {
+                key: 'klachtenomschrijving',
+                title: '1. Klachtenomschrijving',
+                hints: 'Huidige klachten (aard, ernst, duur). Aanleiding van hulpvraag. Eventuele triggers.',
+            },
+            {
+                key: 'dsm_classificatie',
+                title: '2. DSM-classificatie',
+                hints: '(Voorlopige) diagnose volgens DSM. Eventuele differentiaaldiagnoses.',
+            },
+            {
+                key: 'luxerende_factoren',
+                title: '3. Luxerende factoren',
+                hints: 'Uitlokkende gebeurtenissen (recent). Stressoren (werk, relaties, verlies, etc.).',
+            },
+            {
+                key: 'persoonlijkheid',
+                title: '4. Persoonlijkheid',
+                hints: 'Kenmerkende trekken. Eventuele persoonlijkheidsproblematiek.',
+            },
+            {
+                key: 'coping',
+                title: '5. Coping',
+                hints: 'Omgaan met stress/emoties. Adaptieve vs. maladaptieve strategieën.',
+            },
+            {
+                key: 'leergeschiedenis',
+                title: '6. Leergeschiedenis',
+                hints: 'Opvoeding en ontwikkeling. Belangrijke ervaringen (bijv. trauma, hechting).',
+            },
+            {
+                key: 'hulpverleningsgeschiedenis',
+                title: '7. Hulpverleningsgeschiedenis',
+                hints: 'Eerdere behandelingen. Effect en verloop van therapieën.',
+            },
+            {
+                key: 'medicatie',
+                title: '8. Medicatie',
+                hints: 'Huidig gebruik. Eerdere medicatie en effect.',
+            },
+        ],
+    },
+    soap: {
+        id: 'soap',
+        label: 'SOAP Note',
+        language: 'en',
+        description: 'Standard SOAP note format for clinical documentation.',
+        sections: [
+            {
+                key: 'subjective',
+                title: 'Subjective',
+                hints: 'Patient\'s reported symptoms, complaints, history. What the patient says.',
+            },
+            {
+                key: 'objective',
+                title: 'Objective',
+                hints: 'Clinical observations, examination findings, vital signs, test results.',
+            },
+            {
+                key: 'assessment',
+                title: 'Assessment',
+                hints: 'Clinical assessment, diagnosis, differential diagnoses.',
+            },
+            {
+                key: 'plan',
+                title: 'Plan',
+                hints: 'Treatment plan, medications, referrals, follow-up.',
+            },
+        ],
+    },
+    freeform: {
+        id: 'freeform',
+        label: 'Free-form Summary',
+        language: 'en',
+        description: 'Unstructured summary of the document content.',
+        sections: [
+            {
+                key: 'summary',
+                title: 'Summary',
+                hints: 'Provide a comprehensive summary of the document.',
+            },
+        ],
+    },
+};
+
+// ── LLM Model Options (shared with anonymize-handler) ──────────────────────────
+const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
+
+const LLM_MODEL_OPTIONS = {
+    'Qwen3-0.6B-q4f16_1-MLC': {
+        label: 'Qwen3 0.6B',
+        size: '~1.4 GB',
+        note: 'Smallest & fastest. Requires WebGPU.',
+    },
+    'Qwen3-1.7B-q4f16_1-MLC': {
+        label: 'Qwen3 1.7B',
+        size: '~2 GB',
+        note: 'Good balance of speed and quality. Requires WebGPU.',
+    },
+    'Qwen3-4B-q4f16_1-MLC': {
+        label: 'Qwen3 4B',
+        size: '~3.4 GB',
+        note: 'Best quality. Requires WebGPU.',
+    },
+    'Qwen3-8B-q4f16_1-MLC': {
+        label: 'Qwen3 8B',
+        size: '~5.7 GB',
+        note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
+    },
+};
+
+// ── State ──────────────────────────────────────────────────────────────────────
+let engine = null;
+let loadedModelId = null;
+let isModelLoading = false;
+let isSummarizing = false;
+let summarizeDocument = null;
+let summarizeResult = null;
+
+// ── DOM Elements ───────────────────────────────────────────────────────────────
+const sumDocUpload = document.getElementById('sumDocUpload');
+const sumDocInput = document.getElementById('sumDocInput');
+const sumDocInfo = document.getElementById('sumDocInfo');
+const sumDocName = document.getElementById('sumDocName');
+const sumTemplateSelect = document.getElementById('sumTemplateSelect');
+const sumModelSelect = document.getElementById('sumModelSelect');
+const sumTemplateDesc = document.getElementById('sumTemplateDesc');
+const sumModelStatus = document.getElementById('sumModelStatus');
+const sumModelProgress = document.getElementById('sumModelProgress');
+const sumModelStatusText = document.getElementById('sumModelStatusText');
+const sumProgress = document.getElementById('sumProgress');
+const sumProgressBar = document.getElementById('sumProgressBar');
+const sumProgressText = document.getElementById('sumProgressText');
+const summarizeBtn = document.getElementById('summarizeBtn');
+const sumResults = document.getElementById('sumResults');
+const sumOutputText = document.getElementById('sumOutputText');
+const downloadSumBtn = document.getElementById('downloadSumBtn');
+const sumWebGPUStatus = document.getElementById('sumWebGPUStatus');
+const sumInputText = document.getElementById('sumInputText');
+const sumInputSection = document.getElementById('sumInputSection');
+
+const systemStatusIndicator = document.querySelector('.status-indicator');
+const systemStatusText = document.getElementById('systemStatusText');
+
+function updateStatus(state, message) {
+    if (systemStatusIndicator) systemStatusIndicator.className = `status-indicator ${state}`;
+    if (systemStatusText) systemStatusText.textContent = message;
+}
+
+// ── WebGPU Detection ───────────────────────────────────────────────────────────
+let hasWebGPU = false;
+(async function checkWebGPU() {
+    if (!sumWebGPUStatus) return;
+    if (navigator.gpu) {
+        try {
+            const adapter = await navigator.gpu.requestAdapter();
+            if (adapter) {
+                hasWebGPU = true;
+                sumWebGPUStatus.innerHTML = '✓ WebGPU available';
+                sumWebGPUStatus.className = 'webgpu-status supported';
+            } else {
+                sumWebGPUStatus.innerHTML = '⚠ WebGPU adapter not found';
+                sumWebGPUStatus.className = 'webgpu-status fallback';
+            }
+        } catch {
+            sumWebGPUStatus.innerHTML = '⚠ WebGPU error';
+            sumWebGPUStatus.className = 'webgpu-status fallback';
+        }
+    } else {
+        sumWebGPUStatus.innerHTML = '⚠ No WebGPU — summarization requires WebGPU';
+        sumWebGPUStatus.className = 'webgpu-status fallback';
+    }
+    populateModelSelect();
+})();
+
+// ── Populate Selects ───────────────────────────────────────────────────────────
+function populateTemplateSelect() {
+    if (!sumTemplateSelect) return;
+    sumTemplateSelect.innerHTML = '';
+    for (const [id, tpl] of Object.entries(SUMMARIZE_TEMPLATES)) {
+        const el = document.createElement('option');
+        el.value = id;
+        el.textContent = tpl.label;
+        if (id === 'psychology') el.selected = true;
+        sumTemplateSelect.appendChild(el);
+    }
+    updateTemplateDescription();
+}
+
+function updateTemplateDescription() {
+    if (!sumTemplateDesc) return;
+    const tpl = SUMMARIZE_TEMPLATES[sumTemplateSelect.value];
+    if (tpl) {
+        const sectionList = tpl.sections.map(s => s.title).join(', ');
+        sumTemplateDesc.textContent = `${tpl.description} Sections: ${sectionList}.`;
+    }
+}
+
+function populateModelSelect() {
+    if (!sumModelSelect) return;
+    sumModelSelect.innerHTML = '';
+    for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
+        const el = document.createElement('option');
+        el.value = id;
+        el.textContent = `${opt.label} (${opt.size})`;
+        if (id === DEFAULT_MODEL) el.selected = true;
+        sumModelSelect.appendChild(el);
+    }
+}
+
+// ── Model Loading ──────────────────────────────────────────────────────────────
+function getSelectedModel() {
+    return sumModelSelect ? sumModelSelect.value : DEFAULT_MODEL;
+}
+
+function formatLoadError(error) {
+    if (error instanceof Error && error.message) return error.message;
+    return String(error);
+}
+
+async function initSumModel() {
+    const selectedModel = getSelectedModel();
+    if (engine && loadedModelId === selectedModel) return;
+    if (isModelLoading) return;
+
+    if (engine && loadedModelId !== selectedModel) {
+        await disposeSumModel();
+    }
+
+    isModelLoading = true;
+    sumModelStatus.style.display = 'block';
+    sumModelProgress.style.width = '0%';
+
+    const modelLabel = LLM_MODEL_OPTIONS[selectedModel]?.label || selectedModel;
+    const sumModelHeading = document.getElementById('sumModelHeading');
+    if (sumModelHeading) sumModelHeading.textContent = `Loading ${modelLabel}...`;
+    sumModelStatusText.textContent = `Initializing ${modelLabel}...`;
+    updateStatus('loading', `Loading ${modelLabel}...`);
+
+    try {
+        // Check if model is already cached
+        let modelCached = false;
+        try {
+            const cacheNames = await caches.keys();
+            modelCached = cacheNames.some(name => {
+                const lower = name.toLowerCase();
+                return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
+            });
+        } catch { /* ignore */ }
+
+        if (!modelCached) {
+            const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+            try {
+                const probe = await fetch(configUrl);
+                if (!probe.ok) {
+                    throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                }
+            } catch (fetchErr) {
+                throw new Error(
+                    `Cannot reach model files for ${modelLabel}. ` +
+                    (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
+                        ? 'Check your internet connection.'
+                        : fetchErr.message)
+                );
+            }
+        }
+
+        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
+        engine = await CreateMLCEngine(selectedModel, {
+            initProgressCallback: (progress) => {
+                const text = progress.text || '';
+                const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                if (pctMatch) {
+                    sumModelProgress.style.width = pctMatch[1] + '%';
+                }
+                sumModelStatusText.textContent = text || 'Loading...';
+                updateStatus('loading', text || 'Loading summarization model...');
+            },
+        });
+
+        sumModelStatusText.textContent = 'Model loaded ✓';
+        sumModelProgress.style.width = '100%';
+        loadedModelId = selectedModel;
+        updateStatus('idle', 'System Ready');
+        setTimeout(() => { sumModelStatus.style.display = 'none'; }, 2000);
+    } catch (error) {
+        console.error('Summarization model loading error:', error);
+        sumModelStatusText.textContent = 'Error: ' + formatLoadError(error);
+        updateStatus('idle', 'Model loading failed');
+        engine = null;
+        throw error;
+    } finally {
+        isModelLoading = false;
+    }
+}
+
+async function disposeSumModel() {
+    if (!engine) {
+        loadedModelId = null;
+        return;
+    }
+    const oldEngine = engine;
+    engine = null;
+    loadedModelId = null;
+    if (typeof oldEngine.unload === 'function') {
+        await oldEngine.unload();
+    }
+}
+
+async function llmChat(messages, options = {}) {
+    if (!engine) throw new Error('LLM engine not loaded');
+    const reply = await engine.chat.completions.create({
+        messages,
+        max_tokens: options.max_tokens || 4096,
+        temperature: options.temperature ?? 0.3,
+    });
+    return reply.choices[0].message.content || '';
+}
+
+// ── Document Extraction ────────────────────────────────────────────────────────
+async function extractTextFromDocument(file) {
+    const extension = file.name.split('.').pop().toLowerCase();
+    if (extension === 'txt') {
+        return await file.text();
+    } else if (extension === 'docx') {
+        const arrayBuffer = await file.arrayBuffer();
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        return result.value;
+    } else if (extension === 'xlsx') {
+        const data = await file.arrayBuffer();
+        const wb = XLSX.read(data, { type: 'array' });
+        const texts = [];
+        for (const sheetName of wb.SheetNames) {
+            const ws = wb.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            for (const row of rows) {
+                const textCells = row.filter(c => typeof c === 'string' && c.trim());
+                if (textCells.length > 0) texts.push(textCells.join(' '));
+            }
+        }
+        return texts.join('\n');
+    }
+    throw new Error('Unsupported file type: ' + extension);
+}
+
+// ── Build Summary Prompt ───────────────────────────────────────────────────────
+function buildSummaryPrompt(text, templateId) {
+    const template = SUMMARIZE_TEMPLATES[templateId];
+    if (!template) {
+        return {
+            system: 'You are a clinical document summarization expert. Summarize the following medical document clearly and concisely.',
+            user: `Summarize this document:\n\n${text}`,
+        };
+    }
+
+    const lang = template.language === 'nl' ? 'Dutch' : 'English';
+
+    const sectionInstructions = template.sections.map(s =>
+        `## ${s.title}\n${s.hints}`
+    ).join('\n\n');
+
+    const system = `You are a clinical document summarization expert. Your task is to generate a structured report in ${lang} based on the provided medical document.
+
+Fill in each section below based on the information available in the document. If information for a section is not available in the document, write "Niet beschikbaar" (for Dutch) or "Not available" (for English).
+
+Output format:
+${sectionInstructions}
+
+Rules:
+1. Write your response using the exact section headings shown above.
+2. Be concise but thorough. Use bullet points where appropriate.
+3. Only include information that is present in or can be reasonably inferred from the document.
+4. Do NOT make up information. If a section cannot be filled, state that clearly.
+5. Write in ${lang}.
+6. No markdown code blocks. Just use the section headings with ## prefix.`;
+
+    const user = `Generate the structured report from this document:\n\n${text}`;
+
+    return { system, user };
+}
+
+// ── Main Summarization Flow ────────────────────────────────────────────────────
+async function performSummarization() {
+    if (isSummarizing) return;
+
+    // Get text from either document or text input
+    let text = '';
+    if (summarizeDocument) {
+        text = await extractTextFromDocument(summarizeDocument);
+    } else if (sumInputText && sumInputText.value.trim()) {
+        text = sumInputText.value.trim();
+    }
+
+    if (!text) {
+        alert('Please upload a document or paste text to summarize.');
+        return;
+    }
+
+    isSummarizing = true;
+    summarizeBtn.disabled = true;
+    if (sumModelSelect) sumModelSelect.disabled = true;
+    if (sumTemplateSelect) sumTemplateSelect.disabled = true;
+    sumResults.style.display = 'none';
+    sumProgress.style.display = 'block';
+    sumProgressBar.style.width = '0%';
+
+    try {
+        // Load model
+        sumProgressText.textContent = 'Loading LLM model...';
+        updateStatus('loading', 'Loading summarization model...');
+        await initSumModel();
+
+        // Build prompt
+        sumProgressText.textContent = 'Generating summary...';
+        sumProgressBar.style.width = '30%';
+        updateStatus('translating', 'Generating summary...');
+
+        const templateId = sumTemplateSelect ? sumTemplateSelect.value : 'freeform';
+        const { system, user } = buildSummaryPrompt(text, templateId);
+
+        // Truncate very long documents to prevent context overflow
+        const maxChars = 8000;
+        const truncatedUser = text.length > maxChars
+            ? `Generate the structured report from this document (truncated to first ${maxChars} characters):\n\n${text.substring(0, maxChars)}\n\n[... document truncated ...]`
+            : user;
+
+        const messages = [
+            { role: 'system', content: system },
+            { role: 'user', content: truncatedUser },
+        ];
+
+        sumProgressBar.style.width = '50%';
+        let response = await llmChat(messages, { max_tokens: 4096, temperature: 0.3 });
+
+        // Strip thinking tags if present
+        response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+
+        sumProgressBar.style.width = '100%';
+        sumProgressText.textContent = 'Summary complete ✓';
+
+        summarizeResult = response;
+        renderSumResults(response);
+    } catch (error) {
+        console.error('Summarization error:', error);
+        sumProgressText.textContent = 'Error: ' + error.message;
+        updateStatus('idle', 'Summarization failed');
+    } finally {
+        isSummarizing = false;
+        summarizeBtn.disabled = false;
+        if (sumModelSelect) sumModelSelect.disabled = false;
+        if (sumTemplateSelect) sumTemplateSelect.disabled = false;
+        sumProgress.style.display = 'none';
+        updateStatus('idle', 'System Ready');
+    }
+}
+
+function renderSumResults(text) {
+    sumResults.style.display = 'block';
+    if (sumOutputText) {
+        sumOutputText.textContent = text;
+    }
+}
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+// ── Downloads ──────────────────────────────────────────────────────────────────
+if (downloadSumBtn) {
+    downloadSumBtn.addEventListener('click', () => {
+        if (!summarizeResult) return;
+        const baseName = summarizeDocument
+            ? summarizeDocument.name.replace(/\.[^/.]+$/, '')
+            : 'summary';
+        const blob = new Blob([summarizeResult], { type: 'text/plain;charset=utf-8' });
+        saveAs(blob, `${baseName}_summary.txt`);
+    });
+}
+
+// ── Copy to clipboard ──────────────────────────────────────────────────────────
+const copySumBtn = document.getElementById('copySumBtn');
+if (copySumBtn) {
+    copySumBtn.addEventListener('click', async () => {
+        if (!summarizeResult) return;
+        try {
+            await navigator.clipboard.writeText(summarizeResult);
+            copySumBtn.textContent = '✓ Copied!';
+            setTimeout(() => { copySumBtn.textContent = 'Copy'; }, 2000);
+        } catch (e) {
+            console.error('Copy failed:', e);
+        }
+    });
+}
+
+// ── Upload Handlers ────────────────────────────────────────────────────────────
+function setupDropArea(area, input, onFile) {
+    if (!area || !input) return;
+    area.addEventListener('click', () => input.click());
+    area.addEventListener('dragover', (e) => { e.preventDefault(); area.classList.add('drag-over'); });
+    area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+    area.addEventListener('drop', (e) => {
+        e.preventDefault();
+        area.classList.remove('drag-over');
+        if (e.dataTransfer.files.length > 0) onFile(e.dataTransfer.files[0]);
+    });
+    input.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) onFile(e.target.files[0]);
+    });
+}
+
+setupDropArea(sumDocUpload, sumDocInput, async (file) => {
+    const ext = file.name.split('.').pop().toLowerCase();
+    if (!['xlsx', 'docx', 'txt'].includes(ext)) {
+        alert('Unsupported file type. Please upload .xlsx, .docx, or .txt files.');
+        return;
+    }
+    summarizeDocument = file;
+    sumDocName.textContent = file.name;
+    sumDocInfo.style.display = 'block';
+    sumResults.style.display = 'none';
+    summarizeResult = null;
+    summarizeBtn.disabled = false;
+});
+
+// ── Event Listeners ────────────────────────────────────────────────────────────
+if (sumTemplateSelect) {
+    sumTemplateSelect.addEventListener('change', updateTemplateDescription);
+}
+
+if (summarizeBtn) {
+    summarizeBtn.addEventListener('click', () => performSummarization());
+}
+
+// Enable summarize button when text is pasted
+if (sumInputText) {
+    sumInputText.addEventListener('input', () => {
+        if (summarizeBtn) {
+            summarizeBtn.disabled = !sumInputText.value.trim() && !summarizeDocument;
+        }
+    });
+}
+
+// Clean up when leaving the tab
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        if (btn.dataset.tab !== 'summarize') {
+            await disposeSumModel();
+        }
+    });
+});
+
+// Expose in-memory data for privacy inspector
+window.medmorfSummarizeData = {
+    hasDocument: () => summarizeDocument !== null,
+    documentName: () => summarizeDocument ? summarizeDocument.name : null,
+    hasResult: () => summarizeResult !== null,
+    clearAll: async () => {
+        summarizeDocument = null;
+        summarizeResult = null;
+        await disposeSumModel();
+        if (sumDocInput) sumDocInput.value = '';
+        if (sumDocInfo) sumDocInfo.style.display = 'none';
+        if (sumResults) sumResults.style.display = 'none';
+        if (sumInputText) sumInputText.value = '';
+        if (summarizeBtn) summarizeBtn.disabled = true;
+        console.log('[PRIVACY] All summarization data cleared');
+    },
+};
+
+// ── Init ───────────────────────────────────────────────────────────────────────
+populateTemplateSelect();
+console.log('[SUMMARIZE] Summarization module loaded');

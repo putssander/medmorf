@@ -12,6 +12,8 @@ const APP_SHELL = [
     './security.js',
     './app.js',
     './anonymize-handler.js',
+    './summarize-handler.js',
+    './stt-handler.js',
     './cache-manager.js',
     './privacy-runtime.js',
     './translation-runtime.js',

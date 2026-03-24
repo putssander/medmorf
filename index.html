@@ -75,6 +75,25 @@
                 </svg>
                 Anonymize
             </button>
+            <button class="tab-btn" data-tab="summarize">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                Summarize
+            </button>
+            <button class="tab-btn" data-tab="speech">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                </svg>
+                Speech
+            </button>
             <button class="tab-btn" data-tab="storage">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
@@ -632,6 +651,289 @@
                 </section>
             </div>
 
+                            <option value="json">.json</option>
+                        </select>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- SUMMARIZE TAB                              -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-summarize">
+
+                <div class="sum-header">
+                    <div class="hw-requirements-notice">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
+                        <span><strong>Hardware:</strong> Requires WebGPU (Chrome/Edge 113+, Safari 18+). Uses the same Qwen3 models as anonymization.</span>
+                    </div>
+                    <p class="section-description">Generate structured reports from medical documents using <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> + WebGPU — entirely in your browser.</p>
+                    <div class="anon-settings-row">
+                        <div class="setting-group compact">
+                            <label for="sumTemplateSelect">Template</label>
+                            <select id="sumTemplateSelect">
+                                <!-- Populated by summarize-handler.js -->
+                            </select>
+                        </div>
+                        <div class="setting-group compact">
+                            <label for="sumModelSelect">LLM Model</label>
+                            <select id="sumModelSelect">
+                                <!-- Populated by summarize-handler.js -->
+                            </select>
+                        </div>
+                        <div id="sumWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
+                    </div>
+                    <p id="sumTemplateDesc" class="section-description" style="margin-top: 0.75rem;"></p>
+                </div>
+
+                <!-- Input: Upload or Paste -->
+                <div class="sum-input-grid">
+                    <div class="sum-input-box">
+                        <h3>Upload Document</h3>
+                        <div class="upload-area sum-upload" id="sumDocUpload">
+                            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <p>Drop document here</p>
+                            <p class="file-types">.xlsx, .docx, .txt</p>
+                            <input type="file" id="sumDocInput" accept=".xlsx,.docx,.txt" hidden>
+                        </div>
+                        <div class="file-info" id="sumDocInfo" style="display: none;">
+                            <div class="file-details">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                <strong>File:</strong> <span id="sumDocName"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sum-input-box">
+                        <h3>Or Paste Text</h3>
+                        <textarea id="sumInputText" class="sum-textarea" placeholder="Paste clinical notes, session transcripts, or any medical text here..." rows="6"></textarea>
+                    </div>
+                </div>
+
+                <!-- Model Loading -->
+                <section class="model-status" id="sumModelStatus" style="display: none;">
+                    <h3 id="sumModelHeading">Loading model...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="sumModelProgress"></div></div>
+                    <p class="status-text" id="sumModelStatusText">Initializing...</p>
+                </section>
+
+                <!-- Summarization Progress -->
+                <section class="translation-progress" id="sumProgress" style="display: none;">
+                    <h3>Generating Summary...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="sumProgressBar"></div></div>
+                    <p class="status-text" id="sumProgressText">Preparing...</p>
+                </section>
+
+                <!-- Summarize Button -->
+                <section class="actions">
+                    <button id="summarizeBtn" class="btn btn-summarize" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        Summarize
+                    </button>
+                </section>
+
+                <!-- Results -->
+                <section class="sum-results" id="sumResults" style="display: none;">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Summary Complete
+                    </h3>
+                    <div class="sum-output-container">
+                        <pre id="sumOutputText" class="sum-output-text"></pre>
+                    </div>
+                    <div class="actions">
+                        <button id="copySumBtn" class="btn btn-ghost">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                        </button>
+                        <button id="downloadSumBtn" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Download Summary
+                        </button>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ═══════════════════════════════════════════ -->
+            <!-- SPEECH TAB                                 -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-speech">
+
+                <div class="stt-header">
+                    <div class="hw-requirements-notice">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
+                        <span><strong>Offline STT:</strong> Whisper speech recognition runs entirely in your browser via WebAssembly. No audio data is sent anywhere.</span>
+                    </div>
+                    <p class="section-description">Transcribe audio recordings or live microphone input using <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">OpenAI Whisper</a> via <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> — entirely offline.</p>
+                    <div class="anon-settings-row">
+                        <div class="setting-group compact">
+                            <label for="sttModelSelect">Whisper Model</label>
+                            <select id="sttModelSelect">
+                                <!-- Populated by stt-handler.js -->
+                            </select>
+                        </div>
+                        <div class="setting-group compact">
+                            <label for="sttLanguageSelect">Language</label>
+                            <select id="sttLanguageSelect">
+                                <option value="nl" selected>Dutch</option>
+                                <option value="en">English</option>
+                                <option value="de">German</option>
+                                <option value="fr">French</option>
+                                <option value="es">Spanish</option>
+                                <option value="pt">Portuguese</option>
+                                <option value="it">Italian</option>
+                                <option value="pl">Polish</option>
+                                <option value="ro">Romanian</option>
+                                <option value="cs">Czech</option>
+                                <option value="da">Danish</option>
+                                <option value="sv">Swedish</option>
+                                <option value="no">Norwegian</option>
+                                <option value="fi">Finnish</option>
+                                <option value="el">Greek</option>
+                                <option value="hu">Hungarian</option>
+                                <option value="ru">Russian</option>
+                                <option value="uk">Ukrainian</option>
+                                <option value="tr">Turkish</option>
+                                <option value="ar">Arabic</option>
+                                <option value="zh">Chinese</option>
+                                <option value="ja">Japanese</option>
+                                <option value="ko">Korean</option>
+                            </select>
+                        </div>
+                    </div>
+                    <details class="hw-details">
+                        <summary>Model details</summary>
+                        <ul>
+                            <li><strong>Whisper Tiny</strong> — ~150 MB. Fastest, basic quality.</li>
+                            <li><strong>Whisper Base</strong> — ~300 MB. Fair quality.</li>
+                            <li><strong>Whisper Small</strong> (recommended) — ~500 MB. Good quality, best for clinical use.</li>
+                        </ul>
+                        <p>All models run via WebAssembly (ONNX Runtime). First use downloads the model; subsequent runs use browser cache.</p>
+                    </details>
+                </div>
+
+                <!-- Recording / Upload -->
+                <div class="stt-input-grid">
+                    <div class="stt-input-box">
+                        <h3>Record Audio</h3>
+                        <div class="stt-record-controls">
+                            <button id="sttRecordBtn" class="btn btn-record">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                                </svg>
+                                Start Recording
+                            </button>
+                            <button id="sttStopBtn" class="btn btn-danger" style="display: none;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                                </svg>
+                                Stop Recording
+                            </button>
+                        </div>
+                        <div id="sttRecordingIndicator" class="stt-recording-indicator" style="display: none;">
+                            <span class="recording-dot"></span>
+                            <span>Recording...</span>
+                        </div>
+                    </div>
+                    <div class="stt-input-box">
+                        <h3>Or Upload Audio</h3>
+                        <div class="upload-area stt-upload" id="sttUploadArea">
+                            <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 18V5l12-2v13"></path>
+                                <circle cx="6" cy="18" r="3"></circle>
+                                <circle cx="18" cy="16" r="3"></circle>
+                            </svg>
+                            <p>Drop audio file here</p>
+                            <p class="file-types">.mp3, .wav, .ogg, .webm, .m4a, .flac</p>
+                            <input type="file" id="sttFileInput" accept=".mp3,.wav,.ogg,.webm,.m4a,.flac,.mp4" hidden>
+                        </div>
+                        <div class="file-info" id="sttFileInfo" style="display: none;">
+                            <div class="file-details">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
+                                <strong>Audio:</strong> <span id="sttFileName"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Transcript (visible during recording) -->
+                <section id="sttLiveTranscript" class="stt-live-transcript" style="display: none;">
+                    <div class="stt-live-header">
+                        <span class="recording-dot"></span>
+                        <span id="sttLiveStatus">Listening...</span>
+                    </div>
+                    <div class="stt-live-text-container">
+                        <p id="sttLiveText" class="stt-live-text"></p>
+                    </div>
+                </section>
+
+                <!-- Model Loading -->
+                <section class="model-status" id="sttModelStatus" style="display: none;">
+                    <h3 id="sttModelHeading">Loading Whisper...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="sttModelProgress"></div></div>
+                    <p class="status-text" id="sttModelStatusText">Initializing...</p>
+                </section>
+
+                <!-- Transcription Progress -->
+                <section class="translation-progress" id="sttProgress" style="display: none;">
+                    <h3>Transcribing...</h3>
+                    <div class="progress-bar"><div class="progress-fill" id="sttProgressBar"></div></div>
+                    <p class="status-text" id="sttProgressText">Preparing...</p>
+                </section>
+
+                <!-- Transcribe Button -->
+                <section class="actions">
+                    <button id="transcribeBtn" class="btn btn-speech" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                        Transcribe
+                    </button>
+                </section>
+
+                <!-- Results -->
+                <section class="stt-results" id="sttResults" style="display: none;">
+                    <h3>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        Transcription Complete
+                    </h3>
+                    <div class="stt-output-container">
+                        <pre id="sttOutputText" class="stt-output-text"></pre>
+                    </div>
+                    <div class="actions">
+                        <button id="sttCopyBtn" class="btn btn-ghost">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
+                            Copy
+                        </button>
+                        <button id="sttDownloadBtn" class="btn btn-success">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            Download Transcription
+                        </button>
+                    </div>
+                </section>
+            </div>
+
             <!-- ═══════════════════════════════════════════ -->
             <!-- STORAGE TAB                                -->
             <!-- ═══════════════════════════════════════════ -->
@@ -855,9 +1157,9 @@
         </main>
 
         <footer>
-            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a></p>
+            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a> &amp; <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">Whisper</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
-            <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB). All processing is local. Check the Storage tab to manage cached data.</p>
+            <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB, speech ~500MB). All processing is local. Check the Storage tab to manage cached data.</p>
         </footer>
     </div>
 
@@ -880,6 +1182,8 @@
     <script src="word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="app.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="anonymize-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="summarize-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="stt-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="cache-manager.js?v=2026-03-23-cachefix-8"></script>
     <script>
         // Tab switching
