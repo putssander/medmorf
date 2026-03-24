@@ -57,6 +57,26 @@ let liveSampleRate = 16000;
 const LIVE_CHUNK_INTERVAL = 10000;
 const MIN_CHUNK_SECONDS = 2;
 
+// ── Waveform State ─────────────────────────────────────────────────────────────
+let waveformAnalyser = null;
+let waveformAnimId = null;
+
+// ── Dictaphone State ───────────────────────────────────────────────────────────
+let dictaphoneEntries = [];
+let dictaphoneStream = null;
+let dictaphoneRecording = false;
+let dictaphoneMediaRec = null;
+let dictaphoneChunks = [];
+let dictaphonePcmChunks = [];
+let dictaphonePcmCount = 0;
+let dictaphoneAudioCtx = null;
+let dictaphoneSourceNode = null;
+let dictaphoneProcessorNode = null;
+let dictaphoneAnalyser = null;
+let dictaphoneWaveAnimId = null;
+let dictaphoneEntryStart = null;
+let dictaphoneSessionStart = null;
+
 // ── DOM Elements ───────────────────────────────────────────────────────────────
 const sttModelSelect = document.getElementById('sttModelSelect');
 const sttLanguageSelect = document.getElementById('sttLanguageSelect');
@@ -84,6 +104,21 @@ const systemStatusText = document.getElementById('systemStatusText');
 const sttLiveTranscript = document.getElementById('sttLiveTranscript');
 const sttLiveText = document.getElementById('sttLiveText');
 const sttLiveStatus = document.getElementById('sttLiveStatus');
+const sttWaveformCanvas = document.getElementById('sttWaveformCanvas');
+
+// Dictaphone DOM
+const sttModeSelect = document.getElementById('sttModeSelect');
+const sttTranscribeSection = document.getElementById('sttTranscribeSection');
+const sttDictaphoneSection = document.getElementById('sttDictaphoneSection');
+const dictRecordBtn = document.getElementById('dictRecordBtn');
+const dictStopBtn = document.getElementById('dictStopBtn');
+const dictWaveformCanvas = document.getElementById('dictWaveformCanvas');
+const dictRecordingIndicator = document.getElementById('dictRecordingIndicator');
+const dictLog = document.getElementById('dictLog');
+const dictLogBody = document.getElementById('dictLogBody');
+const dictExportBtn = document.getElementById('dictExportBtn');
+const dictClearBtn = document.getElementById('dictClearBtn');
+const dictEntryCount = document.getElementById('dictEntryCount');
 
 function updateStatus(state, message) {
     if (systemStatusIndicator) systemStatusIndicator.className = `status-indicator ${state}`;
@@ -362,6 +397,9 @@ async function startRecording() {
         // Set up raw PCM capture for live transcription
         await setupPCMCapture(stream);
 
+        // Set up waveform visualizer
+        startWaveform(stream, sttWaveformCanvas, 'stt');
+
         mediaRecorder.start(1000);
         isRecording = true;
 
@@ -373,6 +411,7 @@ async function startRecording() {
         if (sttLiveTranscript) sttLiveTranscript.style.display = 'block';
         if (sttLiveText) sttLiveText.textContent = '';
         if (sttLiveStatus) sttLiveStatus.textContent = 'Loading model...';
+        if (sttWaveformCanvas) sttWaveformCanvas.style.display = 'block';
 
         // Preload Whisper model, then begin live transcription loop
         try {
@@ -404,6 +443,9 @@ async function stopRecording() {
     // Clean up PCM capture
     await cleanupLiveCapture();
 
+    // Stop waveform
+    stopWaveform('stt');
+
     // Stop mic stream
     if (stream) stream.getTracks().forEach(t => t.stop());
 
@@ -411,6 +453,7 @@ async function stopRecording() {
     if (sttRecordingIndicator) sttRecordingIndicator.style.display = 'none';
     if (sttRecordBtn) sttRecordBtn.style.display = '';
     if (sttStopBtn) sttStopBtn.style.display = 'none';
+    if (sttWaveformCanvas) sttWaveformCanvas.style.display = 'none';
 
     // Transcribe any remaining audio
     if (pipeline && pcmSampleCount > lastProcessedSample) {
@@ -479,13 +522,13 @@ async function performTranscription() {
             task: 'transcribe',
             chunk_length_s: 30,
             stride_length_s: 5,
-            return_timestamps: false,
+            return_timestamps: true,
         });
 
         if (sttProgressBar) sttProgressBar.style.width = '100%';
         if (sttProgressText) sttProgressText.textContent = 'Transcription complete ✓';
 
-        transcriptionResult = result.text || '';
+        transcriptionResult = formatTimestampedResult(result);
         renderSTTResults(transcriptionResult);
     } catch (error) {
         console.error('Transcription error:', error);
@@ -535,6 +578,339 @@ setupDropArea(sttUploadArea, sttFileInput, async (file) => {
     if (transcribeBtn) transcribeBtn.disabled = false;
 });
 
+// ── Timestamp Formatting ────────────────────────────────────────────────────────
+function formatSeconds(sec) {
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = Math.floor(sec % 60);
+    return h > 0
+        ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+        : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function formatTimestampedResult(result) {
+    if (result.chunks && result.chunks.length > 0) {
+        return result.chunks.map(c => {
+            const start = c.timestamp?.[0] ?? 0;
+            return `[${formatSeconds(start)}] ${(c.text || '').trim()}`;
+        }).filter(l => l.length > 0).join('\n');
+    }
+    return result.text || '';
+}
+
+// ── Waveform Visualizer ─────────────────────────────────────────────────────────
+function startWaveform(stream, canvas, target) {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let audioCtx, analyser;
+
+    if (target === 'stt') {
+        if (!liveAudioCtx) return;
+        audioCtx = liveAudioCtx;
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        liveSourceNode.connect(analyser);
+        waveformAnalyser = analyser;
+    } else {
+        if (!dictaphoneAudioCtx) return;
+        audioCtx = dictaphoneAudioCtx;
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        dictaphoneSourceNode.connect(analyser);
+        dictaphoneAnalyser = analyser;
+    }
+
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+
+    function draw() {
+        const id = requestAnimationFrame(draw);
+        if (target === 'stt') waveformAnimId = id;
+        else dictaphoneWaveAnimId = id;
+
+        analyser.getByteTimeDomainData(dataArray);
+
+        const w = canvas.width = canvas.offsetWidth * (window.devicePixelRatio || 1);
+        const h = canvas.height = canvas.offsetHeight * (window.devicePixelRatio || 1);
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.lineWidth = 2 * (window.devicePixelRatio || 1);
+        ctx.strokeStyle = '#dc2626';
+        ctx.beginPath();
+
+        const sliceWidth = w / bufferLength;
+        let x = 0;
+        for (let i = 0; i < bufferLength; i++) {
+            const v = dataArray[i] / 128.0;
+            const y = (v * h) / 2;
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            x += sliceWidth;
+        }
+        ctx.lineTo(w, h / 2);
+        ctx.stroke();
+    }
+    draw();
+}
+
+function stopWaveform(target) {
+    if (target === 'stt') {
+        if (waveformAnimId) { cancelAnimationFrame(waveformAnimId); waveformAnimId = null; }
+        if (waveformAnalyser) { try { waveformAnalyser.disconnect(); } catch (_) {} waveformAnalyser = null; }
+        if (sttWaveformCanvas) {
+            const ctx = sttWaveformCanvas.getContext('2d');
+            ctx.clearRect(0, 0, sttWaveformCanvas.width, sttWaveformCanvas.height);
+        }
+    } else {
+        if (dictaphoneWaveAnimId) { cancelAnimationFrame(dictaphoneWaveAnimId); dictaphoneWaveAnimId = null; }
+        if (dictaphoneAnalyser) { try { dictaphoneAnalyser.disconnect(); } catch (_) {} dictaphoneAnalyser = null; }
+        if (dictWaveformCanvas) {
+            const ctx = dictWaveformCanvas.getContext('2d');
+            ctx.clearRect(0, 0, dictWaveformCanvas.width, dictWaveformCanvas.height);
+        }
+    }
+}
+
+// ── Mode Switching ──────────────────────────────────────────────────────────────
+function switchMode(mode) {
+    if (sttTranscribeSection) sttTranscribeSection.style.display = mode === 'transcribe' ? '' : 'none';
+    if (sttDictaphoneSection) sttDictaphoneSection.style.display = mode === 'dictaphone' ? '' : 'none';
+}
+
+if (sttModeSelect) {
+    sttModeSelect.addEventListener('change', () => switchMode(sttModeSelect.value));
+}
+
+// ── Dictaphone ──────────────────────────────────────────────────────────────────
+function formatClock(date) {
+    return date.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+async function setupDictaphonePCM(stream) {
+    dictaphoneAudioCtx = new AudioContext({ sampleRate: 16000 });
+    dictaphoneSourceNode = dictaphoneAudioCtx.createMediaStreamSource(stream);
+
+    try {
+        const workletCode = [
+            'class P extends AudioWorkletProcessor {',
+            '  process(inputs) {',
+            '    const d = inputs[0] && inputs[0][0];',
+            '    if (d && d.length) this.port.postMessage(new Float32Array(d));',
+            '    return true;',
+            '  }',
+            '}',
+            'registerProcessor("pcm-dict", P);',
+        ].join('\n');
+        const blob = new Blob([workletCode], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        await dictaphoneAudioCtx.audioWorklet.addModule(url);
+        URL.revokeObjectURL(url);
+        dictaphoneProcessorNode = new AudioWorkletNode(dictaphoneAudioCtx, 'pcm-dict');
+        dictaphoneProcessorNode.port.onmessage = (e) => {
+            dictaphonePcmChunks.push(e.data);
+            dictaphonePcmCount += e.data.length;
+        };
+        dictaphoneSourceNode.connect(dictaphoneProcessorNode);
+    } catch (err) {
+        const proc = dictaphoneAudioCtx.createScriptProcessorNode(4096, 1, 1);
+        proc.onaudioprocess = (e) => {
+            const data = new Float32Array(e.inputBuffer.getChannelData(0));
+            dictaphonePcmChunks.push(data);
+            dictaphonePcmCount += data.length;
+        };
+        dictaphoneSourceNode.connect(proc);
+        const silentGain = dictaphoneAudioCtx.createGain();
+        silentGain.gain.value = 0;
+        proc.connect(silentGain);
+        silentGain.connect(dictaphoneAudioCtx.destination);
+        dictaphoneProcessorNode = proc;
+    }
+}
+
+function collectDictaphonePCM() {
+    const totalLen = dictaphonePcmChunks.reduce((a, c) => a + c.length, 0);
+    const result = new Float32Array(totalLen);
+    let pos = 0;
+    for (const chunk of dictaphonePcmChunks) { result.set(chunk, pos); pos += chunk.length; }
+    return result;
+}
+
+async function dictStartEntry() {
+    if (dictaphoneRecording) return;
+
+    try {
+        if (!dictaphoneStream) {
+            dictaphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        }
+        if (!dictaphoneSessionStart) dictaphoneSessionStart = new Date();
+
+        dictaphonePcmChunks = [];
+        dictaphonePcmCount = 0;
+        dictaphoneChunks = [];
+        dictaphoneEntryStart = new Date();
+
+        // Set up PCM capture
+        await setupDictaphonePCM(dictaphoneStream);
+
+        // Waveform
+        startWaveform(dictaphoneStream, dictWaveformCanvas, 'dict');
+
+        // MediaRecorder backup
+        dictaphoneMediaRec = new MediaRecorder(dictaphoneStream, { mimeType: 'audio/webm;codecs=opus' });
+        dictaphoneMediaRec.ondataavailable = (e) => {
+            if (e.data.size > 0) dictaphoneChunks.push(e.data);
+        };
+        dictaphoneMediaRec.start(500);
+
+        dictaphoneRecording = true;
+        if (dictRecordBtn) dictRecordBtn.style.display = 'none';
+        if (dictStopBtn) dictStopBtn.style.display = '';
+        if (dictRecordingIndicator) dictRecordingIndicator.style.display = 'flex';
+        if (dictWaveformCanvas) dictWaveformCanvas.style.display = 'block';
+    } catch (error) {
+        console.error('Dictaphone mic error:', error);
+        alert('Could not access microphone.');
+    }
+}
+
+async function dictStopEntry() {
+    if (!dictaphoneRecording) return;
+    dictaphoneRecording = false;
+    const entryEnd = new Date();
+
+    // Stop MediaRecorder
+    if (dictaphoneMediaRec && dictaphoneMediaRec.state !== 'inactive') {
+        dictaphoneMediaRec.stop();
+    }
+
+    // Stop waveform
+    stopWaveform('dict');
+
+    // Get PCM audio
+    const pcmData = collectDictaphonePCM();
+
+    // Cleanup dictaphone audio nodes (but keep stream alive for next entry)
+    if (dictaphoneSourceNode) { try { dictaphoneSourceNode.disconnect(); } catch (_) {} dictaphoneSourceNode = null; }
+    if (dictaphoneProcessorNode) { try { dictaphoneProcessorNode.disconnect(); } catch (_) {} dictaphoneProcessorNode = null; }
+    if (dictaphoneAudioCtx && dictaphoneAudioCtx.state !== 'closed') {
+        try { await dictaphoneAudioCtx.close(); } catch (_) {}
+    }
+    dictaphoneAudioCtx = null;
+
+    // UI
+    if (dictRecordBtn) dictRecordBtn.style.display = '';
+    if (dictStopBtn) dictStopBtn.style.display = 'none';
+    if (dictRecordingIndicator) dictRecordingIndicator.style.display = 'none';
+    if (dictWaveformCanvas) dictWaveformCanvas.style.display = 'none';
+
+    // Transcribe the entry
+    const entryIdx = dictaphoneEntries.length + 1;
+    const entry = {
+        nr: entryIdx,
+        startTime: dictaphoneEntryStart,
+        endTime: entryEnd,
+        duration: ((entryEnd - dictaphoneEntryStart) / 1000).toFixed(1),
+        text: '(transcribing...)',
+        pcmData: pcmData,
+    };
+    dictaphoneEntries.push(entry);
+    renderDictLog();
+
+    // Transcribe
+    try {
+        await initSTTModel();
+        let audioData = pcmData;
+        const rate = 16000; // dictaphone audioCtx was created at 16kHz
+        if (rate !== 16000) audioData = resampleTo16k(audioData, rate);
+        const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
+        const result = await pipeline(audioData, {
+            language,
+            task: 'transcribe',
+            return_timestamps: false,
+        });
+        entry.text = (result.text || '').trim() || '(no speech detected)';
+    } catch (err) {
+        console.error('[DICT] Transcription error:', err);
+        entry.text = '(transcription failed)';
+    }
+    renderDictLog();
+}
+
+function renderDictLog() {
+    if (!dictLogBody) return;
+    if (dictaphoneEntries.length === 0) {
+        dictLogBody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:1.5rem;">No entries yet. Press Record to start.</td></tr>';
+        if (dictLog) dictLog.style.display = 'none';
+        if (dictExportBtn) dictExportBtn.disabled = true;
+        if (dictClearBtn) dictClearBtn.disabled = true;
+        return;
+    }
+    if (dictLog) dictLog.style.display = '';
+    if (dictExportBtn) dictExportBtn.disabled = false;
+    if (dictClearBtn) dictClearBtn.disabled = false;
+    if (dictEntryCount) dictEntryCount.textContent = `${dictaphoneEntries.length} ${dictaphoneEntries.length === 1 ? 'entry' : 'entries'}`;
+
+    dictLogBody.innerHTML = dictaphoneEntries.map(e => `
+        <tr>
+            <td>${e.nr}</td>
+            <td>${formatClock(e.startTime)}</td>
+            <td>${formatClock(e.endTime)}</td>
+            <td>${e.duration}s</td>
+            <td class="dict-text-cell">${escapeHTML(e.text)}</td>
+        </tr>
+    `).join('');
+}
+
+function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function dictExportXLSX() {
+    if (dictaphoneEntries.length === 0) return;
+    const rows = [['#', 'Start', 'End', 'Duration (s)', 'Transcription']];
+    for (const e of dictaphoneEntries) {
+        rows.push([
+            e.nr,
+            formatClock(e.startTime),
+            formatClock(e.endTime),
+            parseFloat(e.duration),
+            e.text,
+        ]);
+    }
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    // Set column widths
+    ws['!cols'] = [{ wch: 4 }, { wch: 10 }, { wch: 10 }, { wch: 12 }, { wch: 60 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Dictaphone Log');
+    const dateStr = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(wb, `dictaphone-log-${dateStr}.xlsx`);
+}
+
+function dictClearLog() {
+    dictaphoneEntries = [];
+    dictaphoneSessionStart = null;
+    renderDictLog();
+}
+
+async function cleanupDictaphone() {
+    if (dictaphoneRecording) await dictStopEntry();
+    if (dictaphoneStream) {
+        dictaphoneStream.getTracks().forEach(t => t.stop());
+        dictaphoneStream = null;
+    }
+}
+
+// Dictaphone event listeners
+if (dictRecordBtn) dictRecordBtn.addEventListener('click', dictStartEntry);
+if (dictStopBtn) dictStopBtn.addEventListener('click', dictStopEntry);
+if (dictExportBtn) dictExportBtn.addEventListener('click', dictExportXLSX);
+if (dictClearBtn) dictClearBtn.addEventListener('click', () => {
+    if (dictaphoneEntries.length > 0 && !confirm('Clear all dictaphone entries?')) return;
+    dictClearLog();
+});
+
 // ── Event Listeners ────────────────────────────────────────────────────────────
 if (sttRecordBtn) sttRecordBtn.addEventListener('click', startRecording);
 if (sttStopBtn) sttStopBtn.addEventListener('click', stopRecording);
@@ -566,6 +942,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
         if (btn.dataset.tab !== 'speech') {
             if (isRecording) await stopRecording();
+            await cleanupDictaphone();
             await disposeSTTModel();
         }
     });
@@ -575,8 +952,10 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 window.medmorfSTTData = {
     hasRecording: () => recordedBlob !== null,
     hasResult: () => transcriptionResult !== null,
+    hasDictaphoneEntries: () => dictaphoneEntries.length > 0,
     clearAll: async () => {
         if (isRecording) await stopRecording();
+        await cleanupDictaphone();
         recordedBlob = null;
         transcriptionResult = null;
         audioChunks = [];
@@ -584,6 +963,8 @@ window.medmorfSTTData = {
         pcmChunks = [];
         pcmSampleCount = 0;
         lastProcessedSample = 0;
+        dictaphoneEntries = [];
+        dictaphoneSessionStart = null;
         await disposeSTTModel();
         if (sttFileInput) sttFileInput.value = '';
         if (sttFileInfo) sttFileInfo.style.display = 'none';

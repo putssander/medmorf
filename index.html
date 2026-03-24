@@ -651,12 +651,6 @@
                 </section>
             </div>
 
-                            <option value="json">.json</option>
-                        </select>
-                    </div>
-                </section>
-            </div>
-
             <!-- ═══════════════════════════════════════════ -->
             <!-- SUMMARIZE TAB                              -->
             <!-- ═══════════════════════════════════════════ -->
@@ -779,6 +773,13 @@
                     <p class="section-description">Transcribe audio recordings or live microphone input using <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">OpenAI Whisper</a> via <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> — entirely offline.</p>
                     <div class="anon-settings-row">
                         <div class="setting-group compact">
+                            <label for="sttModeSelect">Mode</label>
+                            <select id="sttModeSelect">
+                                <option value="transcribe" selected>Transcribe</option>
+                                <option value="dictaphone">Dictaphone</option>
+                            </select>
+                        </div>
+                        <div class="setting-group compact">
                             <label for="sttModelSelect">Whisper Model</label>
                             <select id="sttModelSelect">
                                 <!-- Populated by stt-handler.js -->
@@ -824,6 +825,9 @@
                     </details>
                 </div>
 
+                <!-- ══════ TRANSCRIBE MODE ══════ -->
+                <div id="sttTranscribeSection">
+
                 <!-- Recording / Upload -->
                 <div class="stt-input-grid">
                     <div class="stt-input-box">
@@ -845,6 +849,7 @@
                                 Stop Recording
                             </button>
                         </div>
+                        <canvas id="sttWaveformCanvas" class="stt-waveform" style="display: none;"></canvas>
                         <div id="sttRecordingIndicator" class="stt-recording-indicator" style="display: none;">
                             <span class="recording-dot"></span>
                             <span>Recording...</span>
@@ -932,6 +937,77 @@
                         </button>
                     </div>
                 </section>
+
+                </div><!-- /sttTranscribeSection -->
+
+                <!-- ══════ DICTAPHONE MODE ══════ -->
+                <div id="sttDictaphoneSection" style="display: none;">
+                    <div class="dict-header-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        <span>Record short passages over a session. Each entry is automatically transcribed with timestamps. Export as XLSX when done.</span>
+                    </div>
+
+                    <div class="dict-controls">
+                        <button id="dictRecordBtn" class="btn btn-record">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                <line x1="12" y1="19" x2="12" y2="23"></line>
+                                <line x1="8" y1="23" x2="16" y2="23"></line>
+                            </svg>
+                            Record Entry
+                        </button>
+                        <button id="dictStopBtn" class="btn btn-danger" style="display: none;">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+                            </svg>
+                            Stop &amp; Transcribe
+                        </button>
+                        <div id="dictRecordingIndicator" class="stt-recording-indicator" style="display: none;">
+                            <span class="recording-dot"></span>
+                            <span>Recording entry...</span>
+                        </div>
+                    </div>
+                    <canvas id="dictWaveformCanvas" class="stt-waveform" style="display: none;"></canvas>
+
+                    <!-- Dictaphone Log -->
+                    <div id="dictLog" class="dict-log" style="display: none;">
+                        <div class="dict-log-header">
+                            <h3>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                                Session Log
+                            </h3>
+                            <span id="dictEntryCount" class="dict-entry-count"></span>
+                        </div>
+                        <div class="dict-table-scroll">
+                            <table class="dict-table">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Start</th>
+                                        <th>End</th>
+                                        <th>Duration</th>
+                                        <th>Transcription</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dictLogBody">
+                                    <tr><td colspan="5" style="text-align:center;color:var(--text-secondary);padding:1.5rem;">No entries yet. Press Record to start.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="actions" style="margin-top: 1rem;">
+                            <button id="dictExportBtn" class="btn btn-success" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Export XLSX
+                            </button>
+                            <button id="dictClearBtn" class="btn btn-ghost" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                Clear All
+                            </button>
+                        </div>
+                    </div>
+                </div><!-- /sttDictaphoneSection -->
+
             </div>
 
             <!-- ═══════════════════════════════════════════ -->

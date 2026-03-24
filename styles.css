@@ -127,28 +127,43 @@ header {
     text-decoration: underline;
 }
 
-/* Tab Bar */
+/* Tab Bar — mobile-first */
 .tab-bar {
     display: flex;
     background: var(--bg-secondary);
     border-bottom: 2px solid var(--border-color);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+    display: none;
 }
 
 .tab-btn {
-    flex: 1;
+    flex: 1 0 auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    gap: 0;
+    padding: 0.65rem 0.75rem;
     border: none;
     background: transparent;
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    font-size: 0;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
     position: relative;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.tab-btn svg {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
 }
 
 .tab-btn::after {
@@ -173,6 +188,39 @@ header {
 
 .tab-btn.active::after {
     background: var(--primary-color);
+}
+
+/* >= 480px: show labels alongside icons */
+@media (min-width: 480px) {
+    .tab-btn {
+        gap: 0.4rem;
+        font-size: 0.82rem;
+        padding: 0.65rem 0.85rem;
+    }
+
+    .tab-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+/* >= 768px: full-size tabs */
+@media (min-width: 768px) {
+    .tab-bar {
+        overflow-x: visible;
+    }
+
+    .tab-btn {
+        flex: 1;
+        gap: 0.5rem;
+        font-size: 0.95rem;
+        padding: 0.75rem 1rem;
+    }
+
+    .tab-btn svg {
+        width: 18px;
+        height: 18px;
+    }
 }
 
 .tab-btn[data-tab="anonymize"].active {
@@ -2080,10 +2128,7 @@ details summary:hover {
         max-height: 250px;
     }
 
-    .tab-btn {
-        font-size: 0.85rem;
-        padding: 0.6rem 0.75rem;
-    }
+
 
     .storage-summary {
         flex-direction: column;
@@ -2124,12 +2169,27 @@ details summary:hover {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    transition: border-color 0.2s ease;
+}
+
+.sum-input-box:focus-within {
+    border-color: #d97706;
+    box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.1);
 }
 
 .sum-input-box h3 {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary);
+    margin: 0;
+}
+
+.sum-input-box .upload-area {
+    margin-bottom: 0;
 }
 
 .sum-upload {
@@ -2193,8 +2253,9 @@ details summary:hover {
 .sum-results {
     background: #fffbeb;
     border: 1px solid #fde68a;
-    border-radius: 8px;
-    padding: 1.5rem;
+    border-radius: 12px;
+    padding: 1.25rem;
+    animation: fadeIn 0.3s ease;
 }
 
 .sum-results h3 {
@@ -2247,12 +2308,31 @@ details summary:hover {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1rem;
+    transition: border-color 0.2s ease;
+}
+
+.stt-input-box:focus-within {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
 .stt-input-box h3 {
     font-size: 0.95rem;
     font-weight: 600;
     color: var(--text-primary);
+    margin: 0;
+}
+
+.stt-input-box .upload-area {
+    margin-bottom: 0;
+}
+
+.stt-input-box .stt-record-controls {
+    margin-bottom: 0;
 }
 
 .stt-upload {
@@ -2351,8 +2431,9 @@ details summary:hover {
 .stt-results {
     background: #fef2f2;
     border: 1px solid #fecaca;
-    border-radius: 8px;
-    padding: 1.5rem;
+    border-radius: 12px;
+    padding: 1.25rem;
+    animation: fadeIn 0.3s ease;
 }
 
 .stt-results h3 {
@@ -2420,10 +2501,146 @@ details summary:hover {
     white-space: pre-wrap;
 }
 
+/* ── Waveform Canvas ────────────────────────────────── */
+.stt-waveform {
+    width: 100%;
+    height: 60px;
+    border-radius: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    margin-top: 0.75rem;
+}
+
+/* ── Dictaphone Mode ────────────────────────────────── */
+.dict-header-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    color: #1e40af;
+    line-height: 1.5;
+}
+
+.dict-header-info svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.dict-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.dict-log {
+    margin-top: 1.25rem;
+}
+
+.dict-log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+}
+
+.dict-log-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    color: var(--text-primary);
+}
+
+.dict-entry-count {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    padding: 0.2rem 0.6rem;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+}
+
+.dict-table-scroll {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.dict-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.dict-table thead {
+    background: var(--bg-secondary);
+    border-bottom: 2px solid var(--border-color);
+}
+
+.dict-table th {
+    padding: 0.6rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+}
+
+.dict-table td {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+    vertical-align: top;
+}
+
+.dict-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.dict-table tbody tr:hover {
+    background: #f0f9ff;
+}
+
+.dict-table td:nth-child(1) {
+    text-align: center;
+    font-weight: 600;
+    color: var(--text-secondary);
+    width: 2.5rem;
+}
+
+.dict-table td:nth-child(2),
+.dict-table td:nth-child(3),
+.dict-table td:nth-child(4) {
+    white-space: nowrap;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.dict-table td:nth-child(5) {
+    min-width: 200px;
+    max-width: 400px;
+    word-wrap: break-word;
+    line-height: 1.5;
+}
+
 /* ── Responsive for new tabs ────────────────────────── */
 @media (max-width: 768px) {
     .sum-input-grid,
     .stt-input-grid {
         grid-template-columns: 1fr;
+    }
+
+    .dict-table td:nth-child(5) {
+        min-width: 150px;
+        max-width: 250px;
     }
 }
