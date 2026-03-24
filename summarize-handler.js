@@ -197,7 +197,7 @@ function populateTemplateSelect() {
         const el = document.createElement('option');
         el.value = id;
         el.textContent = tpl.label;
-        if (id === 'psychology') el.selected = true;
+        if (id === 'freeform') el.selected = true;
         sumTemplateSelect.appendChild(el);
     }
     updateTemplateDescription();
@@ -360,11 +360,12 @@ async function extractTextFromDocument(file) {
 }
 
 // ── Build Summary Prompt ───────────────────────────────────────────────────────
-function buildSummaryPrompt(text, templateId) {
+function buildSummaryPrompt(text, templateId, lang) {
     const template = SUMMARIZE_TEMPLATES[templateId];
+    const langInstruction = `IMPORTANT: You MUST write the entire summary in ${lang}. All text, headings, and bullet points must be in ${lang}.`;
     if (!template) {
         return {
-            system: 'You are a clinical document summarization expert. Summarize the following medical document clearly and concisely. Always write the summary in the same language as the source document.',
+            system: `You are a clinical document summarization expert. Summarize the following medical document clearly and concisely. ${langInstruction}`,
             user: `Summarize this document:\n\n${text}`,
         };
     }
@@ -375,13 +376,13 @@ function buildSummaryPrompt(text, templateId) {
 
     const system = `You are a clinical document summarization expert. Generate a structured report from the provided document.
 
-Write your response in the same language as the source document. Translate section headings to match if needed. If a section has no relevant information, state that briefly.
+${langInstruction} Translate section headings to ${lang} if needed. If a section has no relevant information, state that briefly.
 
 Sections:
 ${sectionInstructions}
 
 Rules:
-1. Use the section headings above (translated to source language).
+1. Use the section headings above (translated to ${lang}).
 2. Be concise but thorough. Use bullet points.
 3. Only include information present in the document.
 4. Do NOT invent information.
@@ -396,7 +397,23 @@ Rules:
 // ── Chunked Summarization ──────────────────────────────────────────────────────
 const CHUNK_SIZE = 3000;      // chars per chunk (≈1000-1200 tokens for Dutch)
 const CHUNK_OVERLAP = 200;    // overlap to avoid cutting mid-sentence
-const SINGLE_PASS_LIMIT = 3500; // docs shorter than this go single-pass
+const SINGLE_PASS_LIMIT = 6000; // docs shorter than this go single-pass
+
+// Detect the dominant language of the source text
+function detectLanguage(text) {
+    // Sample first 2000 chars for common Dutch/German/French markers
+    const sample = text.substring(0, 2000).toLowerCase();
+    const nlWords = ['de','het','een','van','en','is','dat','voor','niet','met','op','aan','uit','maar','ook','naar','als','nog','wordt','zijn','heeft','wordt','wordt','deze','dit','bij','kan','over','werd','door','meer','wel','geen','hun','onder','na','tot'];
+    const enWords = ['the','is','and','of','to','in','that','for','with','was','on','are','this','but','not','from','have','has','had','been','were','they','will','can','would','about','which','their','said','each'];
+    let nlScore = 0, enScore = 0;
+    for (const w of nlWords) { const re = new RegExp('\\b' + w + '\\b', 'g'); nlScore += (sample.match(re) || []).length; }
+    for (const w of enWords) { const re = new RegExp('\\b' + w + '\\b', 'g'); enScore += (sample.match(re) || []).length; }
+    if (nlScore > enScore * 1.2) return 'Dutch';
+    if (enScore > nlScore * 1.2) return 'English';
+    // Fallback: check for common Dutch digraphs
+    if (/ij|oe|ui|aa|ee|oo|uu/i.test(sample)) return 'Dutch';
+    return 'the same language as the source text';
+}
 
 function splitIntoChunks(text) {
     const chunks = [];
@@ -420,8 +437,8 @@ function splitIntoChunks(text) {
     return chunks.filter(c => c.length > 50);
 }
 
-async function extractChunkFacts(chunkText, chunkIndex, totalChunks) {
-    const system = `You are a clinical document analyst. Extract all clinically relevant facts from this document fragment. Write in the same language as the source text.
+async function extractChunkFacts(chunkText, chunkIndex, totalChunks, lang) {
+    const system = `You are a clinical document analyst. Extract all clinically relevant facts from this document fragment. You MUST write in ${lang}.
 
 Output a concise bullet-point list of key facts, observations, and details. Include: symptoms, diagnoses, timeline, medications, history, relationships, risk factors, coping strategies — anything clinically relevant.
 
@@ -437,11 +454,12 @@ Do NOT output reasoning or thinking. Go straight to the bullet points.`;
     return result;
 }
 
-function buildMergePrompt(extractedFacts, templateId) {
+function buildMergePrompt(extractedFacts, templateId, lang) {
     const template = SUMMARIZE_TEMPLATES[templateId];
+    const langInstruction = `You MUST write the entire report in ${lang}. All text, headings, and bullet points must be in ${lang}.`;
     if (!template) {
         return {
-            system: 'You are a clinical document summarization expert. Synthesize the extracted facts into a clear, comprehensive summary. Write in the same language as the source. Do NOT output reasoning or thinking.',
+            system: `You are a clinical document summarization expert. Synthesize the extracted facts into a clear, comprehensive summary. ${langInstruction} Do NOT output reasoning or thinking.`,
             user: `Synthesize these extracted facts into a coherent summary:\n\n${extractedFacts}`,
         };
     }
@@ -452,13 +470,13 @@ function buildMergePrompt(extractedFacts, templateId) {
 
     const system = `You are a clinical document summarization expert. Synthesize the extracted facts below into a structured report.
 
-Write in the same language as the facts. Translate section headings to match if needed.
+${langInstruction} Translate section headings to ${lang} if needed.
 
 Sections:
 ${sectionInstructions}
 
 Rules:
-1. Use the section headings above (translated to source language).
+1. Use the section headings above (translated to ${lang}).
 2. Be concise but thorough. Use bullet points.
 3. Only include information present in the extracted facts.
 4. Do NOT invent information. If a section has no relevant facts, state that briefly.
@@ -502,6 +520,8 @@ async function performSummarization() {
         await initSumModel();
 
         const templateId = sumTemplateSelect ? sumTemplateSelect.value : 'freeform';
+        const lang = detectLanguage(text);
+        console.log(`[SUM] Detected language: ${lang}, text length: ${text.length} chars`);
         let response;
 
         if (text.length <= SINGLE_PASS_LIMIT) {
@@ -510,7 +530,7 @@ async function performSummarization() {
             sumProgressBar.style.width = '40%';
             updateStatus('translating', 'Generating summary...');
 
-            const { system, user } = buildSummaryPrompt(text, templateId);
+            const { system, user } = buildSummaryPrompt(text, templateId, lang);
             const messages = [
                 { role: 'system', content: system },
                 { role: 'user', content: user },
@@ -530,7 +550,7 @@ async function performSummarization() {
                 sumProgressText.textContent = `Analyzing section ${i + 1} of ${totalChunks}...`;
                 updateStatus('translating', `Analyzing section ${i + 1}/${totalChunks}...`);
 
-                const facts = await extractChunkFacts(chunks[i], i, totalChunks);
+                const facts = await extractChunkFacts(chunks[i], i, totalChunks, lang);
                 if (facts) allFacts.push(facts);
             }
 
@@ -541,7 +561,7 @@ async function performSummarization() {
             sumProgressText.textContent = 'Composing final report...';
             updateStatus('translating', 'Composing final report...');
 
-            const { system, user } = buildMergePrompt(combinedFacts, templateId);
+            const { system, user } = buildMergePrompt(combinedFacts, templateId, lang);
 
             // If combined facts are still too long, truncate
             const maxFactChars = 3500;

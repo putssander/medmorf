@@ -1273,8 +1273,17 @@
                 document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
                 btn.classList.add('active');
                 document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                try { localStorage.setItem('medmod_active_tab', btn.dataset.tab); } catch (_) {}
             });
         });
+
+        // Restore last active tab
+        try {
+            const saved = localStorage.getItem('medmod_active_tab');
+            if (saved && document.querySelector('.tab-btn[data-tab="' + saved + '"]')) {
+                document.querySelector('.tab-btn[data-tab="' + saved + '"]').click();
+            }
+        } catch (_) {}
     </script>
 </body>
 </html>
