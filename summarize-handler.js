@@ -364,30 +364,30 @@ function buildSummaryPrompt(text, templateId) {
     const template = SUMMARIZE_TEMPLATES[templateId];
     if (!template) {
         return {
-            system: 'You are a clinical document summarization expert. Summarize the following medical document clearly and concisely.',
+            system: 'You are a clinical document summarization expert. Summarize the following medical document clearly and concisely. Always write the summary in the same language as the source document.',
             user: `Summarize this document:\n\n${text}`,
         };
     }
-
-    const lang = template.language === 'nl' ? 'Dutch' : 'English';
 
     const sectionInstructions = template.sections.map(s =>
         `## ${s.title}\n${s.hints}`
     ).join('\n\n');
 
-    const system = `You are a clinical document summarization expert. Your task is to generate a structured report in ${lang} based on the provided medical document.
+    const system = `You are a clinical document summarization expert. Your task is to generate a structured report based on the provided medical document.
 
-Fill in each section below based on the information available in the document. If information for a section is not available in the document, write "Niet beschikbaar" (for Dutch) or "Not available" (for English).
+IMPORTANT: Always write your response in the same language as the source document. Detect the language of the input and match it exactly. Translate section headings to match the source language if needed.
+
+Fill in each section below based on the information available in the document. If information for a section is not available, state that clearly in the source document's language.
 
 Output format:
 ${sectionInstructions}
 
 Rules:
-1. Write your response using the exact section headings shown above.
+1. Write your response using the section headings shown above (translate them to the source document's language if needed).
 2. Be concise but thorough. Use bullet points where appropriate.
 3. Only include information that is present in or can be reasonably inferred from the document.
 4. Do NOT make up information. If a section cannot be filled, state that clearly.
-5. Write in ${lang}.
+5. Always respond in the same language as the source document.
 6. No markdown code blocks. Just use the section headings with ## prefix.`;
 
     const user = `Generate the structured report from this document:\n\n${text}`;
