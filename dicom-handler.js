@@ -258,6 +258,8 @@
     let currentIndex = null;
     let fileHandleMap = null;        // Map<relativePath, FileSystemFileHandle>
     let abortController = null;
+    let sortAborted = false;
+    let sortPaused = false;
 
     // ─────────────────────────────────────────────────────────────────────────
     // DOM CACHE
@@ -279,6 +281,9 @@
         'dicomHierarchyMode',
         'dicomTestMode', 'dicomTestModeOpts', 'dicomMaxIndex', 'dicomMaxSort',
         'dicomProgressETA', 'dicomSortProgressETA',
+        'dicomSortModFilters', 'dicomRequireComplete', 'dicomRequiredMods',
+        'dicomSortPauseBtn', 'dicomSortAbortBtn',
+        'dicomSortErrors', 'dicomSortErrorsSummary', 'dicomSortErrorsBody',
         'dicomApiCheck',
     ];
 
@@ -471,18 +476,26 @@
     // FILE SYSTEM WALKING
     // ─────────────────────────────────────────────────────────────────────────
 
-    async function collectFiles(dirHandle, onProgress) {
+    async function collectFiles(dirHandle, onProgress, signal, maxFiles) {
         const files = [];
         const dirGroups = new Map();   // dirPath → [entry]
         fileHandleMap = new Map();
         let count = 0;
+        const cap = maxFiles || Infinity;
 
         async function walk(handle, path) {
+            if (signal && signal.aborted) return;
+            if (files.length >= cap) return;
             const children = [];
-            for await (const entry of handle.values()) children.push(entry);
+            for await (const entry of handle.values()) {
+                if (signal && signal.aborted) return;
+                children.push(entry);
+            }
 
             const dirFiles = [];
             for (const child of children) {
+                if (signal && signal.aborted) return;
+                if (files.length >= cap) break;
                 const childPath = path ? path + '/' + child.name : child.name;
                 if (child.kind === 'directory') {
                     await walk(child, childPath);
@@ -497,7 +510,8 @@
                     dirFiles.push(entry);
                     fileHandleMap.set(childPath, child);
                     if (++count % 200 === 0) {
-                        onProgress('Scanning files: ' + count + ' found…');
+                        onProgress('Scanning files: ' + count + ' found…' +
+                            (cap < Infinity ? ' (test mode: max ' + cap + ')' : ''));
                         await sleep(0);
                     }
                 }
@@ -634,7 +648,7 @@
 
         // 1. Walk directory ─────────────────────────────────────────────
         uiProgress(0, 0, 'Scanning directory tree…');
-        const { files, dirGroups } = await collectFiles(dirHandle, m => uiProgress(0, 0, m));
+        const { files, dirGroups } = await collectFiles(dirHandle, m => uiProgress(0, 0, m), signal, maxFiles);
         if (signal.aborted) return null;
         uiProgress(0, 0, `Found ${files.length} files in ${dirGroups.size} folders`);
         await sleep(50);
@@ -681,8 +695,14 @@
             if (signal.aborted) return null;
             const batch = toParse.slice(i, i + batchSize);
             for (const entry of batch) {
+                if (signal.aborted) return null;
                 parsed.push(await readTags(entry, tagKeys));
                 done++;
+                // Yield every file to keep UI responsive for abort
+                if (done % 4 === 0) {
+                    uiProgress(done, totalToParse, `Reading DICOM headers: ${done}/${totalToParse}`);
+                    await sleep(0);
+                }
             }
             uiProgress(done, totalToParse, `Reading DICOM headers: ${done}/${totalToParse}`);
             await sleep(0);
@@ -693,10 +713,12 @@
             if (signal.aborted) return null;
             const results = [];
             for (const entry of grp.sampleFiles) {
+                if (signal.aborted) return null;
                 const r = await readTags(entry, tagKeys);
                 results.push(r);
                 parsed.push(r);
                 done++;
+                if (done % 4 === 0) await sleep(0);
             }
             uiProgress(done, totalToParse,
                 `Reading DICOM headers: ${done}/${totalToParse} (inferred ${inferred.length} files)`);
@@ -704,6 +726,8 @@
             const sample = results.find(r => r && r.Modality);
             if (sample) {
                 for (const rest of grp.restFiles) {
+                    // Cap total indexed files (parsed + inferred) in test mode
+                    if (maxFiles < Infinity && (parsed.filter(Boolean).length + inferred.length) >= maxFiles) break;
                     inferred.push({
                         ...sample,
                         _filePath: rest.path,
@@ -830,17 +854,34 @@
     // SORTER  (Phase 2)
     // ─────────────────────────────────────────────────────────────────────────
 
-    function computeSortPlan(index, mode) {
+    function computeSortPlan(index, mode, excludedMods, requiredMods) {
         const plan = [];
         if (!mode) mode = 'nested';
+        if (!excludedMods) excludedMods = new Set();
 
         for (const pat of Object.values(index.patients)) {
+            // Check completeness: skip patient if required modalities not all present
+            if (requiredMods && requiredMods.size) {
+                const patMods = new Set();
+                for (const st of Object.values(pat.studies)) {
+                    for (const se of Object.values(st.series)) {
+                        patMods.add(se.modality);
+                    }
+                }
+                let complete = true;
+                for (const rm of requiredMods) {
+                    if (!patMods.has(rm)) { complete = false; break; }
+                }
+                if (!complete) continue;
+            }
+
             const pFolder = sanitize(pat.patientID);
             for (const st of Object.values(pat.studies)) {
                 const date = fmtDate(st.studyDate) || 'NoDate';
                 const desc = sanitize(st.studyDescription || 'NoDescription');
                 const stFolder = pFolder + '/' + date + '_' + desc;
-                const allSeries = Object.values(st.series);
+                const allSeries = Object.values(st.series)
+                    .filter(se => !excludedMods.has(se.modality));
 
                 if (mode === 'modality') {
                     // Group by modality, then individual series inside
@@ -1027,18 +1068,21 @@
         }
     }
 
-    async function runSort(index, srcDir, dstDir, mode, onProgress, maxCopy) {
+    async function runSort(index, srcDir, dstDir, mode, onProgress, maxCopy, excludedMods, requiredMods) {
         // Safety: never write to the source directory
         if (await srcDir.isSameEntry(dstDir)) {
             throw new Error('Refusing to sort: output directory is the same as the source. Source files must not be modified.');
         }
-        let plan = computeSortPlan(index, mode);
+        sortAborted = false;
+        sortPaused = false;
+        let plan = computeSortPlan(index, mode, excludedMods, requiredMods);
         if (maxCopy && maxCopy < plan.length) {
             plan = plan.slice(0, maxCopy);
         }
         const total = plan.length;
         let copied = 0, errors = 0;
         const log = [];
+        const errorLog = [];
         const createdDirs = new Map();   // path → handle
 
         async function ensureDir(relPath) {
@@ -1056,8 +1100,15 @@
         }
 
         for (let i = 0; i < plan.length; i += H.SORT_BATCH) {
+            if (sortAborted) break;
             const batch = plan.slice(i, i + H.SORT_BATCH);
             for (const item of batch) {
+                if (sortAborted) break;
+                // Pause support — spin until resumed or aborted
+                while (sortPaused && !sortAborted) {
+                    await sleep(200);
+                }
+                if (sortAborted) break;
                 try {
                     const parts = item.dst.split('/');
                     const fileName = parts.pop();
@@ -1075,13 +1126,15 @@
                     log.push('✓ ' + item.src + ' → ' + item.dst);
                 } catch (e) {
                     errors++;
-                    log.push('✗ ' + item.src + ': ' + e.message);
+                    const msg = item.src + ': ' + e.message;
+                    log.push('✗ ' + msg);
+                    errorLog.push(msg);
                 }
             }
-            onProgress(copied, total, errors, log);
+            onProgress(copied, total, errors, log, errorLog);
             await sleep(0);
         }
-        return { copied, errors, total, log };
+        return { copied, errors, total, log, errorLog, aborted: sortAborted };
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -1260,6 +1313,59 @@
         el.dicomResults.style.display = 'block';
     }
 
+    function renderSortModFilters(idx) {
+        const mods = idx.scanInfo.modalities;
+        // Include/exclude checkboxes
+        const c = el.dicomSortModFilters;
+        if (c) {
+            c.innerHTML = '';
+            for (const m of mods) {
+                const lbl = document.createElement('label');
+                lbl.className = 'dicom-sort-mod-cb';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.checked = true;
+                cb.value = m; cb.dataset.sortmod = m;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(' ' + m));
+                c.appendChild(lbl);
+            }
+        }
+        // Required modality checkboxes
+        const r = el.dicomRequiredMods;
+        if (r) {
+            r.innerHTML = '';
+            for (const m of mods) {
+                const lbl = document.createElement('label');
+                lbl.className = 'dicom-sort-mod-cb';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox'; cb.checked = false;
+                cb.value = m; cb.dataset.reqmod = m;
+                lbl.appendChild(cb);
+                lbl.appendChild(document.createTextNode(' ' + m));
+                r.appendChild(lbl);
+            }
+        }
+    }
+
+    function getSortModExclusions() {
+        const excluded = new Set();
+        if (!el.dicomSortModFilters) return excluded;
+        el.dicomSortModFilters.querySelectorAll('input[data-sortmod]').forEach(cb => {
+            if (!cb.checked) excluded.add(cb.value);
+        });
+        return excluded;
+    }
+
+    function getRequiredModalities() {
+        if (!el.dicomRequireComplete || !el.dicomRequireComplete.checked) return null;
+        const req = new Set();
+        if (!el.dicomRequiredMods) return null;
+        el.dicomRequiredMods.querySelectorAll('input[data-reqmod]').forEach(cb => {
+            if (cb.checked) req.add(cb.value);
+        });
+        return req.size ? req : null;
+    }
+
     function renderOptionalTags() {
         const p = el.dicomOptionalTagsPanel;
         if (!p) return;
@@ -1294,14 +1400,14 @@
             h += '<div class="dtag-group" data-modality="' + mod + '">';
             h += '<div class="dtag-group-head">';
             h += '<span class="dtag-group-badge" style="background:' + color + '">' + mod + '</span>';
-            h += '<span class="dtag-group-count" data-mod-count="' + mod + '">' + tags.length + '/' + tags.length + '</span>';
+            h += '<span class="dtag-group-count" data-mod-count="' + mod + '">0/' + tags.length + '</span>';
             h += '</div>';
             h += '<div class="dtag-pills">';
             for (const t of tags) {
                 const entry = TAG_CATALOG.find(c => c.key === t);
                 const hex = entry ? entry.hex.replace('x', '(').replace(/(\w{4})(\w{4})/, '$1,$2)') : '';
-                h += '<label class="dtag-pill checked" title="' + hex + ' — ' + (entry ? entry.kw : '') + '">';
-                h += '<input type="checkbox" data-modality="' + mod + '" data-tag="' + t + '" checked>';
+                h += '<label class="dtag-pill" title="' + hex + ' — ' + (entry ? entry.kw : '') + '">';
+                h += '<input type="checkbox" data-modality="' + mod + '" data-tag="' + t + '">';
                 h += '<span class="dtag-pill-text">' + t + '</span>';
                 h += '</label>';
             }
@@ -1530,6 +1636,7 @@
                     el.dicomProgressBar.classList.remove('indeterminate');
                     renderStats(idx);
                     renderModalityFilters(idx);
+                    renderSortModFilters(idx);
                     renderTable(idx.seriesList);
                     el.dicomSortSection.style.display = 'block';
                     el.dicomExportJSON.disabled = false;
@@ -1584,15 +1691,29 @@
                 el.dicomTargetInfo.style.display = 'flex';
                 el.dicomTargetDirName.textContent = targetDirHandle.name;
                 el.dicomSortBtn.disabled = false;
-                if (currentIndex) renderSortPreview(computeSortPlan(currentIndex, el.dicomHierarchyMode.value));
+                if (currentIndex) renderSortPreview(computeSortPlan(currentIndex, el.dicomHierarchyMode.value,
+                    getSortModExclusions(), getRequiredModalities()));
             } catch (e) { if (e.name !== 'AbortError') console.error(e); }
         });
 
         // Hierarchy mode change → update preview
         el.dicomHierarchyMode.addEventListener('change', () => {
             if (currentIndex && targetDirHandle) {
-                renderSortPreview(computeSortPlan(currentIndex, el.dicomHierarchyMode.value));
+                renderSortPreview(computeSortPlan(currentIndex, el.dicomHierarchyMode.value,
+                    getSortModExclusions(), getRequiredModalities()));
             }
+        });
+
+        // Sort pause/abort
+        el.dicomSortPauseBtn?.addEventListener('click', () => {
+            sortPaused = !sortPaused;
+            el.dicomSortPauseBtn.textContent = sortPaused ? 'Resume' : 'Pause';
+            el.dicomSortPauseBtn.classList.toggle('btn-success', sortPaused);
+            el.dicomSortPauseBtn.classList.toggle('btn-warning', !sortPaused);
+        });
+        el.dicomSortAbortBtn?.addEventListener('click', () => {
+            sortAborted = true;
+            sortPaused = false;
         });
 
         // Sort
@@ -1600,12 +1721,23 @@
             if (!currentIndex || !sourceDirHandle || !targetDirHandle) return;
             el.dicomSortBtn.disabled = true;
             el.dicomSortProgress.style.display = 'block';
+            el.dicomSortPauseBtn.style.display = 'inline-flex';
+            el.dicomSortAbortBtn.style.display = 'inline-flex';
+            el.dicomSortPauseBtn.textContent = 'Pause';
+            el.dicomSortPauseBtn.classList.add('btn-warning');
+            el.dicomSortPauseBtn.classList.remove('btn-success');
+            // Reset collapsible errors
+            if (el.dicomSortErrors) { el.dicomSortErrors.style.display = 'none'; }
+            if (el.dicomSortErrorsBody) { el.dicomSortErrorsBody.innerHTML = ''; }
+            if (el.dicomSortErrorsSummary) { el.dicomSortErrorsSummary.textContent = 'Errors (0)'; }
             try {
                 const maxCopy = el.dicomTestMode.checked ? (parseInt(el.dicomMaxSort?.value) || 20) : 0;
+                const excludedMods = getSortModExclusions();
+                const requiredMods = getRequiredModalities();
                 const sortStart = performance.now();
                 const res = await runSort(currentIndex, sourceDirHandle, targetDirHandle,
                     el.dicomHierarchyMode.value,
-                    (copied, total, errors) => {
+                    (copied, total, errors, log, errorLog) => {
                         const pct = Math.round(copied / total * 100);
                         el.dicomSortProgressBar.style.width = pct + '%';
                         el.dicomSortProgressText.textContent =
@@ -1615,12 +1747,45 @@
                         if (el.dicomSortProgressETA) {
                             el.dicomSortProgressETA.textContent = fmtETA(elapsed, copied, total);
                         }
-                    }, maxCopy);
+                        // Live error display
+                        if (errors > 0 && el.dicomSortErrors) {
+                            el.dicomSortErrors.style.display = 'block';
+                            el.dicomSortErrorsSummary.textContent = 'Errors (' + errors + ')';
+                            el.dicomSortErrorsBody.innerHTML = errorLog
+                                .map(e => '<div class="dicom-error-line">' + escHtml(e) + '</div>').join('');
+                        }
+                    }, maxCopy, excludedMods, requiredMods);
+
+                const label = res.aborted ? 'Aborted' : 'Done';
                 el.dicomSortProgressText.textContent =
-                    'Done — copied ' + res.copied + '/' + res.total +
+                    label + ' — copied ' + res.copied + '/' + res.total +
                     (res.errors ? ' (' + res.errors + ' errors)' : '') +
                     ' in ' + ((performance.now() - sortStart) / 1000).toFixed(1) + 's';
                 if (el.dicomSortProgressETA) el.dicomSortProgressETA.textContent = '';
+
+                // Final error display
+                if (res.errors && el.dicomSortErrors) {
+                    el.dicomSortErrors.style.display = 'block';
+                    el.dicomSortErrorsSummary.textContent = 'Errors (' + res.errors + ')';
+                    el.dicomSortErrorsBody.innerHTML = res.errorLog
+                        .map(e => '<div class="dicom-error-line">' + escHtml(e) + '</div>').join('');
+                }
+
+                // Write error log to output folder
+                if (res.errorLog.length && targetDirHandle) {
+                    try {
+                        const errFile = await targetDirHandle.getFileHandle('sort-errors.txt', { create: true });
+                        const w = await errFile.createWritable();
+                        const header = 'DICOM Sort Error Log — ' + new Date().toISOString() + '\n' +
+                            'Copied: ' + res.copied + '/' + res.total + '\n' +
+                            'Errors: ' + res.errors + '\n\n';
+                        await w.write(header + res.errorLog.join('\n'));
+                        await w.close();
+                    } catch (ex) {
+                        console.error('Could not write error log', ex);
+                    }
+                }
+
                 // Show last N log entries
                 el.dicomSortLog.innerHTML = res.log.slice(-100)
                     .map(l => '<div class="dicom-log-line">' + escHtml(l) + '</div>').join('');
@@ -1629,6 +1794,8 @@
                 el.dicomSortProgressText.textContent = 'Error: ' + e.message;
             } finally {
                 el.dicomSortBtn.disabled = false;
+                el.dicomSortPauseBtn.style.display = 'none';
+                el.dicomSortAbortBtn.style.display = 'none';
             }
         });
     }

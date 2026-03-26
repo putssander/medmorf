@@ -3466,6 +3466,124 @@ details summary:hover {
     border-bottom: 1px solid #f1f5f9;
 }
 
+/* ── Sort filter sections ──────────────────────────────── */
+.dicom-sort-filter-section {
+    margin: 0.6rem 0;
+}
+.dicom-sort-filter-label {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.dicom-sort-filter-label input[type="checkbox"] {
+    accent-color: #0891b2;
+}
+.dicom-sort-mod-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.75rem;
+    margin-top: 0.35rem;
+}
+.dicom-sort-mod-cb {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    background: #f0fdfa;
+    border: 1px solid #ccfbf1;
+    transition: background 0.15s, border-color 0.15s;
+}
+.dicom-sort-mod-cb:hover {
+    background: #ccfbf1;
+    border-color: #5eead4;
+}
+.dicom-sort-mod-cb input[type="checkbox"] {
+    accent-color: #0891b2;
+}
+.dicom-required-mods {
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+#dicomRequireComplete:checked ~ .dicom-required-mods,
+.dicom-sort-filter-section:has(#dicomRequireComplete:checked) .dicom-required-mods {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* ── Sort actions row ──────────────────────────────────── */
+.dicom-sort-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.btn-warning {
+    background: #f59e0b;
+    color: #fff;
+    border: none;
+    padding: 0.35rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-warning:hover { background: #d97706; }
+.btn-success {
+    background: #10b981;
+    color: #fff;
+    border: none;
+    padding: 0.35rem 0.9rem;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.btn-success:hover { background: #059669; }
+
+/* ── Collapsible error log ─────────────────────────────── */
+.dicom-sort-errors {
+    margin-top: 0.75rem;
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    background: #fef2f2;
+    overflow: hidden;
+}
+.dicom-sort-errors summary {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #dc2626;
+    cursor: pointer;
+    user-select: none;
+}
+.dicom-sort-errors summary:hover {
+    background: #fee2e2;
+}
+.dicom-sort-errors-body {
+    max-height: 250px;
+    overflow-y: auto;
+    padding: 0 0.75rem 0.5rem;
+}
+.dicom-error-line {
+    font-size: 0.78rem;
+    font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+    color: #b91c1c;
+    padding: 0.15rem 0;
+    border-bottom: 1px solid #fecaca;
+    word-break: break-all;
+}
+
 /* ── DICOM Responsive ──────────────────────────────────── */
 @media (max-width: 768px) {
     .dicom-stats {
