@@ -1604,13 +1604,15 @@
             lines.push('$elapsed = $stopwatch.Elapsed.ToString("hh\\:mm\\:ss")');
             lines.push('$pctStr = "${pct}%"');
             lines.push('Write-Progress -Activity "DICOM Sort Copy" -Status "$copied / $totalFiles files ($pctStr) - $elapsed elapsed" -PercentComplete $pct');
-            lines.push('if ($groupNum % 10 -eq 0 -or $groupNum -eq $totalGroups) {');
-            lines.push('    Write-Host "  [$elapsed] Group $groupNum/$totalGroups - $copied copied, $errors errors ($pctStr)" -ForegroundColor Gray');
-            lines.push('}');
+            lines.push('# Inline progress on same line (always visible, updates in-place)');
+            lines.push('$status = "  [$elapsed] Group $groupNum/$totalGroups - $copied copied, $errors errors ($pctStr)"');
+            lines.push('$pad = [math]::Max(0, 80 - $status.Length)');
+            lines.push('Write-Host ("`r$status" + (" " * $pad)) -NoNewline -ForegroundColor Gray');
             lines.push('');
         }
 
         // Summary
+        lines.push('Write-Host ""  # newline after inline progress');
         lines.push('# ===================================================================');
         lines.push('# SUMMARY');
         lines.push('# ===================================================================');
