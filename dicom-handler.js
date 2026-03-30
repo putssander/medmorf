@@ -274,7 +274,7 @@
         'dicomStats', 'dicomPatientCount', 'dicomStudyCount', 'dicomSeriesCount',
         'dicomFileCount', 'dicomParsedCount', 'dicomSkippedCount',
         'dicomResults', 'dicomResultsBody', 'dicomModalityFilters',
-        'dicomExportJSON', 'dicomExportXLSX',
+        'dicomExportJSON', 'dicomExportXLSX', 'dicomExportRobocopy',
         'dicomSortSection', 'dicomSelectTargetDir', 'dicomTargetInfo', 'dicomTargetDirName',
         'dicomSortBtn', 'dicomSortProgress', 'dicomSortProgressBar', 'dicomSortProgressText',
         'dicomSortLog', 'dicomOptionalTagsPanel', 'dicomSettingsBody', 'dicomSettingsToggle',
@@ -1226,6 +1226,343 @@
         XLSX.writeFile(wb, 'dicom-index-' + new Date().toISOString().slice(0, 10) + '.xlsx');
     }
 
+    function exportRobocopyScript(index, mode, excludedMods, requiredMods) {
+        const plan = computeSortPlan(index, mode, excludedMods, requiredMods);
+        if (!plan.length) { alert('No files in sort plan. Check modality filters.'); return; }
+
+        // Show path configuration dialog before generating script
+        const srcName = index.scanInfo.sourcePath || '';
+        showRobocopyDialog(srcName, plan, index, mode, excludedMods, requiredMods);
+    }
+
+    function showRobocopyDialog(srcName, plan, index, mode) {
+        // Remove any existing dialog
+        const existing = document.getElementById('dicomRobocopyDialog');
+        if (existing) existing.remove();
+
+        const totalFiles = plan.length;
+
+        const backdrop = document.createElement('div');
+        backdrop.id = 'dicomRobocopyDialog';
+        backdrop.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;' +
+            'background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;' +
+            'justify-content:center;backdrop-filter:blur(2px);';
+
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:var(--card-bg, #1e293b);color:var(--text, #e2e8f0);' +
+            'border-radius:12px;padding:1.5rem;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.5);' +
+            'font-family:inherit;';
+
+        dialog.innerHTML = `
+            <h3 style="margin:0 0 0.25rem;color:#0891b2;font-size:1.1rem;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none"
+                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                     style="vertical-align:text-bottom;margin-right:0.3rem;">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Robocopy Sort Script
+            </h3>
+            <p style="margin:0 0 1rem;font-size:0.85rem;color:#94a3b8;">
+                ${totalFiles} files · ${index.scanInfo.patientCount} patients · ${mode} mode<br>
+                Enter the full Windows/UNC paths. UNC paths are recommended for speed.
+            </p>
+            <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#cbd5e1;">
+                Source path <span style="font-weight:400;color:#64748b;">(where the DICOM folder "${escHtml(srcName)}" lives)</span>
+            </label>
+            <input id="rcSrcPath" type="text" spellcheck="false"
+                placeholder="e.g. \\\\server\\share\\path\\to\\${srcName}"
+                style="width:100%;box-sizing:border-box;padding:0.5rem 0.6rem;border-radius:6px;border:1px solid #334155;
+                       background:#0f172a;color:#e2e8f0;font-family:monospace;font-size:0.85rem;margin-bottom:0.75rem;"
+                value="">
+            <label style="display:block;font-size:0.8rem;font-weight:600;margin-bottom:0.25rem;color:#cbd5e1;">
+                Destination path <span style="font-weight:400;color:#64748b;">(where sorted output goes)</span>
+            </label>
+            <input id="rcDstPath" type="text" spellcheck="false"
+                placeholder="e.g. D:\\DICOM_Sorted  or  \\\\server\\output\\sorted"
+                style="width:100%;box-sizing:border-box;padding:0.5rem 0.6rem;border-radius:6px;border:1px solid #334155;
+                       background:#0f172a;color:#e2e8f0;font-family:monospace;font-size:0.85rem;margin-bottom:0.75rem;"
+                value="">
+            <div style="background:#0f172a;border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:1rem;font-size:0.78rem;color:#94a3b8;">
+                <strong style="color:#22d3ee;">Tip:</strong> UNC paths (\\\\server\\share) are faster than mounted drives
+                for robocopy — it talks SMB directly without OS mount overhead.<br>
+                You can also edit these paths in the downloaded .ps1 file later.
+            </div>
+            <div style="display:flex;gap:0.6rem;justify-content:flex-end;">
+                <button id="rcCancel" style="padding:0.45rem 1rem;border-radius:6px;border:1px solid #334155;
+                    background:transparent;color:#94a3b8;cursor:pointer;font-size:0.85rem;">Cancel</button>
+                <button id="rcDownload" style="padding:0.45rem 1rem;border-radius:6px;border:none;
+                    background:#0891b2;color:white;cursor:pointer;font-size:0.85rem;font-weight:600;">
+                    Download Script</button>
+            </div>`;
+
+        backdrop.appendChild(dialog);
+        document.body.appendChild(backdrop);
+
+        // Close on backdrop click
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
+        dialog.querySelector('#rcCancel').addEventListener('click', () => backdrop.remove());
+
+        // Focus source input
+        const srcInput = dialog.querySelector('#rcSrcPath');
+        const dstInput = dialog.querySelector('#rcDstPath');
+        srcInput.focus();
+
+        dialog.querySelector('#rcDownload').addEventListener('click', () => {
+            const userSrc = srcInput.value.trim();
+            const userDst = dstInput.value.trim();
+            backdrop.remove();
+            generateRobocopyFile(plan, index, mode, userSrc, userDst);
+        });
+
+        // Enter key in dest input triggers download
+        dstInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') dialog.querySelector('#rcDownload').click();
+        });
+    }
+
+    function generateRobocopyFile(plan, index, mode, userSrc, userDst) {
+        // Group by (sourceDir → destDir) for efficient robocopy calls
+        const groups = new Map();
+        for (const item of plan) {
+            const srcParts = item.src.split('/');
+            const srcFile = srcParts.pop();
+            const srcDir = srcParts.join('\\') || '.';
+            const dstParts = item.dst.split('/');
+            dstParts.pop();
+            const dstDir = dstParts.join('\\');
+            const key = srcDir + '|' + dstDir;
+            if (!groups.has(key)) groups.set(key, []);
+            groups.get(key).push(srcFile);
+        }
+
+        const totalFiles = plan.length;
+        const totalGroups = groups.size;
+        const srcName = index.scanInfo.sourcePath || 'SOURCE_FOLDER';
+        const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-');
+
+        // Use user-provided paths or placeholders
+        const scriptSrc = userSrc || srcName.replace(/\//g, '\\');
+        const scriptDst = userDst || 'SET_OUTPUT_PATH_HERE';
+
+        const lines = [];
+        lines.push('#Requires -Version 5.1');
+        lines.push('<#');
+        lines.push('.SYNOPSIS');
+        lines.push('    DICOM Robocopy Sort Script — generated by MedMod DICOM Indexer');
+        lines.push('    Generated: ' + new Date().toISOString());
+        lines.push('    Source scan: ' + srcName);
+        lines.push('    Patients: ' + index.scanInfo.patientCount + '  |  Studies: ' + index.scanInfo.studyCount +
+                   '  |  Series: ' + index.scanInfo.seriesCount + '  |  Files: ' + totalFiles);
+        lines.push('    Sort mode: ' + mode);
+        lines.push('');
+        lines.push('.DESCRIPTION');
+        lines.push('    This script copies DICOM files from a source directory to an organized');
+        lines.push('    output structure using robocopy for maximum speed and reliability.');
+        lines.push('    Files are COPIED (never moved or deleted). Source is never modified.');
+        lines.push('');
+        lines.push('.NOTES');
+        lines.push('    - Review $SourceRoot and $DestRoot below before running');
+        lines.push('    - Supports UNC paths (e.g. \\\\server\\share\\path)');
+        lines.push('    - UNC paths are faster than mounted drives for robocopy');
+        lines.push('    - Robocopy retries failed copies automatically (3 retries, 5s wait)');
+        lines.push('    - A detailed log file is written next to this script');
+        lines.push('    - Run as: .\\dicom-sort-' + stamp + '.ps1');
+        lines.push('#>');
+        lines.push('');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('# CONFIGURATION — Review these paths before running');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('');
+        lines.push('$SourceRoot = "' + scriptSrc.replace(/"/g, '`"') + '"');
+        lines.push('$DestRoot   = "' + scriptDst.replace(/"/g, '`"') + '"');
+        lines.push('');
+        lines.push('# Robocopy options (safe defaults — copy only, no delete, with retries)');
+        lines.push('$RobocopyOpts = @(');
+        lines.push('    "/COPY:DAT"    # Copy Data, Attributes, Timestamps');
+        lines.push('    "/R:3"         # Retry 3 times on failure');
+        lines.push('    "/W:5"         # Wait 5 seconds between retries');
+        lines.push('    "/NP"          # No per-file progress (cleaner output)');
+        lines.push('    "/NDL"         # No directory listing');
+        lines.push('    "/NFL"         # No file listing (we log ourselves)');
+        lines.push('    "/NJH"         # No job header');
+        lines.push('    "/NJS"         # No job summary');
+        lines.push(')');
+        lines.push('');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('# SAFETY CHECKS — Do not modify below unless you know what you are doing');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('');
+        lines.push('$ErrorActionPreference = "Stop"');
+        lines.push('$LogFile = Join-Path $PSScriptRoot ("dicom-sort-log-" + (Get-Date -Format "yyyy-MM-dd-HHmmss") + ".txt")');
+        lines.push('');
+        lines.push('function Write-Log {');
+        lines.push('    param([string]$Message, [string]$Level = "INFO")');
+        lines.push('    $entry = "[$(Get-Date -Format \'yyyy-MM-dd HH:mm:ss\')] [$Level] $Message"');
+        lines.push('    Add-Content -Path $LogFile -Value $entry');
+        lines.push('    switch ($Level) {');
+        lines.push('        "ERROR"   { Write-Host $entry -ForegroundColor Red }');
+        lines.push('        "WARN"    { Write-Host $entry -ForegroundColor Yellow }');
+        lines.push('        "SUCCESS" { Write-Host $entry -ForegroundColor Green }');
+        lines.push('        default   { Write-Host $entry }');
+        lines.push('    }');
+        lines.push('}');
+        lines.push('');
+        lines.push('# Validate paths');
+        lines.push('if ($DestRoot -eq "SET_OUTPUT_PATH_HERE" -or [string]::IsNullOrWhiteSpace($DestRoot)) {');
+        lines.push('    Write-Host "" ');
+        lines.push('    Write-Host "  ERROR: Destination path is not set." -ForegroundColor Red');
+        lines.push('    Write-Host "  Open this .ps1 file in a text editor And set the $DestRoot variable." -ForegroundColor Yellow');
+        lines.push('    Write-Host "" ');
+        lines.push('    exit 1');
+        lines.push('}');
+        lines.push('');
+        lines.push('if (-not (Test-Path $SourceRoot)) {');
+        lines.push('    Write-Host "  ERROR: Source path not found: $SourceRoot" -ForegroundColor Red');
+        lines.push('    Write-Host "  Check that the network share is accessible and the path is correct." -ForegroundColor Yellow');
+        lines.push('    exit 1');
+        lines.push('}');
+        lines.push('');
+        lines.push('# Resolve to full paths to prevent confusion');
+        lines.push('$SourceRoot = (Resolve-Path $SourceRoot).Path.TrimEnd("\\")  ');
+        lines.push('');
+        lines.push('# Safety: source and dest must differ');
+        lines.push('if ($SourceRoot -eq $DestRoot.TrimEnd("\\")) {');
+        lines.push('    Write-Host "  ERROR: Source and destination are the same. Aborting." -ForegroundColor Red');
+        lines.push('    exit 1');
+        lines.push('}');
+        lines.push('');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('# SUMMARY & CONFIRMATION');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('');
+        lines.push('Write-Host ""');
+        lines.push('Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan');
+        lines.push('Write-Host "  ║       DICOM Robocopy Sort Script — MedMod               ║" -ForegroundColor Cyan');
+        lines.push('Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan');
+        lines.push('Write-Host ""');
+        lines.push('Write-Host "  Source:       $SourceRoot" -ForegroundColor White');
+        lines.push('Write-Host "  Destination:  $DestRoot" -ForegroundColor White');
+        lines.push('Write-Host "  Total files:  ' + totalFiles + '" -ForegroundColor White');
+        lines.push('Write-Host "  Folder groups: ' + totalGroups + '" -ForegroundColor White');
+        lines.push('Write-Host "  Sort mode:    ' + mode + '" -ForegroundColor White');
+        lines.push('Write-Host "  Log file:     $LogFile" -ForegroundColor White');
+        lines.push('Write-Host ""');
+        lines.push('Write-Host "  This script will COPY files. Source files are NEVER moved or deleted." -ForegroundColor Green');
+        lines.push('Write-Host ""');
+        lines.push('');
+        lines.push('$confirm = Read-Host "  Proceed with copy? (yes/no)"');
+        lines.push('if ($confirm -notin @("yes","y","Y","Yes","YES")) {');
+        lines.push('    Write-Host "  Aborted by user." -ForegroundColor Yellow');
+        lines.push('    exit 0');
+        lines.push('}');
+        lines.push('Write-Host ""');
+        lines.push('');
+        lines.push('Write-Log "Starting DICOM sort copy"');
+        lines.push('Write-Log "Source: $SourceRoot"');
+        lines.push('Write-Log "Destination: $DestRoot"');
+        lines.push('Write-Log "Total files: ' + totalFiles + ', Groups: ' + totalGroups + ', Mode: ' + mode + '"');
+        lines.push('');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('# COPY OPERATIONS');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('');
+        lines.push('$copied = 0');
+        lines.push('$errors = 0');
+        lines.push('$groupNum = 0');
+        lines.push('$totalFiles = ' + totalFiles);
+        lines.push('$totalGroups = ' + totalGroups);
+        lines.push('$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()');
+        lines.push('');
+
+        // Emit one robocopy block per (srcDir, dstDir) group
+        let groupIdx = 0;
+        for (const [key, files] of groups) {
+            groupIdx++;
+            const [srcDir, dstDir] = key.split('|');
+            const fileCount = files.length;
+
+            lines.push('# ── Group ' + groupIdx + '/' + totalGroups + ' (' + fileCount + ' files) ──');
+            lines.push('$groupNum++');
+            lines.push('$srcDir = Join-Path $SourceRoot "' + srcDir + '"');
+            lines.push('$dstDir = Join-Path $DestRoot "' + dstDir + '"');
+            lines.push('');
+            lines.push('# Create destination directory');
+            lines.push('if (-not (Test-Path $dstDir)) {');
+            lines.push('    New-Item -ItemType Directory -Path $dstDir -Force | Out-Null');
+            lines.push('}');
+            lines.push('');
+
+            // Robocopy can accept multiple filenames in one call
+            // Group into batches of ~50 files to avoid command-line length limits
+            const BATCH = 50;
+            for (let b = 0; b < files.length; b += BATCH) {
+                const batch = files.slice(b, b + BATCH);
+                const fileArgs = batch.map(f => '"' + f.replace(/"/g, '`"') + '"').join(' ');
+                lines.push('$robocopyArgs = @($srcDir, $dstDir, ' +
+                    batch.map(f => '"' + f.replace(/"/g, '`"') + '"').join(', ') +
+                    ') + $RobocopyOpts');
+                lines.push('$result = & robocopy @robocopyArgs 2>&1');
+                lines.push('# Robocopy exit codes: 0=no copy needed, 1=copied OK, 2+=errors/extras');
+                lines.push('if ($LASTEXITCODE -le 1) {');
+                lines.push('    $copied += ' + batch.length);
+                lines.push('} elseif ($LASTEXITCODE -le 3) {');
+                lines.push('    # Some files copied, some extra — still OK');
+                lines.push('    $copied += ' + batch.length);
+                lines.push('} else {');
+                lines.push('    $errors += ' + batch.length);
+                lines.push('    Write-Log "Robocopy error (exit $LASTEXITCODE) in group $groupNum — src: $srcDir" "ERROR"');
+                lines.push('    foreach ($line in $result) { Write-Log "  $line" "ERROR" }');
+                lines.push('}');
+                lines.push('');
+            }
+
+            // Progress update after each group
+            lines.push('$pct = [math]::Round(($copied + $errors) / $totalFiles * 100)');
+            lines.push('$elapsed = $stopwatch.Elapsed.ToString("hh\\:mm\\:ss")');
+            lines.push('Write-Progress -Activity "DICOM Sort Copy" -Status "$copied / $totalFiles files ($pct%) — $elapsed elapsed" -PercentComplete $pct');
+            lines.push('if ($groupNum % 10 -eq 0 -or $groupNum -eq $totalGroups) {');
+            lines.push('    Write-Host "  [$elapsed] Group $groupNum/$totalGroups — $copied copied, $errors errors ($pct%)" -ForegroundColor Gray');
+            lines.push('}');
+            lines.push('');
+        }
+
+        // Summary
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('# SUMMARY');
+        lines.push('# ═══════════════════════════════════════════════════════════════════════');
+        lines.push('');
+        lines.push('$stopwatch.Stop()');
+        lines.push('$duration = $stopwatch.Elapsed.ToString("hh\\:mm\\:ss")');
+        lines.push('Write-Progress -Activity "DICOM Sort Copy" -Completed');
+        lines.push('');
+        lines.push('Write-Host ""');
+        lines.push('Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan');
+        lines.push('Write-Host "  ║  COPY COMPLETE                                         ║" -ForegroundColor Cyan');
+        lines.push('Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan');
+        lines.push('Write-Host ""');
+        lines.push('Write-Host "  Files copied:  $copied / $totalFiles" -ForegroundColor Green');
+        lines.push('Write-Host "  Errors:        $errors" -ForegroundColor $(if ($errors -gt 0) { "Red" } else { "Green" })');
+        lines.push('Write-Host "  Duration:      $duration" -ForegroundColor White');
+        lines.push('Write-Host "  Log file:      $LogFile" -ForegroundColor White');
+        lines.push('Write-Host "  Destination:   $DestRoot" -ForegroundColor White');
+        lines.push('Write-Host ""');
+        lines.push('');
+        lines.push('Write-Log "Copy complete — $copied copied, $errors errors in $duration" $(if ($errors -gt 0) { "WARN" } else { "SUCCESS" })');
+        lines.push('');
+        lines.push('if ($errors -gt 0) {');
+        lines.push('    Write-Host "  WARNING: $errors file(s) failed to copy. Check the log file for details." -ForegroundColor Yellow');
+        lines.push('    Write-Host "  You can re-run this script safely — robocopy will skip files already copied." -ForegroundColor Yellow');
+        lines.push('    Write-Host ""');
+        lines.push('}');
+        lines.push('');
+        lines.push('Read-Host "  Press Enter to close"');
+
+        const script = lines.join('\r\n');
+        const blob = new Blob([script], { type: 'text/plain;charset=utf-8' });
+        saveAs(blob, 'dicom-sort-' + stamp + '.ps1');
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // UI HELPERS
     // ─────────────────────────────────────────────────────────────────────────
@@ -1641,6 +1978,7 @@
                     el.dicomSortSection.style.display = 'block';
                     el.dicomExportJSON.disabled = false;
                     el.dicomExportXLSX.disabled = false;
+                    if (el.dicomExportRobocopy) el.dicomExportRobocopy.disabled = false;
                     uiProgress(1, 1,
                         'Done — ' + idx.scanInfo.fileCount + ' DICOM files, ' +
                         idx.scanInfo.patientCount + ' patients in ' +
@@ -1664,6 +2002,10 @@
         // Export
         el.dicomExportJSON.addEventListener('click', () => { if (currentIndex) exportJSON(currentIndex); });
         el.dicomExportXLSX.addEventListener('click', () => { if (currentIndex) exportXLSX(currentIndex); });
+        if (el.dicomExportRobocopy) el.dicomExportRobocopy.addEventListener('click', () => {
+            if (currentIndex) exportRobocopyScript(currentIndex, el.dicomHierarchyMode.value,
+                getSortModExclusions(), getRequiredModalities());
+        });
 
         // Settings toggle
         el.dicomSettingsToggle?.addEventListener('click', () => {
