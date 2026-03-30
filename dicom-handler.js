@@ -1288,13 +1288,20 @@
                 for robocopy — it talks SMB directly without OS mount overhead.<br>
                 You can also edit these paths in the downloaded .ps1 file later.
             </div>
-            <div style="display:flex;gap:0.6rem;justify-content:flex-end;">
+            <div style="display:flex;gap:0.6rem;justify-content:flex-end;align-items:center;">
+                <button id="rcInstructions" style="padding:0.45rem 1rem;border-radius:6px;border:1px solid #334155;
+                    background:transparent;color:#94a3b8;cursor:pointer;font-size:0.85rem;margin-right:auto;"
+                    title="Show setup instructions for permissions, paths, and troubleshooting">
+                    &#9432; Instructions</button>
                 <button id="rcCancel" style="padding:0.45rem 1rem;border-radius:6px;border:1px solid #334155;
                     background:transparent;color:#94a3b8;cursor:pointer;font-size:0.85rem;">Cancel</button>
                 <button id="rcDownload" style="padding:0.45rem 1rem;border-radius:6px;border:none;
                     background:#0891b2;color:white;cursor:pointer;font-size:0.85rem;font-weight:600;">
                     Download Script</button>
-            </div>`;
+            </div>
+            <div id="rcInstructionsPanel" style="display:none;margin-top:1rem;background:#0f172a;border-radius:6px;
+                padding:0.8rem 1rem;font-size:0.78rem;color:#cbd5e1;max-height:320px;overflow-y:auto;
+                border:1px solid #1e293b;line-height:1.6;white-space:pre-wrap;font-family:monospace;"></div>`;
 
         backdrop.appendChild(dialog);
         document.body.appendChild(backdrop);
@@ -1302,6 +1309,22 @@
         // Close on backdrop click
         backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
         dialog.querySelector('#rcCancel').addEventListener('click', () => backdrop.remove());
+
+        // Instructions toggle
+        const instrPanel = dialog.querySelector('#rcInstructionsPanel');
+        const instrBtn = dialog.querySelector('#rcInstructions');
+        instrBtn.addEventListener('click', () => {
+            const open = instrPanel.style.display !== 'none';
+            instrPanel.style.display = open ? 'none' : 'block';
+            instrBtn.style.color = open ? '#94a3b8' : '#22d3ee';
+            instrBtn.style.borderColor = open ? '#334155' : '#0891b2';
+            if (!instrPanel.textContent) {
+                instrPanel.textContent = generateRobocopyReadme(
+                    new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-'),
+                    srcInput.value.trim() || srcName, dstInput.value.trim() || 'SET_OUTPUT_PATH_HERE',
+                    totalFiles, 0, mode, index);
+            }
+        });
 
         // Focus source input
         const srcInput = dialog.querySelector('#rcSrcPath');
@@ -1408,6 +1431,13 @@
         lines.push('    }');
         lines.push('}');
         lines.push('');
+        lines.push('# Strip PowerShell provider prefixes (e.g. Microsoft.PowerShell.Core\FileSystem::)');
+        lines.push('# These prefixes break external tools like robocopy that expect plain paths.');
+        lines.push('function Clean-Path([string]$p) {');
+        lines.push('    $p = $p -replace "^Microsoft\\.PowerShell\\.\\w+\\\\\\w+::", ""');
+        lines.push('    return $p.TrimEnd("\\")  ');
+        lines.push('}');
+        lines.push('');
         lines.push('# Validate paths');
         lines.push('if ($DestRoot -eq "SET_OUTPUT_PATH_HERE" -or [string]::IsNullOrWhiteSpace($DestRoot)) {');
         lines.push('    Write-Host "" ');
@@ -1423,8 +1453,9 @@
         lines.push('    exit 1');
         lines.push('}');
         lines.push('');
-        lines.push('# Resolve to full paths to prevent confusion');
-        lines.push('$SourceRoot = (Resolve-Path $SourceRoot).ProviderPath.TrimEnd("\\")  ');
+        lines.push('# Resolve to full paths and strip any PowerShell provider prefix');
+        lines.push('$SourceRoot = Clean-Path (Resolve-Path $SourceRoot).ProviderPath');
+        lines.push('$DestRoot = Clean-Path $DestRoot');
         lines.push('');
         lines.push('# Safety: source and dest must differ');
         lines.push('if ($SourceRoot -eq $DestRoot.TrimEnd("\\")) {');
@@ -1485,8 +1516,8 @@
 
             lines.push('# -- Group ' + groupIdx + '/' + totalGroups + ' (' + fileCount + ' files) --');
             lines.push('$groupNum++');
-            lines.push('$srcDir = Join-Path $SourceRoot "' + srcDir + '"');
-            lines.push('$dstDir = Join-Path $DestRoot "' + dstDir + '"');
+            lines.push('$srcDir = "$SourceRoot\\' + srcDir + '"');
+            lines.push('$dstDir = "$DestRoot\\' + dstDir + '"');
             lines.push('');
             lines.push('# Create destination directory');
             lines.push('if (-not (Test-Path $dstDir)) {');
@@ -1565,11 +1596,6 @@
         const bom = new Uint8Array([0xEF, 0xBB, 0xBF]);
         const blob = new Blob([bom, script], { type: 'text/plain;charset=utf-8' });
         saveAs(blob, 'dicom-sort-' + stamp + '.ps1');
-
-        // Generate companion README
-        const readme = generateRobocopyReadme(stamp, scriptSrc, scriptDst, totalFiles, totalGroups, mode, index);
-        const readmeBlob = new Blob([bom, readme], { type: 'text/plain;charset=utf-8' });
-        saveAs(readmeBlob, 'dicom-sort-' + stamp + '-README.txt');
     }
 
     function generateRobocopyReadme(stamp, scriptSrc, scriptDst, totalFiles, totalGroups, mode, index) {
