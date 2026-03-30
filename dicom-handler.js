@@ -1424,7 +1424,7 @@
         lines.push('}');
         lines.push('');
         lines.push('# Resolve to full paths to prevent confusion');
-        lines.push('$SourceRoot = (Resolve-Path $SourceRoot).Path.TrimEnd("\\")  ');
+        lines.push('$SourceRoot = (Resolve-Path $SourceRoot).ProviderPath.TrimEnd("\\")  ');
         lines.push('');
         lines.push('# Safety: source and dest must differ');
         lines.push('if ($SourceRoot -eq $DestRoot.TrimEnd("\\")) {');
