@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180" fill="none" role="img" aria-label="Medmorf">
+  <defs>
+    <linearGradient id="atBg" x1="0" y1="0" x2="180" y2="180" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#102033"/>
+      <stop offset="1" stop-color="#1E3A5F"/>
+    </linearGradient>
+    <linearGradient id="atM" x1="20" y1="40" x2="160" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.5" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="180" height="180" rx="40" fill="url(#atBg)"/>
+  <path d="M40 138V58c0-9 11-13.5 17.3-7.1L90 83.6l32.7-32.7C129 44.5 140 49 140 58v80"
+        stroke="url(#atM)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="40" cy="60" r="6" fill="#06B6D4"/>
+  <circle cx="40" cy="90" r="6" fill="#7C3AED"/>
+  <circle cx="140" cy="90" r="6" fill="#10B981"/>
+</svg>

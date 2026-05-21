@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-label="Medmorf mark">
+  <defs>
+    <linearGradient id="mmGrad" x1="12" y1="20" x2="116" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.48" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="mmGradSoft" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ECFEFF"/>
+      <stop offset="1" stop-color="#F3E8FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="128" height="128" rx="28" fill="url(#mmGradSoft)"/>
+  <!-- input fragments -->
+  <rect x="14" y="36" width="14" height="14" rx="4" fill="#2563EB"/>
+  <rect x="14" y="56" width="14" height="14" rx="4" fill="#06B6D4"/>
+  <rect x="14" y="76" width="14" height="14" rx="4" fill="#10B981"/>
+  <!-- morphing M -->
+  <path d="M38 96V40c0-7 8.4-10.5 13.3-5.6L70 53.1l18.7-18.7C93.6 29.5 102 33 102 40v56"
+        stroke="url(#mmGrad)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- output -->
+  <rect x="108" y="56" width="14" height="14" rx="4" fill="#7C3AED"/>
+</svg>

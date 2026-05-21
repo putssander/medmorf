@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" fill="none" role="img" aria-label="Medmorf">
+  <defs>
+    <linearGradient id="g512" x1="56" y1="84" x2="456" y2="428" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2563EB"/>
+      <stop offset="0.48" stop-color="#06B6D4"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="512" height="512" rx="116" fill="#102033"/>
+  <rect x="60" y="156" width="52" height="52" rx="14" fill="#2563EB"/>
+  <rect x="60" y="230" width="52" height="52" rx="14" fill="#06B6D4"/>
+  <rect x="60" y="304" width="52" height="52" rx="14" fill="#10B981"/>
+  <path d="M156 384V164c0-26 32-40 50-22l74 74 74-74c18-18 50-4 50 22v220"
+        stroke="url(#g512)" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <rect x="426" y="230" width="52" height="52" rx="14" fill="#7C3AED"/>
+</svg>

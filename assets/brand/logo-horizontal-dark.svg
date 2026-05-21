@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="64" viewBox="0 0 280 64" fill="none" role="img" aria-label="Medmorf">
+  <defs>
+    <linearGradient id="lhd" x1="6" y1="10" x2="62" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="0.48" stop-color="#22D3EE"/>
+      <stop offset="1" stop-color="#A78BFA"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="18" width="9" height="9" rx="2.5" fill="#60A5FA"/>
+  <rect x="6" y="30" width="9" height="9" rx="2.5" fill="#22D3EE"/>
+  <rect x="6" y="42" width="9" height="9" rx="2.5" fill="#34D399"/>
+  <path d="M22 50V18c0-3.6 4.4-5.4 6.9-2.9L40 26l11.1-10.9C53.6 12.6 58 14.4 58 18v32"
+        stroke="url(#lhd)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <text x="76" y="42" font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif"
+        font-size="30" font-weight="800" letter-spacing="-1.1" fill="#FFFFFF">Medmorf</text>
+</svg>

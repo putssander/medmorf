@@ -6,21 +6,88 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>MedMorf — Translate & Anonymize</title>
+    <title>Medmorf — Medical Data Transformation</title>
+    <meta name="description" content="Medmorf transforms medical data into safer, structured, usable formats — speech-to-text, translation, de-identification, document merging — 100% in-browser.">
+    <meta name="theme-color" content="#102033">
+    <meta name="color-scheme" content="light dark">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Medmorf — Medical Data Transformation">
+    <meta property="og:description" content="Morph medical data into clean, privacy-aware output. Runs entirely in your browser.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/brand/icon-512.svg">
+
+    <!-- Favicons / app icons -->
+    <link rel="icon" href="assets/brand/favicon.svg" type="image/svg+xml">
+    <link rel="alternate icon" href="assets/brand/favicon-light.svg" type="image/svg+xml" media="(prefers-color-scheme: dark)">
+    <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.svg">
+    <link rel="mask-icon" href="assets/brand/safari-pinned-tab.svg" color="#2563EB">
+    <link rel="manifest" href="manifest.webmanifest">
+
+    <!-- Inter + JetBrains Mono -->
+    <link rel="preconnect" href="https://rsms.me/">
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
+
     <script>
-        window.MEDMORF_BUILD_ID = '2026-03-23-cachefix-8';
+        window.MEDMORF_BUILD_ID = '2026-05-21-brand-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
-    <link rel="stylesheet" href="styles.css?v=2026-03-23-cachefix-8">
+
+    <!-- Tailwind CSS (Play CDN) -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', '"IBM Plex Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace']
+                    },
+                    colors: {
+                        ink:      '#102033',
+                        clinical: '#2563EB',
+                        morph:    '#06B6D4',
+                        translate:'#7C3AED',
+                        privacy:  '#10B981',
+                        ice:      '#ECFEFF',
+                        lavender: '#F3E8FF'
+                    },
+                    backgroundImage: {
+                        'mm-gradient': 'linear-gradient(135deg, #2563EB 0%, #06B6D4 48%, #7C3AED 100%)',
+                        'mm-gradient-soft': 'linear-gradient(135deg, #ECFEFF 0%, #F3E8FF 100%)'
+                    },
+                    boxShadow: {
+                        'mm-soft': '0 18px 50px rgba(16, 32, 51, 0.12)',
+                        'mm-ring': '0 0 0 3px rgba(37, 99, 235, 0.18)'
+                    },
+                    borderRadius: {
+                        'mm-sm': '8px',
+                        'mm-md': '14px',
+                        'mm-lg': '24px'
+                    },
+                    letterSpacing: {
+                        'mm-tight': '-0.04em'
+                    }
+                }
+            }
+        };
+    </script>
+
+    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-brand-1">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-05-21-brand-1">
     <script type="importmap">
     {
         "imports": {
-            "sharp": "./stubs/null-module.js",
-            "fs": "./stubs/empty-module.js",
-            "path": "./stubs/empty-module.js",
-            "url": "./stubs/empty-module.js",
-            "onnxruntime-node": "./stubs/null-module.js",
+            "sharp": "./src/stubs/null-module.js",
+            "fs": "./src/stubs/empty-module.js",
+            "path": "./src/stubs/empty-module.js",
+            "url": "./src/stubs/empty-module.js",
+            "onnxruntime-node": "./src/stubs/null-module.js",
             "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js",
             "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs",
             "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.min.mjs",
@@ -36,16 +103,26 @@
     <div class="container">
         <header>
             <div class="header-content">
-                <div class="logo">
-                    <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="23 4 23 10 17 10"></polyline>
-                        <polyline points="1 20 1 14 7 14"></polyline>
-                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                    </svg>
+                <a href="./" class="logo no-underline" aria-label="Medmorf — home">
+                    <span class="logo-icon" role="img" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" fill="none">
+                            <defs>
+                                <linearGradient id="hdrGrad" x1="4" y1="6" x2="32" y2="30" gradientUnits="userSpaceOnUse">
+                                    <stop stop-color="#2563EB"/>
+                                    <stop offset="0.5" stop-color="#06B6D4"/>
+                                    <stop offset="1" stop-color="#7C3AED"/>
+                                </linearGradient>
+                            </defs>
+                            <rect x="0" y="0" width="36" height="36" rx="9" fill="#102033"/>
+                            <path d="M8 28V12c0-2.6 3.1-3.9 5-2L18 15l5-5c1.9-1.9 5-.6 5 2v16"
+                                  stroke="url(#hdrGrad)" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                        </svg>
+                    </span>
                     <div class="logo-text">
-                        <h1>MedMorf</h1>
+                        <h1>Medmorf</h1>
+                        <p class="logo-tagline">Medical data transformation</p>
                     </div>
-                </div>
+                </a>
                 <div class="privacy-pills">
                     <span class="privacy-pill">
                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
@@ -1578,7 +1655,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-    <script src="security.js?v=2026-03-23-cachefix-8"></script>
+    <script src="src/security.js?v=2026-03-23-cachefix-8"></script>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./sw.js').then(
@@ -1588,16 +1665,16 @@
         }
     </script>
 
-    <script src="excel-handler.js?v=2026-03-23-cachefix-8"></script>
-    <script src="word-handler.js?v=2026-03-23-cachefix-8"></script>
-    <script type="module" src="app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="anonymize-handler.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="summarize-handler.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="stt-handler.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="cache-manager.js?v=2026-05-21-stability-1"></script>
-    <script src="dicom-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/stt-handler.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>
+    <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-    <script src="pdf-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {

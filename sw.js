@@ -2,29 +2,42 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v5';
+const CACHE_NAME = 'medmorf-app-v7';
 
 // App shell files (local)
 const APP_SHELL = [
     './',
     './index.html',
-    './styles.css',
-    './security.js',
-    './app.js',
-    './anonymize-handler.js',
-    './summarize-handler.js',
-    './stt-handler.js',
-    './cache-manager.js',
-    './privacy-runtime.js',
-    './translation-runtime.js',
-    './device-capabilities.js',
-    './pre-flight-warn.js',
-    './lifecycle-manager.js',
-    './excel-handler.js',
-    './word-handler.js',
-    './pdf-handler.js',
-    './stubs/empty-module.js',
-    './stubs/null-module.js',
+    './manifest.webmanifest',
+    './styles/styles.css',
+    './styles/brand.css',
+    './src/security.js',
+    './src/app.js',
+    './src/anonymize-handler.js',
+    './src/summarize-handler.js',
+    './src/stt-handler.js',
+    './src/cache-manager.js',
+    './src/privacy-runtime.js',
+    './src/translation-runtime.js',
+    './src/device-capabilities.js',
+    './src/pre-flight-warn.js',
+    './src/lifecycle-manager.js',
+    './src/excel-handler.js',
+    './src/word-handler.js',
+    './src/pdf-handler.js',
+    './src/dicom-handler.js',
+    './src/stubs/empty-module.js',
+    './src/stubs/null-module.js',
+    // Brand assets
+    './assets/brand/icon-mark.svg',
+    './assets/brand/favicon.svg',
+    './assets/brand/favicon-light.svg',
+    './assets/brand/apple-touch-icon.svg',
+    './assets/brand/icon-192.svg',
+    './assets/brand/icon-512.svg',
+    './assets/brand/logo-horizontal.svg',
+    './assets/brand/logo-horizontal-dark.svg',
+    './assets/brand/safari-pinned-tab.svg',
 ];
 
 // CDN dependencies that must be available offline
@@ -46,10 +59,14 @@ const CDN_DEPS = [
     // Dynamic imports
     'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js',
     'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',
+    // Brand: Tailwind + fonts
+    'https://cdn.tailwindcss.com?plugins=forms,typography',
+    'https://rsms.me/inter/inter.css',
+    'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap',
 ];
 
 // Hostnames that should use cache-first strategy (versioned CDN resources)
-const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'esm.sh'];
+const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'esm.sh', 'cdn.tailwindcss.com', 'rsms.me', 'fonts.googleapis.com', 'fonts.gstatic.com'];
 
 // Hostnames where WebLLM/Transformers.js store model files in their own caches
 // We intercept these to serve from any cache (including WebLLM's own caches) when offline

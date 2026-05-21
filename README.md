@@ -1,56 +1,59 @@
-# 🌐 Medmorf - In-Browser Translation & Anonymization Tool
+# Medmorf — Medical Data Transformation
 
-A powerful web-based tool for translating and anonymizing medical/sensitive documents entirely in your browser. Uses Hugging Face's Transformers.js, GLiNER NER, and WebLLM — all processing happens locally on your device. No data is ever sent to a server.
+<p align="left">
+  <img src="assets/brand/logo-horizontal.svg" alt="Medmorf" height="56">
+</p>
 
-## 🚀 Live Demo
+**Medmorf transforms medical data into safer, structured, and usable formats — entirely in your browser.**
+It supports speech-to-text, multilingual translation, de-identification (PII redaction), document merging, DICOM tag editing, PDF/Word/Excel processing, and clinical summarization. No data ever leaves your device.
 
-**[Try it now: https://putssander.github.io/medmorf/](https://putssander.github.io/medmorf/)**
+## 🚀 Live Site
 
-## ✨ Features
+**👉 [https://putssander.github.io/medmorf/](https://putssander.github.io/medmorf/)**
 
-- **🔒 100% Privacy - Healthcare Safe**: All processing happens in your browser - no data leaves your device
-  - ✅ Zero data transmission to servers
-  - ✅ Zero data storage on our end (we have no servers!)
-  - ✅ Zero tracking, cookies, or analytics
-  - ✅ GDPR compliant by design
-  - ✅ Suitable for HIPAA-compliant workflows
-  - ✅ **Automatic data clearing** when you close the tab or navigate away
-- **🛡️ Anonymization**: Detect and redact PII (names, addresses, dates, phone numbers, emails, medical IDs, etc.)
-  - ✅ Multiple NER models: XLM-RoBERTa, GLiNER (ModernBERT), mBERT
-  - ✅ Optional LLM verification (Qwen3 4B via WebGPU) for additional PII detection
-  - ✅ 23+ PII entity types recognized
-- **📊 Excel Support**: Upload `.xlsx` files and select specific sheets and columns to translate
-- **📝 Word Support**: Upload `.docx` files for full document translation
-- **🎯 Multiple Languages**: Support for Dutch, English, German, French, Spanish, Italian, Portuguese, and more
-- **📈 Progress Tracking**: Real-time progress bars showing translation status
-- **💾 Easy Download**: Download translated files with one click
-- **🚀 No Installation**: Just open in a modern web browser and start translating
-- **🔍 Verifiable**: Open source - audit the code yourself
+Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and start. After the first visit, models are cached locally and the app works fully offline (PWA).
+
+## ✨ What Medmorf does
+
+| Pillar | Capability |
+|---|---|
+| 🎙 **Transcribe** | Speech-to-text for clinical audio (Whisper / Transformers.js, WebGPU when available) |
+| 🌐 **Translate** | Multilingual medical translation (NLLB-200) — Dutch, English, German, French, Spanish, Italian, Portuguese, +200 languages |
+| 🛡 **Protect** | De-identify PII via XLM-RoBERTa, GLiNER (ModernBERT), mBERT, optionally verified by an in-browser LLM (Qwen3 / Ministral-3 via WebLLM + WebGPU) |
+| 📚 **Summarize** | Clinical-summary generation with the same WebLLM stack (Qwen3 4B by default) |
+| 🩻 **DICOM** | In-browser DICOM tag editing, anonymization presets, modality-aware sorting |
+| 📄 **Documents** | `.xlsx` (sheet/column-aware), `.docx`, and `.pdf` ingestion + export |
+| 💾 **Offline-first** | Full PWA — service worker caches the app shell + CDN deps; model weights persist in IndexedDB / Cache API |
+| 🔄 **App updates** | Storage tab → *App Updates* lets you refresh code without redownloading model weights |
+
+## 🔒 Privacy & healthcare safety
+
+- **100% in-browser** — zero data transmission, zero analytics, zero cookies, no server-side processing.
+- **Auto-clear** on tab close, refresh, navigation, or 30 minutes of inactivity.
+- **GDPR-compliant by design**; suitable for HIPAA-aligned workflows.
+- Verify yourself in DevTools: `window.medmorfSecurity.getPrivacyReport()`.
+
+See [PRIVACY.md](PRIVACY.md), [PRIVACY_VERIFICATION.md](PRIVACY_VERIFICATION.md), [HEALTHCARE_SAFETY.md](HEALTHCARE_SAFETY.md), and [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
 
 ## 🚀 Quick Start
 
-### Option 1: Open Directly (Recommended)
+### Use the hosted site (recommended)
 
-1. Download all files to a folder on your computer
-2. Open `index.html` in a modern web browser (Chrome, Firefox, Edge, or Safari)
-3. That's it! Start translating
+Open **[https://putssander.github.io/medmorf/](https://putssander.github.io/medmorf/)** — nothing else required.
 
-### Option 2: Run with Local Server
-
-If you prefer to run a local server:
+### Run locally
 
 ```bash
-# Using Python 3
-python -m http.server 8000
+git clone https://github.com/putssander/medmorf.git
+cd medmorf
 
-# Or using Python 2
-python -m SimpleHTTPServer 8000
-
-# Or using Node.js (if you have http-server installed)
+# Serve from the repo root (service worker requires same origin)
+python3 -m http.server 8000
+# or
 npx http-server -p 8000
 ```
 
-Then open `http://localhost:8000` in your browser.
+Then open `http://localhost:8000`. Opening `index.html` via `file://` works for most features, but the service worker (offline mode + app-update flow) requires an `http(s)://` origin.
 
 ## 🏥 Healthcare Data Privacy
 
@@ -169,7 +172,7 @@ Find language codes in the [NLLB documentation](https://github.com/facebookresea
 
 ### Changing the Translation Model
 
-Edit `app.js` and change the model name:
+Edit `src/translation-runtime.js` and change the model name:
 
 ```javascript
 translator = await pipeline('translation', 'Xenova/your-model-name');
@@ -177,7 +180,7 @@ translator = await pipeline('translation', 'Xenova/your-model-name');
 
 ### Adjusting Batch Size
 
-For Excel files with many cells, you can adjust translation speed vs. memory usage by modifying the batch processing logic in `app.js`.
+For Excel files with many cells, you can adjust translation speed vs. memory usage by modifying the batch processing logic in `src/app.js`.
 
 ## 🐛 Troubleshooting
 
@@ -216,23 +219,49 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 ## 📝 File Structure
 
 ```
-.
-├── index.html              # Main HTML interface + import map
-├── app.js                  # Translation UI logic
-├── anonymize-handler.js    # Anonymization UI + NER/LLM pipeline
-├── privacy-runtime.js      # NER model loading, GLiNER init + patches
-├── translation-runtime.js  # Translation pipeline (Xenova v2)
-├── cache-manager.js        # Browser cache management
-├── security.js             # Runtime privacy guards
-├── sw.js                   # Service Worker for offline support
-├── excel-handler.js        # Excel file processing utilities
-├── word-handler.js         # Word document processing utilities
-├── styles.css              # Styling and responsive design
-├── stubs/                  # Browser shims for Node-only modules
-│   ├── empty-module.js
-│   └── null-module.js
-└── README.md               # This file
+medmorf/
+├── index.html              # App shell + import map + Tailwind/brand config
+├── sw.js                   # Service worker (root scope)
+├── manifest.webmanifest    # PWA manifest
+├── README.md, DEPLOYMENT.md, PRIVACY.md,
+│   PRIVACY_VERIFICATION.md, HEALTHCARE_SAFETY.md,
+│   SECURITY_AUDIT.md       # Project docs
+├── AGENTS.md               # Instructions for AI coding agents
+├── .github/
+│   ├── copilot-instructions.md   # GitHub Copilot agent rules
+│   └── workflows/deploy.yml      # GitHub Pages deploy
+├── assets/brand/           # Logo, favicons, app icons (SVG)
+├── docs/brand/             # Brand guide (Markdown + HTML preview)
+├── styles/
+│   ├── styles.css          # Legacy component styles
+│   └── brand.css           # Brand layer (tokens + JS-hooked classes)
+├── src/                    # All client-side JS (flat — sibling imports)
+│   ├── app.js                       # Translation tab UI
+│   ├── security.js                  # Runtime privacy guards + auto-clear
+│   ├── cache-manager.js             # Storage tab + offline downloads + app-update logic
+│   ├── device-capabilities.js       # GPU/RAM probing + model risk classification
+│   ├── pre-flight-warn.js           # Pre-load capability warning UI + heavy-load lock
+│   ├── lifecycle-manager.js         # Loaded-model registry + idle eviction
+│   ├── privacy-runtime.js           # NER pipeline (Transformers.js v3 + GLiNER patches)
+│   ├── translation-runtime.js       # NLLB-200 (Transformers.js v2)
+│   ├── anonymize-handler.js         # Anonymize tab UI + LLM verification
+│   ├── summarize-handler.js         # Summarize tab UI + LLM
+│   ├── stt-handler.js               # Speech-to-text tab
+│   ├── dicom-handler.js             # DICOM tag editor + sort tab
+│   ├── pdf-handler.js               # PDF upload/extract/export
+│   ├── word-handler.js              # .docx ingestion
+│   ├── excel-handler.js             # .xlsx sheet/column UI
+│   └── stubs/{empty,null}-module.js # Browser shims for Node-only modules
+├── server/
+│   └── deduce_server.py    # Optional Dutch DEDUCE de-identification server
+└── tests/                  # Sample fixtures + diagnostic page
+    ├── test-upgrade.html
+    └── test_*.{txt,xlsx}
 ```
+
+## 🎨 Brand
+
+The full brand system lives at [docs/brand/medmorf-brand-guide.md](docs/brand/medmorf-brand-guide.md). The icon set in `assets/brand/` (favicon, app icons 192/512, Apple touch icon, Safari pinned tab, horizontal logo light/dark) is referenced by `index.html` and registered in `manifest.webmanifest`. Brand tokens (colors, gradient, fonts, radii, shadows) are exposed both as CSS variables in `styles/brand.css` and as Tailwind theme extensions in `index.html`.
 
 ## 🏗️ Runtime Architecture
 
