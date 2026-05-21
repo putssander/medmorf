@@ -27,13 +27,18 @@ let hasWebGPU = false;
     populateSTTModelSelect();
 })();
 
+// WebGPU has been the single biggest source of STT hangs (cold-start kernel
+// compilation can stall for 30 s+, and the JSEP glue occasionally fails to
+// expose `Module.webgpuInit`, leaving inference deadlocked). For stability
+// we default to WASM on every device. Power users can opt back into WebGPU
+// by appending `?stt-gpu=1` to the URL.
+const STT_FORCE_WASM = !/[?&]stt-gpu=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+
 function getModelConfig() {
-    // WebGPU: prefer fp16 (≈2× faster than fp32 on WebGPU with no audible
-    //         quality loss for Whisper) and fall back to fp32 only if the
-    //         pipeline explicitly rejects fp16.
     // Mobile: q4 on WASM (smallest footprint)
     // Desktop WASM: q8 on WASM
-    if (hasWebGPU && !isMobile) {
+    // WebGPU: opt-in via ?stt-gpu=1
+    if (!STT_FORCE_WASM && hasWebGPU && !isMobile) {
         return { dtype: 'fp16', device: 'webgpu', suffix: 'GPU' };
     } else if (isMobile) {
         return { dtype: 'q4', device: 'wasm', suffix: 'q4' };
@@ -83,6 +88,7 @@ const DEFAULT_STT_MODEL = isMobile
 let pipeline = null;
 let loadedModelId = null;
 let isModelLoading = false;
+let isPipelineWarm = false;   // set true after a successful warm-up inference
 let isTranscribing = false;
 let isRecording = false;
 let mediaRecorder = null;
@@ -341,6 +347,30 @@ async function initSTTModel(externalProgressCb) {
             if (sttModelProgress) sttModelProgress.style.width = '100%';
             loadedModelId = selectedModel;
             registerLoadedModel('stt', disposeSTTModel, { sizeMB });
+
+            // Pre-warm the pipeline: run one inference on 1 s of silence so all
+            // ONNX kernels are JIT-compiled now (during loading state) instead
+            // of during the first live chunk — the source of the "hang at first
+            // transcribe" complaint. Bounded by a 60 s timeout in case warm-up
+            // itself stalls (we then just continue without warm; live loop will
+            // pay the cost on its own first chunk).
+            isPipelineWarm = false;
+            try {
+                if (sttModelStatusText) sttModelStatusText.textContent = `Warming up ${modelLabel}…`;
+                const warmAudio = new Float32Array(16000); // 1 s of silence at 16 kHz
+                const warmLang = (sttLanguageSelect && sttLanguageSelect.value) || 'en';
+                const warmTimeout = new Promise((_, rej) => setTimeout(() => rej(new Error('warm-up timeout')), 60000));
+                await Promise.race([
+                    pipeline(warmAudio, { language: warmLang, task: 'transcribe', return_timestamps: false }),
+                    warmTimeout,
+                ]);
+                isPipelineWarm = true;
+                console.log('[STT] pipeline pre-warmed');
+            } catch (warmErr) {
+                console.warn('[STT] pre-warm failed (continuing anyway):', warmErr);
+                isPipelineWarm = true; // allow inference even if warm-up didn't finish; first real chunk will compile
+            }
+
             updateStatus('idle', 'System Ready');
             setTimeout(() => { if (sttModelStatus) sttModelStatus.style.display = 'none'; }, 2000);
         } catch (error) {
@@ -369,6 +399,7 @@ async function disposeSTTModel() {
     }
     pipeline = null;
     loadedModelId = null;
+    isPipelineWarm = false;
     unregisterLoadedModel('stt');
 }
 
@@ -453,8 +484,14 @@ function resampleTo16k(data, fromRate) {
     return out;
 }
 
+// Hard ceiling on a single inference. If it doesn't return in this long,
+// the chunk is abandoned (advance the cursor, log a warning) so the live
+// loop never deadlocks. Picked generously — a healthy WASM inference on
+// whisper-small for 20 s of audio is ~3–8 s on modern desktops.
+const LIVE_INFER_TIMEOUT_MS = 90000;
+
 async function transcribeLiveChunk() {
-    if (!pipeline || isChunkBusy) return;
+    if (!pipeline || !isPipelineWarm || isChunkBusy) return;
     const currentCount = pcmSampleCount;
     if (currentCount <= lastProcessedSample) return;
     const newSamples = currentCount - lastProcessedSample;
@@ -467,8 +504,7 @@ async function transcribeLiveChunk() {
     const chunkEnd = Math.min(currentCount, lastProcessedSample + maxSamples);
 
     isChunkBusy = true;
-    pauseWaveform('stt');   // free the main thread for inference
-    if (sttLiveStatus) sttLiveStatus.textContent = 'Transcribing...';
+    if (sttLiveStatus) sttLiveStatus.textContent = 'Transcribing…';
     try {
         let chunkData = collectPCMRange(lastProcessedSample, chunkEnd);
         if (liveSampleRate !== 16000) chunkData = resampleTo16k(chunkData, liveSampleRate);
@@ -480,16 +516,29 @@ async function transcribeLiveChunk() {
         }
 
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
-        // Yield to event loop so waveform keeps animating during WASM work
+        // Yield to event loop so the UI/waveform stays responsive
         await new Promise(r => setTimeout(r, 0));
         const t0 = performance.now();
-        const result = await pipeline(chunkData, {
+        // Race inference against a hard timeout so a stuck call can't freeze
+        // the live loop. On timeout we drop the chunk and advance the cursor;
+        // the stuck promise will eventually resolve and be ignored.
+        const inferPromise = pipeline(chunkData, {
             language,
             task: 'transcribe',
             return_timestamps: false,
         });
+        let timeoutId;
+        const timeoutPromise = new Promise((_, rej) => {
+            timeoutId = setTimeout(() => rej(new Error('inference timeout')), LIVE_INFER_TIMEOUT_MS);
+        });
+        let result;
+        try {
+            result = await Promise.race([inferPromise, timeoutPromise]);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
         lastInferenceMs = performance.now() - t0;
-        const text = (result.text || '').trim();
+        const text = (result && result.text || '').trim();
         if (text && !isHallucination(text)) {
             liveSegments.push(text);
             updateLiveDisplay();
@@ -497,10 +546,12 @@ async function transcribeLiveChunk() {
         lastProcessedSample = chunkEnd;
     } catch (err) {
         console.error('[STT] Live chunk error:', err);
+        // Advance the cursor regardless so we don't retry the same broken chunk
+        // forever (which is the classic "transcribing… hangs" symptom).
+        lastProcessedSample = chunkEnd;
     } finally {
         isChunkBusy = false;
-        resumeWaveform('stt');
-        if (sttLiveStatus && isRecording) sttLiveStatus.textContent = 'Listening...';
+        if (sttLiveStatus && isRecording) sttLiveStatus.textContent = 'Listening…';
     }
 }
 
@@ -766,13 +817,27 @@ async function performTranscription() {
 
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
 
-        const result = await pipeline(audioData, {
+        // Hard timeout so a hung WASM/WebGPU inference can't freeze the UI.
+        // 10 minutes is generous — whisper-small on a 30-minute file under
+        // WASM lands well under that.
+        const FILE_INFER_TIMEOUT_MS = 10 * 60 * 1000;
+        const inferPromise = pipeline(audioData, {
             language,
             task: 'transcribe',
             chunk_length_s: isMobile ? 15 : 30,
             stride_length_s: isMobile ? 3 : 5,
             return_timestamps: true,
         });
+        let timeoutId;
+        const timeoutPromise = new Promise((_, rej) => {
+            timeoutId = setTimeout(() => rej(new Error('inference timeout after 10 minutes — try a shorter clip or the Whisper Tiny model')), FILE_INFER_TIMEOUT_MS);
+        });
+        let result;
+        try {
+            result = await Promise.race([inferPromise, timeoutPromise]);
+        } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+        }
 
         if (sttProgressBar) sttProgressBar.style.width = '100%';
         if (sttProgressText) sttProgressText.textContent = 'Transcription complete ✓';
