@@ -105,6 +105,15 @@
                 </svg>
                 DICOM
             </button>
+            <button class="tab-btn" data-tab="mergepdf">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="9" y1="14" x2="15" y2="14"></line>
+                    <line x1="12" y1="11" x2="12" y2="17"></line>
+                </svg>
+                Merge PDF
+            </button>
             <button class="tab-btn" data-tab="storage">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
@@ -1224,6 +1233,61 @@
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
+            <!-- MERGE PDF TAB                              -->
+            <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-mergepdf">
+                <div class="mergepdf-header">
+                    <h3 class="section-label">Merge PDF documents</h3>
+                    <p class="section-description">
+                        Combine several PDF files into one document. Everything stays on your computer —
+                        files are never uploaded anywhere.
+                    </p>
+                </div>
+
+                <!-- Step 1: Add files -->
+                <section class="mergepdf-section">
+                    <h4 class="mergepdf-step"><span class="step-num">1</span> Add your PDF files</h4>
+                    <div class="file-upload-row mergepdf-drop" id="mergepdfDrop">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Drop one or more <strong>.pdf</strong> files here, or <u>browse</u></span>
+                        <input type="file" id="mergepdfInput" accept="application/pdf,.pdf" multiple hidden>
+                    </div>
+                </section>
+
+                <!-- Step 2: Reorder -->
+                <section class="mergepdf-section" id="mergepdfListSection" style="display: none;">
+                    <h4 class="mergepdf-step"><span class="step-num">2</span> Put them in the right order</h4>
+                    <p class="mergepdf-hint">Use the arrows to move a file up or down. The top file becomes the first page.</p>
+                    <ul class="mergepdf-list" id="mergepdfList"></ul>
+                    <div class="mergepdf-list-actions">
+                        <button type="button" class="btn btn-small btn-ghost" id="mergepdfClearBtn">Remove all</button>
+                    </div>
+                </section>
+
+                <!-- Step 3: Merge -->
+                <section class="mergepdf-section" id="mergepdfMergeSection" style="display: none;">
+                    <h4 class="mergepdf-step"><span class="step-num">3</span> Save the merged file</h4>
+                    <div class="mergepdf-output-row">
+                        <label for="mergepdfFilename">File name</label>
+                        <input type="text" id="mergepdfFilename" value="merged.pdf" spellcheck="false">
+                    </div>
+                    <button type="button" class="btn btn-primary" id="mergepdfMergeBtn" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        Merge &amp; download
+                    </button>
+                    <div class="mergepdf-status" id="mergepdfStatus"></div>
+                </section>
+            </div>
+
+            <!-- ═══════════════════════════════════════════ -->
             <!-- STORAGE TAB                                -->
             <!-- ═══════════════════════════════════════════ -->
             <div class="tab-panel" id="tab-storage">
@@ -1495,6 +1559,8 @@
     <script type="module" src="stt-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="cache-manager.js?v=2026-03-23-cachefix-8"></script>
     <script src="dicom-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+    <script src="pdf-handler.js?v=2026-03-23-cachefix-8"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {

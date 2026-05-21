@@ -19,6 +19,7 @@ const APP_SHELL = [
     './translation-runtime.js',
     './excel-handler.js',
     './word-handler.js',
+    './pdf-handler.js',
     './stubs/empty-module.js',
     './stubs/null-module.js',
 ];
@@ -34,6 +35,7 @@ const CDN_DEPS = [
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
+    'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
     // Dynamic imports
     'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js',
     'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',

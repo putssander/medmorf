@@ -3613,3 +3613,203 @@ details summary:hover {
         max-width: 250px;
     }
 }
+
+/* ─── Merge PDF tab ────────────────────────────────────────────────── */
+.mergepdf-header {
+    margin-bottom: 1rem;
+}
+
+.mergepdf-header .section-description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+}
+
+.mergepdf-section {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+}
+
+.mergepdf-step {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 0.75rem 0;
+}
+
+.mergepdf-step .step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.mergepdf-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.75rem 0;
+}
+
+.mergepdf-drop.is-dragover {
+    border-color: var(--success-color);
+    background: rgba(16, 185, 129, 0.05);
+    border-style: solid;
+}
+
+.mergepdf-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.75rem 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.mergepdf-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+}
+
+.mergepdf-item-order {
+    flex-shrink: 0;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: #fff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.mergepdf-item-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.mergepdf-item-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mergepdf-item-meta {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+}
+
+.mergepdf-item-actions {
+    display: flex;
+    gap: 0.25rem;
+    flex-shrink: 0;
+}
+
+.mergepdf-icon-btn {
+    width: 2rem;
+    height: 2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: #ffffff;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+}
+
+.mergepdf-icon-btn:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+    background: #f8fafc;
+}
+
+.mergepdf-icon-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.mergepdf-remove-btn:hover:not(:disabled) {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.mergepdf-list-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.mergepdf-output-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.mergepdf-output-row label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.mergepdf-output-row input[type="text"] {
+    flex: 1;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    background: #ffffff;
+    color: var(--text-primary);
+}
+
+.mergepdf-output-row input[type="text"]:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.mergepdf-status {
+    margin-top: 0.75rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    min-height: 1.2em;
+}
+
+.mergepdf-status.is-success {
+    color: var(--success-color, #10b981);
+    font-weight: 600;
+}
+
+.mergepdf-status.is-error {
+    color: #dc2626;
+    font-weight: 600;
+}
+
+.mergepdf-status.is-progress {
+    color: var(--primary-color);
+}
