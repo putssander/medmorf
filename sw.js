@@ -2,7 +2,7 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v9';
+const CACHE_NAME = 'medmorf-app-v11';
 
 // App shell files (local)
 const APP_SHELL = [
@@ -67,7 +67,7 @@ const CDN_DEPS = [
 ];
 
 // Hostnames that should use cache-first strategy (versioned CDN resources)
-const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'esm.sh', 'cdn.tailwindcss.com', 'rsms.me', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'esm.sh', 'cdn.tailwindcss.com', 'rsms.me', 'fonts.googleapis.com', 'fonts.gstatic.com', 'tessdata.projectnaptha.com'];
 
 // Hostnames where WebLLM/Transformers.js store model files in their own caches
 // We intercept these to serve from any cache (including WebLLM's own caches) when offline

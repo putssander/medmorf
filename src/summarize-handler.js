@@ -120,12 +120,6 @@ const LLM_MODEL_OPTIONS = {
         sizeMB: 2000,
         note: 'Good balance of speed and quality. Requires WebGPU.',
     },
-    'Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC': {
-        label: 'Ministral-3 3B (Dec 2025)',
-        size: '~2.9 GB',
-        sizeMB: 2900,
-        note: 'Newest 3B Mistral. Strong multilingual quality.',
-    },
     'Qwen3-4B-q4f16_1-MLC': {
         label: 'Qwen3 4B',
         size: '~3.4 GB',

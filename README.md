@@ -19,7 +19,7 @@ Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and sta
 |---|---|
 | 🎙 **Transcribe** | Speech-to-text for clinical audio (Whisper / Transformers.js, WebGPU when available) |
 | 🌐 **Translate** | Multilingual medical translation (NLLB-200) — Dutch, English, German, French, Spanish, Italian, Portuguese, +200 languages |
-| 🛡 **Protect** | De-identify PII via XLM-RoBERTa, GLiNER (ModernBERT), mBERT, optionally verified by an in-browser LLM (Qwen3 / Ministral-3 via WebLLM + WebGPU) |
+| 🛡 **Protect** | De-identify PII via XLM-RoBERTa, GLiNER (ModernBERT), mBERT, optionally verified by an in-browser LLM (Qwen3 0.6B/1.7B/4B/8B via WebLLM + WebGPU) |
 | 📚 **Summarize** | Clinical-summary generation with the same WebLLM stack (Qwen3 4B by default) |
 | 🩻 **DICOM** | In-browser DICOM tag editing, anonymization presets, modality-aware sorting |
 | 📄 **Documents** | `.xlsx` (sheet/column-aware), `.docx`, and `.pdf` ingestion + export |
@@ -278,7 +278,7 @@ Medmorf uses **two separate Transformers.js runtimes** to balance memory efficie
 | **Translation** | `translation-runtime.js` | `@xenova/transformers@2.17.2` (full CDN URL) | v3 consumed too much memory for the 600M NLLB model |
 | **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@3.8.1` (import map) | v3 supports modern model architectures (ModernBERT) |
 | **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses v3's `AutoTokenizer` via import map alias |
-| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.83` (WebGPU) | Qwen3 / Ministral-3 for additional PII verification |
+| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.83` (WebGPU) | Qwen3 (0.6B / 1.7B / 4B / 8B) for additional PII verification |
 
 ### Why Two Runtimes?
 

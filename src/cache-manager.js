@@ -463,6 +463,23 @@ const offlineSTTPct = document.getElementById('offlineSTTPct');
 const offlineSTTCard = document.getElementById('offlineSTT');
 const offlineSTTMeta = document.getElementById('offlineSTTMeta');
 
+const offlineOCRBtn = document.getElementById('offlineOCRBtn');
+const offlineOCRText = document.getElementById('offlineOCRText');
+const offlineOCRProgress = document.getElementById('offlineOCRProgress');
+const offlineOCRBar = document.getElementById('offlineOCRBar');
+const offlineOCRPct = document.getElementById('offlineOCRPct');
+const offlineOCRCard = document.getElementById('offlineOCR');
+
+const offlinePDFJSBtn = document.getElementById('offlinePDFJSBtn');
+const offlinePDFJSText = document.getElementById('offlinePDFJSText');
+const offlinePDFJSProgress = document.getElementById('offlinePDFJSProgress');
+const offlinePDFJSBar = document.getElementById('offlinePDFJSBar');
+const offlinePDFJSPct = document.getElementById('offlinePDFJSPct');
+const offlinePDFJSCard = document.getElementById('offlinePDFJS');
+
+const PDFJS_VERSION = '4.7.76';
+const TESSERACT_VERSION = '5.1.1';
+
 const offlineDownloadAllBtn = document.getElementById('offlineDownloadAllBtn');
 
 function getSelectedNerModelId() {
@@ -629,8 +646,60 @@ async function checkSTTCached() {
     }
 }
 
+async function checkOCRCached() {
+    if (!offlineOCRCard) return false;
+    try {
+        const names = await caches.keys();
+        let hasScript = false, hasCore = false, hasLang = false;
+        for (const name of names) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            for (const r of keys) {
+                if (r.url.includes('tesseract.js@') || r.url.includes('/tesseract.min.js')) hasScript = true;
+                if (r.url.includes('tesseract.js-core')) hasCore = true;
+                if (r.url.includes('eng.traineddata') || r.url.includes('tessdata')) hasLang = true;
+            }
+        }
+        const ok = hasScript && hasCore && hasLang;
+        setCardStatus(offlineOCRCard, offlineOCRText, offlineOCRBtn, ok ? 'cached' : 'not-cached');
+        return ok;
+    } catch {
+        setCardStatus(offlineOCRCard, offlineOCRText, offlineOCRBtn, 'not-cached');
+        return false;
+    }
+}
+
+async function checkPDFJSCached() {
+    if (!offlinePDFJSCard) return false;
+    try {
+        const names = await caches.keys();
+        let hasMain = false, hasWorker = false;
+        for (const name of names) {
+            const cache = await caches.open(name);
+            const keys = await cache.keys();
+            for (const r of keys) {
+                if (r.url.includes(`pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`)) hasMain = true;
+                if (r.url.includes(`pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`)) hasWorker = true;
+            }
+        }
+        const ok = hasMain && hasWorker;
+        setCardStatus(offlinePDFJSCard, offlinePDFJSText, offlinePDFJSBtn, ok ? 'cached' : 'not-cached');
+        return ok;
+    } catch {
+        setCardStatus(offlinePDFJSCard, offlinePDFJSText, offlinePDFJSBtn, 'not-cached');
+        return false;
+    }
+}
+
 async function checkAllOfflineStatus() {
-    await Promise.all([checkTranslationCached(), checkNERCached(), checkLLMCached(), checkSTTCached()]);
+    await Promise.all([
+        checkTranslationCached(),
+        checkNERCached(),
+        checkLLMCached(),
+        checkSTTCached(),
+        checkOCRCached(),
+        checkPDFJSCached(),
+    ]);
     updateDownloadAllBtn();
 }
 
@@ -644,7 +713,7 @@ async function requestPersistentStorage() {
 }
 
 function updateDownloadAllBtn() {
-    const cards = [offlineTranslationCard, offlineNERCard, offlineLLMCard, offlineSTTCard].filter(Boolean);
+    const cards = [offlineTranslationCard, offlineNERCard, offlineLLMCard, offlineSTTCard, offlineOCRCard, offlinePDFJSCard].filter(Boolean);
     const allCached = cards.every(c => c.dataset.status === 'cached' || c.dataset.status === 'done');
     if (allCached) {
         offlineDownloadAllBtn.textContent = '✓ All models ready for offline use';
@@ -799,6 +868,12 @@ async function downloadAllModels() {
     if (offlineSTTCard && offlineSTTCard.dataset.status !== 'cached' && offlineSTTCard.dataset.status !== 'done') {
         tasks.push(downloadSTTModel());
     }
+    if (offlineOCRCard && offlineOCRCard.dataset.status !== 'cached' && offlineOCRCard.dataset.status !== 'done') {
+        tasks.push(downloadOCRModel());
+    }
+    if (offlinePDFJSCard && offlinePDFJSCard.dataset.status !== 'cached' && offlinePDFJSCard.dataset.status !== 'done') {
+        tasks.push(downloadPDFJS());
+    }
     await Promise.all(tasks);
     refreshStorageView();
 }
@@ -855,7 +930,95 @@ if (offlineSTTBtn) offlineSTTBtn.addEventListener('click', async () => {
     await downloadSTTModel();
     refreshStorageView();
 });
+if (offlineOCRBtn) offlineOCRBtn.addEventListener('click', async () => {
+    await downloadOCRModel();
+    refreshStorageView();
+});
+if (offlinePDFJSBtn) offlinePDFJSBtn.addEventListener('click', async () => {
+    await downloadPDFJS();
+    refreshStorageView();
+});
 if (offlineDownloadAllBtn) offlineDownloadAllBtn.addEventListener('click', downloadAllModels);
+
+// ── OCR (Tesseract.js) preload ────────────────────────────────────────────────────────────
+let downloadingOCR = false;
+function loadTesseractScript() {
+    if (window.Tesseract) return Promise.resolve(window.Tesseract);
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = `https://cdn.jsdelivr.net/npm/tesseract.js@${TESSERACT_VERSION}/dist/tesseract.min.js`;
+        s.onload = () => resolve(window.Tesseract);
+        s.onerror = () => reject(new Error('Failed to load Tesseract.js'));
+        document.head.appendChild(s);
+    });
+}
+async function downloadOCRModel() {
+    if (downloadingOCR || !offlineOCRCard) return;
+    downloadingOCR = true;
+    setCardStatus(offlineOCRCard, offlineOCRText, offlineOCRBtn, 'downloading');
+    offlineOCRProgress.style.display = 'block';
+    offlineOCRBar.style.width = '0%';
+    offlineOCRPct.textContent = '0%';
+    let worker = null;
+    try {
+        const Tesseract = await loadTesseractScript();
+        worker = await Tesseract.createWorker('eng', 1, {
+            cacheMethod: 'write',
+            logger: (m) => {
+                if (m && typeof m.progress === 'number') {
+                    const pct = Math.round(m.progress * 100);
+                    offlineOCRBar.style.width = pct + '%';
+                    offlineOCRPct.textContent = pct + '%';
+                    offlineOCRText.textContent = m.status || 'Downloading…';
+                }
+            },
+        });
+        offlineOCRProgress.style.display = 'none';
+        setCardStatus(offlineOCRCard, offlineOCRText, offlineOCRBtn, 'done');
+        requestPersistentStorage();
+    } catch (err) {
+        console.error('OCR download error:', err);
+        setCardStatus(offlineOCRCard, offlineOCRText, offlineOCRBtn, 'error');
+        offlineOCRText.textContent = 'Download failed — ' + (err && err.message ? err.message : err);
+        offlineOCRProgress.style.display = 'none';
+    } finally {
+        if (worker) { try { await worker.terminate(); } catch (_) {} }
+        downloadingOCR = false;
+        updateDownloadAllBtn();
+    }
+}
+
+// ── PDF.js preload ──────────────────────────────────────────────────────────────────────────
+let downloadingPDFJS = false;
+async function downloadPDFJS() {
+    if (downloadingPDFJS || !offlinePDFJSCard) return;
+    downloadingPDFJS = true;
+    setCardStatus(offlinePDFJSCard, offlinePDFJSText, offlinePDFJSBtn, 'downloading');
+    offlinePDFJSProgress.style.display = 'block';
+    offlinePDFJSBar.style.width = '0%';
+    offlinePDFJSPct.textContent = '0%';
+    try {
+        offlinePDFJSText.textContent = 'Fetching pdf.min.mjs…';
+        await fetch(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`, { mode: 'cors' });
+        offlinePDFJSBar.style.width = '50%';
+        offlinePDFJSPct.textContent = '50%';
+        offlinePDFJSText.textContent = 'Fetching pdf.worker.min.mjs…';
+        await fetch(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`, { mode: 'cors' });
+        offlinePDFJSBar.style.width = '100%';
+        offlinePDFJSPct.textContent = '100%';
+        offlinePDFJSProgress.style.display = 'none';
+        setCardStatus(offlinePDFJSCard, offlinePDFJSText, offlinePDFJSBtn, 'done');
+        requestPersistentStorage();
+    } catch (err) {
+        console.error('PDF.js download error:', err);
+        setCardStatus(offlinePDFJSCard, offlinePDFJSText, offlinePDFJSBtn, 'error');
+        offlinePDFJSText.textContent = 'Download failed — ' + (err && err.message ? err.message : err);
+        offlinePDFJSProgress.style.display = 'none';
+    } finally {
+        downloadingPDFJS = false;
+        updateDownloadAllBtn();
+    }
+}
 
 // ── Personal Data Inspector ────────────────────────────────────────────────────
 const personalDataList = document.getElementById('personalDataList');

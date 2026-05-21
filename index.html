@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-mic-1';
+        window.MEDMORF_BUILD_ID = '2026-05-21-cache-3';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -191,7 +191,7 @@
                     <line x1="9" y1="14" x2="15" y2="14"></line>
                     <line x1="12" y1="11" x2="12" y2="17"></line>
                 </svg>
-                PDFs
+                Merge PDF
             </button>
             <button class="tab-btn" data-tab="storage">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -763,6 +763,56 @@
                             <option value="json">.json</option>
                         </select>
                     </div>
+                </section>
+
+                <!-- ─────────── Anonymize PDF (real burn-in redaction) ─────────── -->
+                <section class="upload-section" style="margin-top:2rem;">
+                    <h3 class="section-label">Anonymize a PDF (with OCR fallback)</h3>
+                    <p class="section-description">
+                        Detect and burn redactions directly into a PDF. Pages with a text layer are read
+                        in place; scanned / image-only pages are auto-OCR'd. The output is a re-rasterized
+                        PDF — the original glyph and image text are removed, not just covered.
+                    </p>
+
+                    <div class="file-upload-row" id="pdfanonDrop" style="margin-top:.75rem;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <span>Drop a <strong>.pdf</strong> here, or <u>browse</u></span>
+                        <input type="file" id="pdfanonInput" accept="application/pdf,.pdf" hidden>
+                    </div>
+                    <div id="pdfanonFileInfo" style="display:none; margin-top:.5rem; font-size:.9rem; color:#475569;"></div>
+
+                    <div style="display:flex; align-items:center; gap:.75rem; margin-top:1rem; flex-wrap:wrap;">
+                        <label for="pdfanonOcrLang" style="font-weight:500;">OCR language (scanned pages):</label>
+                        <select id="pdfanonOcrLang">
+                            <option value="eng" selected>English</option>
+                            <option value="nld">Dutch (Nederlands)</option>
+                            <option value="deu">German (Deutsch)</option>
+                            <option value="fra">French (Français)</option>
+                            <option value="spa">Spanish (Español)</option>
+                            <option value="eng+nld">English + Dutch</option>
+                        </select>
+                    </div>
+
+                    <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:1rem;">
+                        <button type="button" class="btn btn-primary" id="pdfanonRunBtn" disabled>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                            </svg>
+                            Anonymize &amp; download
+                        </button>
+                        <button type="button" class="btn btn-ghost" id="pdfanonClearBtn">Clear</button>
+                    </div>
+                    <div id="pdfanonProgress" style="display:none; margin-top:.75rem;">
+                        <div style="background:#e5e7eb; border-radius:6px; overflow:hidden; height:8px;">
+                            <div id="pdfanonProgressBar" style="background:var(--mm-blue,#2563eb); height:100%; width:0%; transition:width .2s;"></div>
+                        </div>
+                    </div>
+                    <div id="pdfanonStatus" style="margin-top:.5rem; font-size:.9rem;"></div>
+                    <div id="pdfanonReport" style="margin-top:1rem;"></div>
                 </section>
             </div>
 
@@ -1380,66 +1430,6 @@
                     </button>
                     <div class="mergepdf-status" id="mergepdfStatus"></div>
                 </section>
-
-                <!-- ─────────── Anonymize PDF ─────────── -->
-                <div class="mergepdf-header" style="margin-top:2rem;">
-                    <h3 class="section-label">Anonymize a PDF</h3>
-                    <p class="section-description">
-                        Detect and burn redactions directly into a PDF. Pages with a text layer are read
-                        in place; scanned / image-only pages are auto-OCR'd. The output is a re-rasterized
-                        PDF — the original glyph and image text are removed, not just covered.
-                    </p>
-                </div>
-
-                <section class="mergepdf-section">
-                    <h4 class="mergepdf-step"><span class="step-num">1</span> Choose a PDF</h4>
-                    <div class="file-upload-row mergepdf-drop" id="pdfanonDrop">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                            <polyline points="17 8 12 3 7 8"></polyline>
-                            <line x1="12" y1="3" x2="12" y2="15"></line>
-                        </svg>
-                        <span>Drop a <strong>.pdf</strong> here, or <u>browse</u></span>
-                        <input type="file" id="pdfanonInput" accept="application/pdf,.pdf" hidden>
-                    </div>
-                    <div class="mergepdf-hint" id="pdfanonFileInfo" style="display:none;"></div>
-                </section>
-
-                <section class="mergepdf-section">
-                    <h4 class="mergepdf-step"><span class="step-num">2</span> OCR language (used for scanned pages)</h4>
-                    <div class="mergepdf-output-row">
-                        <label for="pdfanonOcrLang">Language</label>
-                        <select id="pdfanonOcrLang">
-                            <option value="eng" selected>English</option>
-                            <option value="nld">Dutch (Nederlands)</option>
-                            <option value="deu">German (Deutsch)</option>
-                            <option value="fra">French (Français)</option>
-                            <option value="spa">Spanish (Español)</option>
-                            <option value="eng+nld">English + Dutch</option>
-                        </select>
-                    </div>
-                    <p class="mergepdf-hint">OCR runs only on pages without a text layer. The NER model used is the one selected in the Anonymize tab.</p>
-                </section>
-
-                <section class="mergepdf-section">
-                    <h4 class="mergepdf-step"><span class="step-num">3</span> Redact &amp; download</h4>
-                    <div style="display:flex; gap:.5rem; flex-wrap:wrap;">
-                        <button type="button" class="btn btn-primary" id="pdfanonRunBtn" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg>
-                            Anonymize &amp; download
-                        </button>
-                        <button type="button" class="btn btn-ghost" id="pdfanonClearBtn">Clear</button>
-                    </div>
-                    <div id="pdfanonProgress" style="display:none; margin-top:.75rem;">
-                        <div style="background:#e5e7eb; border-radius:6px; overflow:hidden; height:8px;">
-                            <div id="pdfanonProgressBar" style="background:var(--mm-blue,#2563eb); height:100%; width:0%; transition:width .2s;"></div>
-                        </div>
-                    </div>
-                    <div class="mergepdf-status" id="pdfanonStatus"></div>
-                    <div id="pdfanonReport" style="margin-top:1rem;"></div>
-                </section>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
@@ -1534,6 +1524,46 @@
                                 <span class="offline-progress-text" id="offlineSTTPct"></span>
                             </div>
                             <button class="btn btn-small btn-primary offline-download-btn" id="offlineSTTBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
+
+                        <!-- OCR (Tesseract.js — used for scanned-PDF anonymization) -->
+                        <div class="offline-model-card" id="offlineOCR">
+                            <div class="offline-model-info">
+                                <strong>OCR Engine</strong>
+                                <span class="offline-model-meta" id="offlineOCRMeta">Tesseract.js + English traineddata · ~25 MB</span>
+                                <span class="offline-model-desc">Text recognition for scanned PDFs (used by PDF anonymization)</span>
+                            </div>
+                            <div class="offline-model-status" id="offlineOCRStatus">
+                                <span class="offline-status-text" id="offlineOCRText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlineOCRProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlineOCRBar"></div></div>
+                                <span class="offline-progress-text" id="offlineOCRPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlineOCRBtn" disabled>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                                Download
+                            </button>
+                        </div>
+
+                        <!-- PDF Engine (PDF.js worker) -->
+                        <div class="offline-model-card" id="offlinePDFJS">
+                            <div class="offline-model-info">
+                                <strong>PDF Engine</strong>
+                                <span class="offline-model-meta">PDF.js 4.7.76 · ~1.5 MB</span>
+                                <span class="offline-model-desc">Reads and rasterizes PDFs (used by PDF anonymization &amp; merge)</span>
+                            </div>
+                            <div class="offline-model-status" id="offlinePDFJSStatus">
+                                <span class="offline-status-text" id="offlinePDFJSText">Checking...</span>
+                            </div>
+                            <div class="offline-model-progress" id="offlinePDFJSProgress" style="display:none;">
+                                <div class="progress-bar"><div class="progress-fill" id="offlinePDFJSBar"></div></div>
+                                <span class="offline-progress-text" id="offlinePDFJSPct"></span>
+                            </div>
+                            <button class="btn btn-small btn-primary offline-download-btn" id="offlinePDFJSBtn" disabled>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                                 Download
                             </button>
