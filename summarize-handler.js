@@ -3,8 +3,13 @@
 // Templates guide the LLM to fill in specific report sections.
 // Zero data leaves the browser — all processing is local.
 
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-21-stability-1';
+import { getCapabilities, recommendDefault } from './device-capabilities.js?v=2026-05-21-stability-1';
+import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
+
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] summarize-handler.js build', BUILD_ID, 'module url', import.meta.url);
+
 
 // ── Templates ──────────────────────────────────────────────────────────────────
 const SUMMARIZE_TEMPLATES = {
@@ -106,21 +111,31 @@ const LLM_MODEL_OPTIONS = {
     'Qwen3-0.6B-q4f16_1-MLC': {
         label: 'Qwen3 0.6B',
         size: '~1.4 GB',
+        sizeMB: 1400,
         note: 'Smallest & fastest. Requires WebGPU.',
     },
     'Qwen3-1.7B-q4f16_1-MLC': {
         label: 'Qwen3 1.7B',
         size: '~2 GB',
+        sizeMB: 2000,
         note: 'Good balance of speed and quality. Requires WebGPU.',
+    },
+    'Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC': {
+        label: 'Ministral-3 3B (Dec 2025)',
+        size: '~2.9 GB',
+        sizeMB: 2900,
+        note: 'Newest 3B Mistral. Strong multilingual quality.',
     },
     'Qwen3-4B-q4f16_1-MLC': {
         label: 'Qwen3 4B',
         size: '~3.4 GB',
+        sizeMB: 3400,
         note: 'Best quality. Requires WebGPU.',
     },
     'Qwen3-8B-q4f16_1-MLC': {
         label: 'Qwen3 8B',
         size: '~5.7 GB',
+        sizeMB: 5700,
         note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
     },
 };
@@ -215,13 +230,27 @@ function updateTemplateDescription() {
 function populateModelSelect() {
     if (!sumModelSelect) return;
     sumModelSelect.innerHTML = '';
+    const candidates = Object.entries(LLM_MODEL_OPTIONS).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
+    const recommended = recommendDefault(candidates) || DEFAULT_MODEL;
     for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
         el.textContent = `${opt.label} (${opt.size})`;
-        if (id === DEFAULT_MODEL) el.selected = true;
+        if (id === recommended) el.selected = true;
         sumModelSelect.appendChild(el);
     }
+}
+
+// Re-evaluate once device probe finishes; respect manual user selection.
+getCapabilities().then(() => {
+    if (sumModelSelect && !sumModelSelect.dataset.userChosen) {
+        populateModelSelect();
+    }
+});
+if (sumModelSelect) {
+    sumModelSelect.addEventListener('change', () => {
+        sumModelSelect.dataset.userChosen = '1';
+    });
 }
 
 // ── Model Loading ──────────────────────────────────────────────────────────────
@@ -243,71 +272,87 @@ async function initSumModel() {
         await disposeSumModel();
     }
 
-    isModelLoading = true;
-    sumModelStatus.style.display = 'block';
-    sumModelProgress.style.width = '0%';
-
     const modelLabel = LLM_MODEL_OPTIONS[selectedModel]?.label || selectedModel;
-    const sumModelHeading = document.getElementById('sumModelHeading');
-    if (sumModelHeading) sumModelHeading.textContent = `Loading ${modelLabel}...`;
-    sumModelStatusText.textContent = `Initializing ${modelLabel}...`;
-    updateStatus('loading', `Loading ${modelLabel}...`);
+    const sizeMB = LLM_MODEL_OPTIONS[selectedModel]?.sizeMB || 0;
 
-    try {
-        // Check if model is already cached
-        let modelCached = false;
-        try {
-            const cacheNames = await caches.keys();
-            modelCached = cacheNames.some(name => {
-                const lower = name.toLowerCase();
-                return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
-            });
-        } catch { /* ignore */ }
-
-        if (!modelCached) {
-            const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
-            try {
-                const probe = await fetch(configUrl);
-                if (!probe.ok) {
-                    throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
-                }
-            } catch (fetchErr) {
-                throw new Error(
-                    `Cannot reach model files for ${modelLabel}. ` +
-                    (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
-                        ? 'Check your internet connection.'
-                        : fetchErr.message)
-                );
-            }
-        }
-
-        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
-        engine = await CreateMLCEngine(selectedModel, {
-            initProgressCallback: (progress) => {
-                const text = progress.text || '';
-                const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
-                if (pctMatch) {
-                    sumModelProgress.style.width = pctMatch[1] + '%';
-                }
-                sumModelStatusText.textContent = text || 'Loading...';
-                updateStatus('loading', text || 'Loading summarization model...');
-            },
-        });
-
-        sumModelStatusText.textContent = 'Model loaded ✓';
-        sumModelProgress.style.width = '100%';
-        loadedModelId = selectedModel;
-        updateStatus('idle', 'System Ready');
-        setTimeout(() => { sumModelStatus.style.display = 'none'; }, 2000);
-    } catch (error) {
-        console.error('Summarization model loading error:', error);
-        sumModelStatusText.textContent = 'Error: ' + formatLoadError(error);
-        updateStatus('idle', 'Model loading failed');
-        engine = null;
-        throw error;
-    } finally {
-        isModelLoading = false;
+    const proceed = await preflightWarn({
+        key: `llm:${selectedModel}`,
+        title: 'Load summarization model?',
+        model: `${modelLabel} (${selectedModel})`,
+        sizeMB,
+        why: 'Large LLMs need WebGPU and several GB of RAM/VRAM. On low-RAM devices the tab may crash. Pick a smaller variant if unsure.',
+    });
+    if (!proceed) {
+        throw new Error('Model load cancelled by user');
     }
+
+    return withHeavyLoadLock(`LLM (summarize): ${modelLabel}`, async () => {
+        isModelLoading = true;
+        sumModelStatus.style.display = 'block';
+        sumModelProgress.style.width = '0%';
+
+        const sumModelHeading = document.getElementById('sumModelHeading');
+        if (sumModelHeading) sumModelHeading.textContent = `Loading ${modelLabel}...`;
+        sumModelStatusText.textContent = `Initializing ${modelLabel}...`;
+        updateStatus('loading', `Loading ${modelLabel}...`);
+
+        try {
+            // Check if model is already cached
+            let modelCached = false;
+            try {
+                const cacheNames = await caches.keys();
+                modelCached = cacheNames.some(name => {
+                    const lower = name.toLowerCase();
+                    return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
+                });
+            } catch { /* ignore */ }
+
+            if (!modelCached) {
+                const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+                try {
+                    const probe = await fetch(configUrl);
+                    if (!probe.ok) {
+                        throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                    }
+                } catch (fetchErr) {
+                    throw new Error(
+                        `Cannot reach model files for ${modelLabel}. ` +
+                        (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
+                            ? 'Check your internet connection.'
+                            : fetchErr.message)
+                    );
+                }
+            }
+
+            const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js');
+            engine = await CreateMLCEngine(selectedModel, {
+                initProgressCallback: (progress) => {
+                    const text = progress.text || '';
+                    const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                    if (pctMatch) {
+                        sumModelProgress.style.width = pctMatch[1] + '%';
+                    }
+                    sumModelStatusText.textContent = text || 'Loading...';
+                    updateStatus('loading', text || 'Loading summarization model...');
+                },
+            });
+
+            sumModelStatusText.textContent = 'Model loaded ✓';
+            sumModelProgress.style.width = '100%';
+            loadedModelId = selectedModel;
+            registerLoadedModel('summarize-llm', disposeSumModel, { sizeMB });
+            updateStatus('idle', 'System Ready');
+            setTimeout(() => { sumModelStatus.style.display = 'none'; }, 2000);
+        } catch (error) {
+            console.error('Summarization model loading error:', error);
+            sumModelStatusText.textContent = 'Error: ' + formatLoadError(error);
+            updateStatus('idle', 'Model loading failed');
+            engine = null;
+            throw error;
+        } finally {
+            isModelLoading = false;
+        }
+    });
 }
 
 async function disposeSumModel() {
@@ -318,6 +363,7 @@ async function disposeSumModel() {
     const oldEngine = engine;
     engine = null;
     loadedModelId = null;
+    unregisterLoadedModel('summarize-llm');
     if (typeof oldEngine.unload === 'function') {
         await oldEngine.unload();
     }
@@ -325,6 +371,7 @@ async function disposeSumModel() {
 
 async function llmChat(messages, options = {}) {
     if (!engine) throw new Error('LLM engine not loaded');
+    markModelUsed('summarize-llm');
     const reply = await engine.chat.completions.create({
         messages,
         max_tokens: options.max_tokens || 4096,

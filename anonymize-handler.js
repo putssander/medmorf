@@ -21,6 +21,9 @@ import {
     getGLiNERInstance,
     mapNEREntityType,
 } from './privacy-runtime.js?v=2026-05-21-tfjs4';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-21-stability-1';
+import { getCapabilities, recommendDefault } from './device-capabilities.js?v=2026-05-21-stability-1';
+import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
 const MAX_CHUNK_CHARS = 1500;
@@ -29,24 +32,35 @@ const LLM_MODEL_OPTIONS = {
     'Qwen3-0.6B-q4f16_1-MLC': {
         label: 'Qwen3 0.6B',
         size: '~1.4 GB',
+        sizeMB: 1400,
         note: 'Smallest & fastest. Requires WebGPU.',
         engine: 'webllm',
     },
     'Qwen3-1.7B-q4f16_1-MLC': {
         label: 'Qwen3 1.7B',
         size: '~2 GB',
+        sizeMB: 2000,
         note: 'Good balance of speed and quality. Requires WebGPU.',
+        engine: 'webllm',
+    },
+    'Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC': {
+        label: 'Ministral-3 3B (Dec 2025)',
+        size: '~2.9 GB',
+        sizeMB: 2900,
+        note: 'Mistral 3B alternative. Strong multilingual quality.',
         engine: 'webllm',
     },
     'Qwen3-4B-q4f16_1-MLC': {
         label: 'Qwen3 4B',
         size: '~3.4 GB',
-        note: 'Best quality. Requires WebGPU.',
+        sizeMB: 3400,
+        note: 'Best instruction-following at this size. Requires WebGPU.',
         engine: 'webllm',
     },
     'Qwen3-8B-q4f16_1-MLC': {
         label: 'Qwen3 8B',
         size: '~5.7 GB',
+        sizeMB: 5700,
         note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
         engine: 'webllm',
     },
@@ -194,13 +208,32 @@ function updateModeBanner() {
 function populateLLMModelSelect() {
     if (!anonModelSelect) return;
     anonModelSelect.innerHTML = '';
+    // Auto-downshift: if device profile is known, recommend a smaller default
+    // to avoid OOM on first-load before the user opens the model picker.
+    const candidates = Object.entries(LLM_MODEL_OPTIONS).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
+    const recommended = recommendDefault(candidates) || DEFAULT_MODEL;
     for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
         el.textContent = `${opt.label} (${opt.size})`;
-        if (id === DEFAULT_MODEL) el.selected = true;
+        if (id === recommended) el.selected = true;
         anonModelSelect.appendChild(el);
     }
+}
+
+// Re-evaluate the default once the device probe completes (only if the user
+// hasn't already changed it manually).
+let _llmSelectAutoSet = false;
+getCapabilities().then(() => {
+    if (anonModelSelect && (!_llmSelectAutoSet || !anonModelSelect.dataset.userChosen)) {
+        populateLLMModelSelect();
+        _llmSelectAutoSet = true;
+    }
+});
+if (anonModelSelect) {
+    anonModelSelect.addEventListener('change', () => {
+        anonModelSelect.dataset.userChosen = '1';
+    });
 }
 
 // ── Model Loading (WebLLM) ──────────────────────────────────────────────────
@@ -222,84 +255,99 @@ async function initAnonModel() {
         await disposeAnonModel();
     }
 
-    isAnonModelLoading = true;
-
-    anonModelStatus.style.display = 'block';
-    anonModelProgress.style.width = '0%';
-
     const modelOption = getSelectedLLMOption();
     const modelLabel = modelOption.label;
-    const anonModelHeading = document.getElementById('anonModelHeading');
-    if (anonModelHeading) anonModelHeading.textContent = `Loading ${modelLabel}...`;
 
-    anonModelStatusText.textContent = `Initializing ${modelLabel}...`;
-    updateStatus('loading', `Loading ${modelLabel}...`);
+    const proceed = await preflightWarn({
+        key: `llm:${selectedModel}`,
+        title: 'Load language model?',
+        model: `${modelLabel} (${selectedModel})`,
+        sizeMB: modelOption.sizeMB || 0,
+        why: 'Large LLMs need WebGPU and several GB of RAM/VRAM. On low-RAM devices the tab may crash. Pick a smaller variant if unsure.',
+    });
+    if (!proceed) {
+        throw new Error('Model load cancelled by user');
+    }
 
-    try {
-        if (modelOption.engine === 'webllm') {
-            // Check if model is already cached (skip network probe when offline)
-            let modelCached = false;
-            try {
-                const cacheNames = await caches.keys();
-                modelCached = cacheNames.some(name => {
-                    const lower = name.toLowerCase();
-                    return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
-                });
-            } catch { /* ignore */ }
+    return withHeavyLoadLock(`LLM: ${modelLabel}`, async () => {
+        isAnonModelLoading = true;
 
-            if (!modelCached) {
-                // Not cached — verify we can reach HuggingFace before starting a large download
-                const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+        anonModelStatus.style.display = 'block';
+        anonModelProgress.style.width = '0%';
+
+        const anonModelHeading = document.getElementById('anonModelHeading');
+        if (anonModelHeading) anonModelHeading.textContent = `Loading ${modelLabel}...`;
+
+        anonModelStatusText.textContent = `Initializing ${modelLabel}...`;
+        updateStatus('loading', `Loading ${modelLabel}...`);
+
+        try {
+            if (modelOption.engine === 'webllm') {
+                // Check if model is already cached (skip network probe when offline)
+                let modelCached = false;
                 try {
-                    const probe = await fetch(configUrl);
-                    if (!probe.ok) {
-                        throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                    const cacheNames = await caches.keys();
+                    modelCached = cacheNames.some(name => {
+                        const lower = name.toLowerCase();
+                        return lower.includes('webllm') || lower.includes('mlc') || lower.includes('tvmjs');
+                    });
+                } catch { /* ignore */ }
+
+                if (!modelCached) {
+                    // Not cached — verify we can reach HuggingFace before starting a large download
+                    const configUrl = `https://huggingface.co/mlc-ai/${selectedModel}/resolve/main/mlc-chat-config.json`;
+                    try {
+                        const probe = await fetch(configUrl);
+                        if (!probe.ok) {
+                            throw new Error(`HuggingFace returned ${probe.status} for ${selectedModel}. Check your internet connection.`);
+                        }
+                    } catch (fetchErr) {
+                        console.error('Pre-flight fetch failed:', fetchErr);
+                        throw new Error(
+                            `Cannot reach model files for ${modelLabel}. ` +
+                            (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
+                                ? 'Check your internet connection and ensure nothing is blocking huggingface.co (ad-blockers, VPN, firewall).'
+                                : fetchErr.message)
+                        );
                     }
-                } catch (fetchErr) {
-                    console.error('Pre-flight fetch failed:', fetchErr);
-                    throw new Error(
-                        `Cannot reach model files for ${modelLabel}. ` +
-                        (fetchErr.message.includes('Failed to fetch') || fetchErr.message.includes('NetworkError') || fetchErr.message.includes('Load failed')
-                            ? 'Check your internet connection and ensure nothing is blocking huggingface.co (ad-blockers, VPN, firewall).'
-                            : fetchErr.message)
-                    );
+                } else {
+                    console.log('[ANON] Model appears cached, skipping pre-flight fetch');
                 }
-            } else {
-                console.log('[ANON] Model appears cached, skipping pre-flight fetch');
+
+                const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js');
+                engine = await CreateMLCEngine(selectedModel, {
+                    initProgressCallback: (progress) => {
+                        const text = progress.text || '';
+                        const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                        if (pctMatch) {
+                            anonModelProgress.style.width = pctMatch[1] + '%';
+                        }
+                        anonModelStatusText.textContent = text || 'Loading...';
+                        updateStatus('loading', text || 'Loading anonymization model...');
+                    },
+                });
             }
 
-            const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
-            engine = await CreateMLCEngine(selectedModel, {
-                initProgressCallback: (progress) => {
-                    const text = progress.text || '';
-                    const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
-                    if (pctMatch) {
-                        anonModelProgress.style.width = pctMatch[1] + '%';
-                    }
-                    anonModelStatusText.textContent = text || 'Loading...';
-                    updateStatus('loading', text || 'Loading anonymization model...');
-                },
-            });
+            anonModelStatusText.textContent = 'Anonymization model loaded ✓';
+            anonModelProgress.style.width = '100%';
+            loadedModelId = selectedModel;
+            registerLoadedModel('anon-llm', disposeAnonModel, { sizeMB: modelOption.sizeMB || 0 });
+            updateStatus('idle', 'System Ready');
+            setTimeout(() => { anonModelStatus.style.display = 'none'; }, 2000);
+        } catch (error) {
+            console.error('Anonymization model loading error:', error);
+            let userMsg = error.message;
+            if (userMsg.includes('Cannot fetch')) {
+                userMsg = `Model download failed. Try: (1) clear LLM cache in Storage tab, (2) hard-refresh (⌘⇧R), (3) check that nothing blocks huggingface.co. If using Safari, try Chrome/Edge instead.`;
+            }
+            anonModelStatusText.textContent = 'Error: ' + userMsg;
+            updateStatus('idle', 'Model loading failed');
+            engine = null;
+            throw error;
+        } finally {
+            isAnonModelLoading = false;
         }
-
-        anonModelStatusText.textContent = 'Anonymization model loaded ✓';
-        anonModelProgress.style.width = '100%';
-        loadedModelId = selectedModel;
-        updateStatus('idle', 'System Ready');
-        setTimeout(() => { anonModelStatus.style.display = 'none'; }, 2000);
-    } catch (error) {
-        console.error('Anonymization model loading error:', error);
-        let userMsg = error.message;
-        if (userMsg.includes('Cannot fetch')) {
-            userMsg = `Model download failed. Try: (1) clear LLM cache in Storage tab, (2) hard-refresh (⌘⇧R), (3) check that nothing blocks huggingface.co. If using Safari, try Chrome/Edge instead.`;
-        }
-        anonModelStatusText.textContent = 'Error: ' + userMsg;
-        updateStatus('idle', 'Model loading failed');
-        engine = null;
-        throw error;
-    } finally {
-        isAnonModelLoading = false;
-    }
+    });
 }
 
 async function disposeAnonModel() {
@@ -311,6 +359,7 @@ async function disposeAnonModel() {
     const oldEngine = engine;
     engine = null;
     loadedModelId = null;
+    unregisterLoadedModel('anon-llm');
 
     if (typeof oldEngine.unload === 'function') {
         await oldEngine.unload();
@@ -319,6 +368,7 @@ async function disposeAnonModel() {
 
 async function llmChat(messages, options = {}) {
     if (!engine) throw new Error('LLM engine not loaded');
+    markModelUsed('anon-llm');
 
     const reply = await engine.chat.completions.create({
         messages,
@@ -365,41 +415,54 @@ async function initNerModel() {
     const loadedNerModelId = getActiveNERModelId();
     if (getNERPipeline() && loadedNerModelId === selectedNerModelId) return;
     if (isNerLoading) return;
-    isNerLoading = true;
 
-    anonModelStatus.style.display = 'block';
-    anonModelProgress.style.width = '0%';
-
-    const anonModelHeading = document.getElementById('anonModelHeading');
     const nerOption = getNERModelOption(selectedNerModelId);
-    if (anonModelHeading) anonModelHeading.textContent = `Loading ${nerOption.label}...`;
-    anonModelStatusText.textContent = `Downloading ${nerOption.label}...`;
-    updateStatus('loading', `Loading ${nerOption.label}...`);
-
-    try {
-        await initNERPipeline({
-            modelId: selectedNerModelId,
-            progressCallback: (progress) => {
-                if (progress.status === 'progress' && progress.total > 0) {
-                    const pct = Math.round((progress.loaded / progress.total) * 100);
-                    anonModelProgress.style.width = pct + '%';
-                    anonModelStatusText.textContent = `Downloading ${nerOption.label}: ${pct}%`;
-                }
-            },
-        });
-
-        anonModelStatusText.textContent = `${nerOption.label} loaded ✓`;
-        anonModelProgress.style.width = '100%';
-        updateStatus('idle', `${nerOption.label} ready`);
-        setTimeout(() => { anonModelStatus.style.display = 'none'; }, 1500);
-    } catch (error) {
-        console.error('NER model loading error:', error);
-        anonModelStatusText.textContent = 'NER error: ' + error.message;
-        updateStatus('idle', 'NER model loading failed');
-        throw error;
-    } finally {
-        isNerLoading = false;
+    const proceed = await preflightWarn({
+        key: `ner:${selectedNerModelId}`,
+        title: 'Load NER model?',
+        model: `${nerOption.label} — ${nerOption.model}`,
+        sizeMB: nerOption.sizeMB || 0,
+        why: `This NER model runs locally for PII detection. ${nerOption.qualityNote || ''}`,
+    });
+    if (!proceed) {
+        throw new Error('Model load cancelled by user');
     }
+
+    return withHeavyLoadLock(`NER: ${nerOption.label}`, async () => {
+        isNerLoading = true;
+        anonModelStatus.style.display = 'block';
+        anonModelProgress.style.width = '0%';
+
+        const anonModelHeading = document.getElementById('anonModelHeading');
+        if (anonModelHeading) anonModelHeading.textContent = `Loading ${nerOption.label}...`;
+        anonModelStatusText.textContent = `Downloading ${nerOption.label}...`;
+        updateStatus('loading', `Loading ${nerOption.label}...`);
+
+        try {
+            await initNERPipeline({
+                modelId: selectedNerModelId,
+                progressCallback: (progress) => {
+                    if (progress.status === 'progress' && progress.total > 0) {
+                        const pct = Math.round((progress.loaded / progress.total) * 100);
+                        anonModelProgress.style.width = pct + '%';
+                        anonModelStatusText.textContent = `Downloading ${nerOption.label}: ${pct}%`;
+                    }
+                },
+            });
+
+            anonModelStatusText.textContent = `${nerOption.label} loaded ✓`;
+            anonModelProgress.style.width = '100%';
+            updateStatus('idle', `${nerOption.label} ready`);
+            setTimeout(() => { anonModelStatus.style.display = 'none'; }, 1500);
+        } catch (error) {
+            console.error('NER model loading error:', error);
+            anonModelStatusText.textContent = 'NER error: ' + error.message;
+            updateStatus('idle', 'NER model loading failed');
+            throw error;
+        } finally {
+            isNerLoading = false;
+        }
+    });
 }
 
 async function extractEntitiesNER(text) {

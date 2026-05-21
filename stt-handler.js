@@ -2,6 +2,9 @@
 // Uses whisper-small or whisper-tiny for browser-based transcription.
 // Zero data leaves the browser — all processing is local.
 
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-21-stability-1';
+import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
+
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] stt-handler.js build', BUILD_ID, 'module url', import.meta.url);
 
@@ -44,6 +47,7 @@ const STT_MODEL_OPTIONS = {
         sizeWasm: '~150 MB',
         sizeMobile: '~40 MB',
         sizeGpu: '~150 MB',
+        sizeMB: 150,
         description: 'Fastest, lowest resource usage. Good for short recordings.',
         quality: 'Basic',
     },
@@ -53,6 +57,7 @@ const STT_MODEL_OPTIONS = {
         sizeWasm: '~300 MB',
         sizeMobile: '~80 MB',
         sizeGpu: '~290 MB',
+        sizeMB: 300,
         description: 'Middle ground between tiny and small.',
         quality: 'Fair',
     },
@@ -62,6 +67,7 @@ const STT_MODEL_OPTIONS = {
         sizeWasm: '~500 MB',
         sizeMobile: '~170 MB',
         sizeGpu: '~460 MB',
+        sizeMB: 500,
         description: 'Best accuracy. Recommended with WebGPU.',
         quality: 'Good',
     },
@@ -253,64 +259,80 @@ async function initSTTModel(externalProgressCb) {
         await disposeSTTModel();
     }
 
-    isModelLoading = true;
-    if (sttModelStatus) sttModelStatus.style.display = 'block';
-    if (sttModelProgress) sttModelProgress.style.width = '0%';
-
     const modelLabel = STT_MODEL_OPTIONS[selectedModel]?.label || selectedModel;
-    const sttModelHeading = document.getElementById('sttModelHeading');
-    if (sttModelHeading) sttModelHeading.textContent = `Loading ${modelLabel}...`;
-    if (sttModelStatusText) sttModelStatusText.textContent = `Initializing ${modelLabel}...`;
-    updateStatus('loading', `Loading ${modelLabel}...`);
+    const sizeMB = STT_MODEL_OPTIONS[selectedModel]?.sizeMB || 0;
 
-    try {
-        const { pipeline: createPipeline, env } = await import('@huggingface/transformers');
-        env.allowLocalModels = false;
-        env.useBrowserCache = true;
-
-        const fileProgress = {};
-        const loggedFiles = new Set();
-        const { dtype: modelDtype, device: modelDevice } = getModelConfig();
-        console.log(`[STT] Using device: ${modelDevice}, dtype: ${modelDtype}`);
-
-        pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
-            dtype: modelDtype,
-            device: modelDevice,
-            progress_callback: (progress) => {
-                if (progress.file && !loggedFiles.has(progress.file)) {
-                    loggedFiles.add(progress.file);
-                    console.log('[STT] loading file', progress.file);
-                }
-                if (progress.status === 'progress' && progress.total > 0) {
-                    const file = progress.file || 'data';
-                    fileProgress[file] = { loaded: progress.loaded, total: progress.total };
-                    const loaded = Object.values(fileProgress).reduce((a, c) => a + c.loaded, 0);
-                    const total = Object.values(fileProgress).reduce((a, c) => a + c.total, 0);
-                    const pct = Math.round((loaded / total) * 100);
-                    if (sttModelProgress) sttModelProgress.style.width = pct + '%';
-                    if (sttModelStatusText) sttModelStatusText.textContent = `Loading ${modelLabel}: ${pct}%`;
-                    updateStatus('loading', `Loading ${modelLabel}: ${pct}%`);
-                    if (externalProgressCb) externalProgressCb(progress);
-                } else if (progress.status === 'done') {
-                    if (sttModelStatusText) sttModelStatusText.textContent = `Initializing ${modelLabel}...`;
-                }
-            },
-        });
-
-        if (sttModelStatusText) sttModelStatusText.textContent = `${modelLabel} loaded ✓`;
-        if (sttModelProgress) sttModelProgress.style.width = '100%';
-        loadedModelId = selectedModel;
-        updateStatus('idle', 'System Ready');
-        setTimeout(() => { if (sttModelStatus) sttModelStatus.style.display = 'none'; }, 2000);
-    } catch (error) {
-        console.error('STT model loading error:', error);
-        if (sttModelStatusText) sttModelStatusText.textContent = 'Error: ' + formatLoadError(error);
-        updateStatus('idle', 'STT model loading failed');
-        pipeline = null;
-        throw error;
-    } finally {
-        isModelLoading = false;
+    const proceed = await preflightWarn({
+        key: `stt:${selectedModel}`,
+        title: 'Load speech-to-text model?',
+        model: modelLabel,
+        sizeMB,
+        why: 'Whisper runs locally for transcription. Larger models give better accuracy but use more RAM. WebGPU is much faster on Apple Silicon and modern GPUs.',
+    });
+    if (!proceed) {
+        throw new Error('Model load cancelled by user');
     }
+
+    return withHeavyLoadLock(`STT: ${modelLabel}`, async () => {
+        isModelLoading = true;
+        if (sttModelStatus) sttModelStatus.style.display = 'block';
+        if (sttModelProgress) sttModelProgress.style.width = '0%';
+
+        const sttModelHeading = document.getElementById('sttModelHeading');
+        if (sttModelHeading) sttModelHeading.textContent = `Loading ${modelLabel}...`;
+        if (sttModelStatusText) sttModelStatusText.textContent = `Initializing ${modelLabel}...`;
+        updateStatus('loading', `Loading ${modelLabel}...`);
+
+        try {
+            const { pipeline: createPipeline, env } = await import('@huggingface/transformers');
+            env.allowLocalModels = false;
+            env.useBrowserCache = true;
+
+            const fileProgress = {};
+            const loggedFiles = new Set();
+            const { dtype: modelDtype, device: modelDevice } = getModelConfig();
+            console.log(`[STT] Using device: ${modelDevice}, dtype: ${modelDtype}`);
+
+            pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
+                dtype: modelDtype,
+                device: modelDevice,
+                progress_callback: (progress) => {
+                    if (progress.file && !loggedFiles.has(progress.file)) {
+                        loggedFiles.add(progress.file);
+                        console.log('[STT] loading file', progress.file);
+                    }
+                    if (progress.status === 'progress' && progress.total > 0) {
+                        const file = progress.file || 'data';
+                        fileProgress[file] = { loaded: progress.loaded, total: progress.total };
+                        const loaded = Object.values(fileProgress).reduce((a, c) => a + c.loaded, 0);
+                        const total = Object.values(fileProgress).reduce((a, c) => a + c.total, 0);
+                        const pct = Math.round((loaded / total) * 100);
+                        if (sttModelProgress) sttModelProgress.style.width = pct + '%';
+                        if (sttModelStatusText) sttModelStatusText.textContent = `Loading ${modelLabel}: ${pct}%`;
+                        updateStatus('loading', `Loading ${modelLabel}: ${pct}%`);
+                        if (externalProgressCb) externalProgressCb(progress);
+                    } else if (progress.status === 'done') {
+                        if (sttModelStatusText) sttModelStatusText.textContent = `Initializing ${modelLabel}...`;
+                    }
+                },
+            });
+
+            if (sttModelStatusText) sttModelStatusText.textContent = `${modelLabel} loaded ✓`;
+            if (sttModelProgress) sttModelProgress.style.width = '100%';
+            loadedModelId = selectedModel;
+            registerLoadedModel('stt', disposeSTTModel, { sizeMB });
+            updateStatus('idle', 'System Ready');
+            setTimeout(() => { if (sttModelStatus) sttModelStatus.style.display = 'none'; }, 2000);
+        } catch (error) {
+            console.error('STT model loading error:', error);
+            if (sttModelStatusText) sttModelStatusText.textContent = 'Error: ' + formatLoadError(error);
+            updateStatus('idle', 'STT model loading failed');
+            pipeline = null;
+            throw error;
+        } finally {
+            isModelLoading = false;
+        }
+    });
 }
 
 async function disposeSTTModel() {
@@ -327,6 +349,7 @@ async function disposeSTTModel() {
     }
     pipeline = null;
     loadedModelId = null;
+    unregisterLoadedModel('stt');
 }
 
 // ── Live PCM Capture ───────────────────────────────────────────────────────────

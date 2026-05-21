@@ -658,7 +658,7 @@ async function downloadLLMModel() {
     offlineLLMPct.textContent = '0%';
 
     try {
-        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js');
+        const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js');
         const engine = await CreateMLCEngine(LLM_MODEL, {
             initProgressCallback: (progress) => {
                 const text = progress.text || '';

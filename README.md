@@ -243,7 +243,7 @@ Medmorf uses **two separate Transformers.js runtimes** to balance memory efficie
 | **Translation** | `translation-runtime.js` | `@xenova/transformers@2.17.2` (full CDN URL) | v3 consumed too much memory for the 600M NLLB model |
 | **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@3.8.1` (import map) | v3 supports modern model architectures (ModernBERT) |
 | **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses v3's `AutoTokenizer` via import map alias |
-| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.82` (WebGPU) | Qwen3 for additional PII verification |
+| **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.83` (WebGPU) | Qwen3 / Ministral-3 for additional PII verification |
 
 ### Why Two Runtimes?
 
