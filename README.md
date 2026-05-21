@@ -23,6 +23,7 @@ Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and sta
 | 📚 **Summarize** | Clinical-summary generation with the same WebLLM stack (Qwen3 4B by default) |
 | 🩻 **DICOM** | In-browser DICOM tag editing, anonymization presets, modality-aware sorting |
 | 📄 **Documents** | `.xlsx` (sheet/column-aware), `.docx`, and `.pdf` ingestion + export |
+| 🔳 **PDF redaction** | True burn-in PDF anonymization — auto OCR on scanned pages, output is re-rasterized so the original glyph/image text is gone, not just covered |
 | 💾 **Offline-first** | Full PWA — service worker caches the app shell + CDN deps; model weights persist in IndexedDB / Cache API |
 | 🔄 **App updates** | Storage tab → *App Updates* lets you refresh code without redownloading model weights |
 
@@ -33,7 +34,7 @@ Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and sta
 - **GDPR-compliant by design**; suitable for HIPAA-aligned workflows.
 - Verify yourself in DevTools: `window.medmorfSecurity.getPrivacyReport()`.
 
-See [PRIVACY.md](PRIVACY.md), [PRIVACY_VERIFICATION.md](PRIVACY_VERIFICATION.md), [HEALTHCARE_SAFETY.md](HEALTHCARE_SAFETY.md), and [SECURITY_AUDIT.md](SECURITY_AUDIT.md).
+See [docs/PRIVACY.md](docs/PRIVACY.md), [docs/PRIVACY_VERIFICATION.md](docs/PRIVACY_VERIFICATION.md), [docs/HEALTHCARE_SAFETY.md](docs/HEALTHCARE_SAFETY.md), and [docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md).
 
 ## 🚀 Quick Start
 
@@ -83,7 +84,7 @@ Medmorf is specifically designed for processing sensitive healthcare data:
 - Unencrypted devices
 - Outdated browsers
 
-See [PRIVACY.md](PRIVACY.md) for complete privacy documentation.
+See [docs/PRIVACY.md](docs/PRIVACY.md) for complete privacy documentation.
 
 ---
 
@@ -221,17 +222,21 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 ```
 medmorf/
 ├── index.html              # App shell + import map + Tailwind/brand config
-├── sw.js                   # Service worker (root scope)
-├── manifest.webmanifest    # PWA manifest
-├── README.md, DEPLOYMENT.md, PRIVACY.md,
-│   PRIVACY_VERIFICATION.md, HEALTHCARE_SAFETY.md,
-│   SECURITY_AUDIT.md       # Project docs
-├── AGENTS.md               # Instructions for AI coding agents
+├── sw.js                   # Service worker (must stay at root for full-site scope)
+├── manifest.webmanifest    # PWA manifest (root-served)
+├── README.md               # This file (root for GitHub rendering)
+├── AGENTS.md               # Pointer to agent instructions
 ├── .github/
-│   ├── copilot-instructions.md   # GitHub Copilot agent rules
+│   ├── copilot-instructions.md   # AI-agent rules (auto-loaded by Copilot)
 │   └── workflows/deploy.yml      # GitHub Pages deploy
+├── docs/
+│   ├── DEPLOYMENT.md
+│   ├── PRIVACY.md
+│   ├── PRIVACY_VERIFICATION.md
+│   ├── HEALTHCARE_SAFETY.md
+│   ├── SECURITY_AUDIT.md
+│   └── brand/              # Brand guide (Markdown + HTML preview)
 ├── assets/brand/           # Logo, favicons, app icons (SVG)
-├── docs/brand/             # Brand guide (Markdown + HTML preview)
 ├── styles/
 │   ├── styles.css          # Legacy component styles
 │   └── brand.css           # Brand layer (tokens + JS-hooked classes)
@@ -248,16 +253,17 @@ medmorf/
 │   ├── summarize-handler.js         # Summarize tab UI + LLM
 │   ├── stt-handler.js               # Speech-to-text tab
 │   ├── dicom-handler.js             # DICOM tag editor + sort tab
-│   ├── pdf-handler.js               # PDF upload/extract/export
+│   ├── pdf-handler.js               # PDF merge tab
+│   ├── pdf-anonymize-handler.js     # PDF anonymize (text-layer + auto-OCR + burn-in)
 │   ├── word-handler.js              # .docx ingestion
 │   ├── excel-handler.js             # .xlsx sheet/column UI
 │   └── stubs/{empty,null}-module.js # Browser shims for Node-only modules
-├── server/
-│   └── deduce_server.py    # Optional Dutch DEDUCE de-identification server
 └── tests/                  # Sample fixtures + diagnostic page
     ├── test-upgrade.html
     └── test_*.{txt,xlsx}
 ```
+
+There is intentionally **no `server/` folder** — Medmorf is 100% client-side. All processing happens in the browser; nothing is sent to a backend.
 
 ## 🎨 Brand
 

@@ -8,7 +8,7 @@ The README is the canonical reference for users, contributors, and other agents.
 
 You **must update `README.md`** whenever you do any of the following:
 
-- Add, remove, rename, or relocate any file in `src/`, `styles/`, `assets/brand/`, `server/`, or `tests/`
+- Add, remove, rename, or relocate any file in `src/`, `styles/`, `assets/brand/`, `docs/`, or `tests/`
 - Change the top-level folder structure
 - Add, remove, or replace a runtime dependency (CDN URL, model ID, library version)
 - Change the supported file formats (`.xlsx`, `.docx`, `.pdf`, DICOM, audio …)
@@ -51,7 +51,8 @@ If you add a new top-level folder, a new agent-relevant convention, or a new con
 - **Brand assets** live in `assets/brand/`. Reference SVGs from there in `index.html` `<head>`, `manifest.webmanifest`, and `sw.js` APP_SHELL. The brand guide is at `docs/brand/medmorf-brand-guide.md`.
 - **Privacy posture is load-bearing.** Do not introduce analytics, tracking, third-party telemetry, or unconditional outbound network calls. Models are loaded from public CDNs; that's the only egress.
 - **Test fixtures** live in `tests/`. Don't move them to the repo root.
-- **`server/deduce_server.py`** is an optional Python service, not part of the client app. Keep it in `server/`.
+- **No `server/` folder.** Medmorf is 100% client-side. Do not add a backend service to this repo — if a companion server is needed, it belongs in a separate repository so it can't be confused with the deployed PWA.
+- **Documentation** (privacy, deployment, healthcare-safety, security audits, brand guide) lives in `docs/`. Only `README.md` and `AGENTS.md` stay at the repo root.
 
 ## 4. Cache-busting
 

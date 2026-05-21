@@ -513,20 +513,92 @@ async function cleanupLiveCapture() {
 }
 
 // ── Audio Recording ────────────────────────────────────────────────────────────
+
+/**
+ * Acquire the microphone with explicit, classified error reporting.
+ * Must be called synchronously inside a user-gesture handler (or before any
+ * long async work) so the browser actually shows its permission prompt.
+ *
+ * @param {(msg:string,kind:'info'|'error')=>void} report  UI status reporter
+ * @returns {Promise<MediaStream|null>}
+ */
+async function acquireMicStream(report) {
+    // 1. Insecure context — getUserMedia rejects silently on http:// (except localhost).
+    if (typeof window !== 'undefined' && window.isSecureContext === false) {
+        report('Microphone blocked: this page must be served over HTTPS (or localhost). Open the site via its https:// URL and try again.', 'error');
+        return null;
+    }
+    // 2. API missing (very old browser, or disabled by enterprise policy / Permissions-Policy).
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        report('Microphone unavailable: this browser does not expose mediaDevices.getUserMedia. Try Chrome, Edge, Firefox or Safari, and check that microphone isn’t disabled by your browser/OS or a Permissions-Policy header.', 'error');
+        return null;
+    }
+    // 3. If permission was previously denied at the browser level, getUserMedia rejects
+    //    immediately without showing a prompt. Surface that clearly.
+    try {
+        if (navigator.permissions && navigator.permissions.query) {
+            const p = await navigator.permissions.query({ name: 'microphone' });
+            if (p && p.state === 'denied') {
+                report('Microphone permission was previously denied for this site. Click the lock/info icon in the address bar → Site settings → set Microphone to “Allow” (or “Ask”), then reload.', 'error');
+                return null;
+            }
+        }
+    } catch (_) { /* permissions.query for "microphone" is unsupported in some browsers — ignore */ }
+
+    try {
+        return await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (err) {
+        const name = err && err.name;
+        let msg;
+        switch (name) {
+            case 'NotAllowedError':
+            case 'SecurityError':
+                msg = 'Microphone permission denied. Click the lock/info icon in the address bar and allow microphone access, then try again.';
+                break;
+            case 'NotFoundError':
+            case 'OverconstrainedError':
+                msg = 'No microphone found. Connect a microphone (or check OS sound settings) and try again.';
+                break;
+            case 'NotReadableError':
+                msg = 'Microphone is in use by another application. Close other apps using the mic and try again.';
+                break;
+            case 'AbortError':
+                msg = 'Microphone request was aborted. Try again.';
+                break;
+            default:
+                msg = `Microphone error: ${name || 'unknown'} — ${err && err.message ? err.message : 'no details'}.`;
+        }
+        console.error('[stt] getUserMedia failed:', err);
+        report(msg, 'error');
+        return null;
+    }
+}
+
 async function startRecording() {
     if (isRecording) return;
 
-    try {
-        // Load model FIRST — before starting mic/recording
+    const report = (msg, _kind) => {
         if (sttLiveStatus) {
             if (sttLiveTranscript) sttLiveTranscript.style.display = 'block';
-            sttLiveStatus.textContent = 'Loading model...';
+            sttLiveStatus.textContent = msg;
         }
-        if (sttRecordBtn) sttRecordBtn.disabled = true;
+    };
+
+    // 1. Acquire mic FIRST — keeps us inside the user-gesture window so the
+    //    permission prompt is guaranteed to appear (model load can take seconds).
+    if (sttRecordBtn) sttRecordBtn.disabled = true;
+    const stream = await acquireMicStream(report);
+    if (!stream) {
+        if (sttRecordBtn) sttRecordBtn.disabled = false;
+        return;
+    }
+
+    try {
+        // 2. Now load the model.
+        report('Loading model...', 'info');
         await initSTTModel();
         if (sttRecordBtn) sttRecordBtn.disabled = false;
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioChunks = [];
         recordedBlob = null;
         liveSegments = [];
@@ -566,8 +638,16 @@ async function startRecording() {
         // Model is already loaded — start live transcription loop immediately
         startLiveLoop();
     } catch (error) {
-        console.error('Microphone access error:', error);
-        alert('Could not access microphone. Please allow microphone permission.');
+        console.error('[stt] recording setup failed after mic acquired:', error);
+        // Release the mic since we never started recording.
+        try { stream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        report(`Could not start transcription: ${error && error.message ? error.message : error}`, 'error');
+        if (sttRecordBtn) {
+            sttRecordBtn.disabled = false;
+            sttRecordBtn.style.display = '';
+        }
+        if (sttStopBtn) sttStopBtn.style.display = 'none';
+        if (sttRecordingIndicator) sttRecordingIndicator.style.display = 'none';
     }
 }
 
@@ -879,15 +959,31 @@ function collectDictaphonePCM() {
 async function dictStartEntry() {
     if (dictaphoneRecording) return;
 
+    // Find a status element to report into (fall back to alert if none exists).
+    const dictStatusEl = document.getElementById('dictStatus') || document.getElementById('dictLiveStatus');
+    const report = (msg, _kind) => {
+        if (dictStatusEl) dictStatusEl.textContent = msg;
+        else console.warn('[dict]', msg);
+    };
+
+    if (dictRecordBtn) dictRecordBtn.disabled = true;
+
+    // 1. Acquire mic FIRST (only if we don't already have a stream).
+    if (!dictaphoneStream) {
+        const stream = await acquireMicStream(report);
+        if (!stream) {
+            if (dictRecordBtn) dictRecordBtn.disabled = false;
+            return;
+        }
+        dictaphoneStream = stream;
+    }
+
     try {
-        // Load model FIRST — before starting mic/recording
-        if (dictRecordBtn) dictRecordBtn.disabled = true;
+        // 2. Load model.
+        report('Loading model...', 'info');
         await initSTTModel();
         if (dictRecordBtn) dictRecordBtn.disabled = false;
 
-        if (!dictaphoneStream) {
-            dictaphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        }
         if (!dictaphoneSessionStart) dictaphoneSessionStart = new Date();
 
         dictaphonePcmChunks = [];
@@ -913,9 +1009,18 @@ async function dictStartEntry() {
         if (dictStopBtn) dictStopBtn.style.display = '';
         if (dictRecordingIndicator) dictRecordingIndicator.style.display = 'flex';
         if (dictWaveformCanvas) dictWaveformCanvas.style.display = 'block';
+        report('', 'info');
     } catch (error) {
-        console.error('Dictaphone mic error:', error);
-        alert('Could not access microphone.');
+        console.error('[dict] entry start failed after mic acquired:', error);
+        try { dictaphoneStream && dictaphoneStream.getTracks().forEach(t => t.stop()); } catch (_) {}
+        dictaphoneStream = null;
+        report(`Could not start dictation: ${error && error.message ? error.message : error}`, 'error');
+        if (dictRecordBtn) {
+            dictRecordBtn.disabled = false;
+            dictRecordBtn.style.display = '';
+        }
+        if (dictStopBtn) dictStopBtn.style.display = 'none';
+        if (dictRecordingIndicator) dictRecordingIndicator.style.display = 'none';
     }
 }
 
