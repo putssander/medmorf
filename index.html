@@ -461,12 +461,13 @@
                                 <option value="ner">NER only</option>
                             </select>
                         </div>
-                        <div class="setting-group compact">
+                        <div class="setting-group compact" id="anonNerModelGroup">
                             <label for="anonNerModelSelect">NER Model</label>
                             <select id="anonNerModelSelect">
                                 <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
                                 <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
                                 <option value="multilingual_ner">Multilingual BERT NER</option>
+                                <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
                             </select>
                         </div>
                         <div class="setting-group compact">

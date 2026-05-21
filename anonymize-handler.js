@@ -294,9 +294,10 @@ function updateNerModelHint() {
     const supportedLanguages = option.supportedLanguages ? option.supportedLanguages.join(', ') : 'See model card';
     const qualityNote = option.qualityNote ? ` Quality note: ${option.qualityNote}` : '';
     anonNerModelHint.textContent = `${option.label}: ${option.description} Supported languages: ${supportedLanguages}. Categories: ${option.categoriesLabel}.${qualityNote}`;
-    // Show threshold slider only for GLiNER models
+    // Show threshold slider only for GLiNER models, and only when NER is part of the pipeline
     if (glinerThresholdRow) {
-        glinerThresholdRow.style.display = option.engine === 'gliner' ? 'flex' : 'none';
+        const showThreshold = option.engine === 'gliner' && getSelectedPipeline() !== 'llm';
+        glinerThresholdRow.style.display = showThreshold ? 'flex' : 'none';
     }
 }
 
@@ -918,6 +919,18 @@ function updatePipelineControls() {
     const pipeline = getSelectedPipeline();
     if (anonModelSelect) {
         anonModelSelect.disabled = pipeline === 'ner';
+    }
+    // Hide NER model picker, GLiNER threshold and NER hint when running LLM-only.
+    const nerVisible = pipeline !== 'llm';
+    const nerGroup = document.getElementById('anonNerModelGroup');
+    if (nerGroup) nerGroup.style.display = nerVisible ? '' : 'none';
+    if (anonNerModelHint) anonNerModelHint.style.display = nerVisible ? '' : 'none';
+    if (glinerThresholdRow) {
+        if (!nerVisible) {
+            glinerThresholdRow.style.display = 'none';
+        } else if (isGLiNERModel(getSelectedNerModelId())) {
+            glinerThresholdRow.style.display = '';
+        }
     }
 }
 

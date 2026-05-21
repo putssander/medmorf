@@ -102,6 +102,29 @@ export const NER_MODEL_OPTIONS = {
             MISC: 'OTHER',
         },
     },
+    openai_privacy_filter: {
+        id: 'openai_privacy_filter',
+        label: 'OpenAI Privacy Filter (1.5B, WebGPU)',
+        model: 'openai/privacy-filter',
+        description: 'OpenAI bidirectional token classifier for PII detection (8 span categories incl. names, emails, addresses, dates, URLs, account numbers, secrets).',
+        supportedLanguages: ['English (primary)', 'Multilingual robustness reported'],
+        qualityNote: '~1.5B params, q4 quantized. Runs in-browser via WebGPU; falls back to WASM if WebGPU is unavailable (slower).',
+        categoriesLabel: 'PERSON, EMAIL, PHONE, ADDRESS, DATE, URL, ID_NUMBER, OTHER',
+        cacheMatchers: ['privacy-filter'],
+        dtypes: ['q4', 'q8'],
+        device: 'webgpu',
+        deviceFallback: true,
+        typeMap: {
+            private_person: 'PERSON',
+            private_email: 'EMAIL',
+            private_phone: 'PHONE',
+            private_address: 'ADDRESS',
+            private_date: 'DATE',
+            private_url: 'OTHER',
+            account_number: 'ID_NUMBER',
+            secret: 'ID_NUMBER',
+        },
+    },
 };
 
 let transformersModulePromise = null;
@@ -171,20 +194,27 @@ export function mapNEREntityType(rawType, modelId = activeNerModelId || DEFAULT_
 
 async function createNERPipelineWithFallback(pipeline, option, progressCallback) {
     const dtypes = Array.isArray(option.dtypes) && option.dtypes.length ? option.dtypes : ['q8'];
+    const devices = option.device
+        ? (option.deviceFallback ? [option.device, undefined] : [option.device])
+        : [undefined];
     let lastError = null;
 
-    for (const dtype of dtypes) {
-        try {
-            const instance = await pipeline('token-classification', option.model, {
-                dtype,
-                progress_callback: progressCallback,
-            });
-            activeNerDtype = dtype;
-            console.log(`[NER] Loaded ${option.label} with dtype ${dtype}`);
-            return instance;
-        } catch (error) {
-            lastError = error;
-            console.warn(`[NER] Failed to load ${option.label} with dtype ${dtype}`, error);
+    for (const device of devices) {
+        for (const dtype of dtypes) {
+            try {
+                const opts = {
+                    dtype,
+                    progress_callback: progressCallback,
+                };
+                if (device) opts.device = device;
+                const instance = await pipeline('token-classification', option.model, opts);
+                activeNerDtype = device ? `${dtype} (${device})` : dtype;
+                console.log(`[NER] Loaded ${option.label} with dtype ${dtype}${device ? ' on ' + device : ''}`);
+                return instance;
+            } catch (error) {
+                lastError = error;
+                console.warn(`[NER] Failed to load ${option.label} with dtype ${dtype}${device ? ' on ' + device : ''}`, error);
+            }
         }
     }
 
