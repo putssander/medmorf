@@ -447,63 +447,78 @@
             <div class="tab-panel" id="tab-anonymize">
 
                 <div class="anon-header">
-                    <div class="hw-requirements-notice">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
-                        <span><strong>Hardware:</strong> Requires a modern GPU or Apple Silicon Mac with WebGPU support (Chrome/Edge 113+, Safari 18+). The default 4B model needs ~3.4 GB GPU memory; choose a smaller model on devices with limited VRAM.</span>
+                    <p class="section-description">Detect and replace personal data (PII) in medical documents — entirely in your browser. Nothing is uploaded.</p>
+
+                    <!-- Smart mode banner: auto-picks the best method for this device -->
+                    <div class="anon-mode-banner" id="anonModeBanner">
+                        <div class="anon-mode-summary">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                            <div class="anon-mode-text">
+                                <strong id="anonModeTitle">Auto-detecting best method…</strong>
+                                <span id="anonModeSubtitle" class="storage-hint">Checking your hardware.</span>
+                            </div>
+                        </div>
+                        <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU…</div>
                     </div>
-                    <p class="section-description">Detect and replace PII in medical documents using <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> + WebGPU — entirely in your browser.</p>
-                    <div class="anon-settings-row">
-                        <div class="setting-group compact">
-                            <label for="anonPipelineSelect">Pipeline</label>
-                            <select id="anonPipelineSelect">
-                                <option value="llm" selected>LLM only (recommended)</option>
-                                <option value="ner+llm">NER + LLM</option>
-                                <option value="ner">NER only</option>
-                            </select>
+
+                    <details class="anon-advanced">
+                        <summary>Advanced settings — pick a specific model</summary>
+                        <div class="anon-settings-row">
+                            <div class="setting-group compact">
+                                <label for="anonPipelineSelect">Pipeline</label>
+                                <select id="anonPipelineSelect">
+                                    <option value="llm" selected>LLM only (recommended)</option>
+                                    <option value="ner+llm">NER + LLM</option>
+                                    <option value="ner">NER only</option>
+                                </select>
+                            </div>
+                            <div class="setting-group compact" id="anonNerModelGroup">
+                                <label for="anonNerModelSelect">NER Model</label>
+                                <select id="anonNerModelSelect">
+                                    <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
+                                    <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
+                                    <option value="multilingual_ner">Multilingual BERT NER</option>
+                                    <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
+                                </select>
+                            </div>
+                            <div class="setting-group compact">
+                                <label for="anonModelSelect">LLM Model</label>
+                                <select id="anonModelSelect">
+                                    <!-- Populated dynamically by anonymize-handler.js -->
+                                </select>
+                            </div>
                         </div>
-                        <div class="setting-group compact" id="anonNerModelGroup">
-                            <label for="anonNerModelSelect">NER Model</label>
-                            <select id="anonNerModelSelect">
-                                <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
-                                <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
-                                <option value="multilingual_ner">Multilingual BERT NER</option>
-                                <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
-                            </select>
+                        <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
+                            <div class="setting-group compact" style="flex:1">
+                                <label for="glinerThreshold">GLiNER Threshold: <span id="glinerThresholdValue">0.3</span></label>
+                                <input type="range" id="glinerThreshold" min="0.05" max="0.95" step="0.05" value="0.3" style="width:100%">
+                                <small class="storage-hint">Lower = more entities detected (more false positives). Higher = fewer but more confident detections.</small>
+                            </div>
                         </div>
-                        <div class="setting-group compact">
-                            <label for="anonModelSelect">LLM Model</label>
-                            <select id="anonModelSelect">
-                                <!-- Populated dynamically by anonymize-handler.js -->
-                            </select>
-                        </div>
-                        <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
-                    </div>
-                    <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
-                        <div class="setting-group compact" style="flex:1">
-                            <label for="glinerThreshold">GLiNER Threshold: <span id="glinerThresholdValue">0.3</span></label>
-                            <input type="range" id="glinerThreshold" min="0.05" max="0.95" step="0.05" value="0.3" style="width:100%">
-                            <small class="storage-hint">Lower = more entities detected (more false positives). Higher = fewer but more confident detections.</small>
-                        </div>
-                    </div>
-                    <p id="anonNerModelHint" class="section-description" style="margin-top: 0.75rem;"></p>
+                        <p id="anonNerModelHint" class="section-description" style="margin-top: 0.75rem;"></p>
+                    </details>
+
+                    <details class="hw-details">
+                        <summary>How it works · models &amp; hardware</summary>
+                        <p><strong>LLM only</strong> (recommended on WebGPU devices): Qwen3 handles all PII detection in a single pass. Best accuracy, especially with the 4B or 8B model.</p>
+                        <p><strong>NER + LLM</strong>: Run a NER model first, then let the LLM verify and catch remaining PII. Useful for additional coverage or comparison.</p>
+                        <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
+                        <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.4 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
+                        <ul>
+                            <li><strong>Qwen3 0.6B</strong> — ~1.4 GB VRAM. Smallest &amp; fastest LLM. Good for quick scans.</li>
+                            <li><strong>Qwen3 1.7B</strong> — ~2 GB VRAM. Good balance of speed and quality.</li>
+                            <li><strong>Qwen3 4B</strong> (default) — ~3.4 GB VRAM. Best quality for most devices.</li>
+                            <li><strong>Qwen3 8B</strong> — ~5.7 GB VRAM. Highest quality, needs a powerful GPU.</li>
+                            <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
+                            <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
+                            <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER (people, places, organizations).</li>
+                            <li><strong>OpenAI Privacy Filter</strong> — ~1.5 B params (q4 ≈ 800 MB). OpenAI's bidirectional token classifier with 8 PII categories: person, email, phone, address, date, URL, account number, secret. Runs in-browser via <a href="https://huggingface.co/openai/privacy-filter" target="_blank" rel="noopener noreferrer">Transformers.js + WebGPU</a>; falls back to WASM if WebGPU is unavailable (slower). Primarily English with multilingual robustness reported. Pick it under <em>Advanced settings → NER Model</em> with the <em>NER only</em> or <em>NER + LLM</em> pipeline.</li>
+                        </ul>
+                        <p>Always manually review the output. First load downloads the selected model; subsequent runs use the browser cache.</p>
+                    </details>
+
                     <div class="anon-disclaimer">
                         <p><strong>⚠️ Disclaimer:</strong> Anonymization is not guaranteed to detect all PII. Always manually review the output before sharing documents. This tool is an aid, not a replacement for human review.</p>
-                        <details class="hw-details">
-                            <summary>Pipeline details &amp; hardware</summary>
-                            <p><strong>LLM only</strong> (recommended): Qwen3 handles all PII detection in a single pass. Best accuracy, especially with the 4B or 8B model.</p>
-                            <p><strong>NER + LLM</strong>: Run a NER model first, then let the LLM verify and catch remaining PII. Useful for additional coverage or comparison.</p>
-                            <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
-                            <ul>
-                                <li><strong>Qwen3 0.6B</strong> — ~1.4 GB VRAM. Smallest & fastest. Good for quick scans.</li>
-                                <li><strong>Qwen3 1.7B</strong> — ~2 GB VRAM. Good balance of speed and quality.</li>
-                                <li><strong>Qwen3 4B</strong> (default) — ~3.4 GB VRAM. Best quality for most devices.</li>
-                                <li><strong>Qwen3 8B</strong> — ~5.7 GB VRAM. Highest quality, needs a powerful GPU.</li>
-                                <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
-                                <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
-                                <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER.</li>
-                            </ul>
-                            <p>Always manually review the output. First load downloads the selected model; subsequent runs use the browser cache.</p>
-                        </details>
                     </div>
                 </div>
 
@@ -519,8 +534,8 @@
                                 <line x1="16" y1="17" x2="8" y2="17"></line>
                             </svg>
                             <p>Drop document here</p>
-                            <p class="file-types">.xlsx, .docx, .txt</p>
-                            <input type="file" id="anonDocInput" accept=".xlsx,.docx,.txt" hidden>
+                            <p class="file-types">.pdf, .xlsx, .docx, .txt</p>
+                            <input type="file" id="anonDocInput" accept=".pdf,.xlsx,.docx,.txt" hidden>
                         </div>
                         <div class="file-info" id="anonDocInfo" style="display: none;">
                             <div class="file-details">
@@ -1555,7 +1570,7 @@
     <script src="excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="app.js?v=2026-03-23-cachefix-8"></script>
-    <script type="module" src="anonymize-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="anonymize-handler.js?v=2026-03-24-cachefix-10"></script>
     <script type="module" src="summarize-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="stt-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="cache-manager.js?v=2026-03-23-cachefix-8"></script>

@@ -102,6 +102,8 @@ const anonPreviewText = document.getElementById('anonPreviewText');
 const downloadAnonDocBtn = document.getElementById('downloadAnonDocBtn');
 const downloadMappingBtn = document.getElementById('downloadMappingBtn');
 const anonWebGPUStatus = document.getElementById('anonWebGPUStatus');
+const anonModeTitle = document.getElementById('anonModeTitle');
+const anonModeSubtitle = document.getElementById('anonModeSubtitle');
 const anonMappingCount = document.getElementById('anonMappingCount');
 const clearAnonMappingBtn = document.getElementById('clearAnonMappingBtn');
 const anonModelSelect = document.getElementById('anonModelSelect');
@@ -124,28 +126,70 @@ function updateStatus(state, message) {
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
 let hasWebGPU = false;
 (async function checkWebGPU() {
-    if (!anonWebGPUStatus) return;
-    if (navigator.gpu) {
-        try {
-            const adapter = await navigator.gpu.requestAdapter();
-            if (adapter) {
-                hasWebGPU = true;
-                anonWebGPUStatus.innerHTML = '✓ WebGPU available';
-                anonWebGPUStatus.className = 'webgpu-status supported';
-            } else {
-                anonWebGPUStatus.innerHTML = '⚠ WebGPU adapter not found — LLM anonymization requires WebGPU (Chrome/Edge 113+ or Safari 18+)';
+    if (anonWebGPUStatus) {
+        if (navigator.gpu) {
+            try {
+                const adapter = await navigator.gpu.requestAdapter();
+                if (adapter) {
+                    hasWebGPU = true;
+                    anonWebGPUStatus.innerHTML = '✓ WebGPU available';
+                    anonWebGPUStatus.className = 'webgpu-status supported';
+                } else {
+                    anonWebGPUStatus.innerHTML = '⚠ No WebGPU adapter — using CPU NER';
+                    anonWebGPUStatus.className = 'webgpu-status fallback';
+                }
+            } catch {
+                anonWebGPUStatus.innerHTML = '⚠ WebGPU error — using CPU NER';
                 anonWebGPUStatus.className = 'webgpu-status fallback';
             }
-        } catch {
-            anonWebGPUStatus.innerHTML = '⚠ WebGPU error — LLM anonymization requires WebGPU';
+        } else {
+            anonWebGPUStatus.innerHTML = '⚠ No WebGPU — using CPU NER';
             anonWebGPUStatus.className = 'webgpu-status fallback';
         }
-    } else {
-        anonWebGPUStatus.innerHTML = '⚠ No WebGPU — LLM anonymization requires WebGPU (Chrome/Edge 113+ or Safari 18+)';
-        anonWebGPUStatus.className = 'webgpu-status fallback';
     }
     populateLLMModelSelect();
+    applySmartDefaults();
+    updateModeBanner();
 })();
+
+// Pick the best pipeline for this device automatically
+function applySmartDefaults() {
+    if (!anonPipelineSelect) return;
+    if (anonPipelineSelect.dataset.userChanged === '1') return; // respect user override
+    if (hasWebGPU) {
+        anonPipelineSelect.value = 'llm';
+    } else {
+        anonPipelineSelect.value = 'ner';
+        if (anonNerModelSelect && anonNerModelSelect.dataset.userChanged !== '1') {
+            // Multilingual PII NER runs well on CPU
+            anonNerModelSelect.value = 'multilang_pii';
+        }
+    }
+    updatePipelineControls();
+    if (typeof updateNerModelHint === 'function') updateNerModelHint();
+}
+
+// Friendly summary of the active detection method
+function updateModeBanner() {
+    if (!anonModeTitle || !anonModeSubtitle) return;
+    const pipeline = getSelectedPipeline();
+    if (pipeline === 'llm') {
+        const opt = getSelectedLLMOption();
+        anonModeTitle.textContent = `LLM detection · ${opt.label}`;
+        anonModeSubtitle.textContent = hasWebGPU
+            ? 'Best accuracy. Runs on your GPU.'
+            : '⚠ Needs WebGPU — switch to NER under Advanced settings on this device.';
+    } else if (pipeline === 'ner+llm') {
+        const nerOpt = getNERModelOption(getSelectedNerModelId());
+        const llmOpt = getSelectedLLMOption();
+        anonModeTitle.textContent = `NER + LLM · ${nerOpt.label} + ${llmOpt.label}`;
+        anonModeSubtitle.textContent = 'Two-pass detection: NER first, LLM verifies and adds.';
+    } else {
+        const nerOpt = getNERModelOption(getSelectedNerModelId());
+        anonModeTitle.textContent = `NER detection · ${nerOpt.label}`;
+        anonModeSubtitle.textContent = 'Fast, no GPU required.';
+    }
+}
 
 function populateLLMModelSelect() {
     if (!anonModelSelect) return;
@@ -854,6 +898,107 @@ function chunkText(text) {
 }
 
 // ── Document Extraction ────────────────────────────────────────────────────────
+let _pdfjsLib = null;
+async function loadPdfJs() {
+    if (_pdfjsLib) return _pdfjsLib;
+    const PDFJS_VERSION = '4.7.76';
+    const lib = await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);
+    if (lib.GlobalWorkerOptions) {
+        lib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+    }
+    _pdfjsLib = lib;
+    return lib;
+}
+
+async function extractTextFromPdf(file) {
+    const pdfjs = await loadPdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    const pageTexts = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        // Reconstruct text with line breaks based on item.hasEOL or absent newlines
+        let pageText = '';
+        let lastY = null;
+        for (const item of content.items) {
+            const text = item.str || '';
+            const y = item.transform ? item.transform[5] : null;
+            if (lastY !== null && y !== null && Math.abs(y - lastY) > 1) {
+                pageText += '\n';
+            } else if (pageText && !pageText.endsWith(' ') && text && !text.startsWith(' ')) {
+                pageText += ' ';
+            }
+            pageText += text;
+            if (item.hasEOL) pageText += '\n';
+            lastY = y;
+        }
+        pageTexts.push(pageText.trim());
+    }
+    return pageTexts.join('\n\n');
+}
+
+// Build a new PDF containing the anonymized plain text using pdf-lib.
+// (Re-rendering as a new document strips original metadata and embedded images,
+//  which is the safer outcome for an anonymization tool.)
+async function createAnonymizedPdfBlob(text) {
+    if (typeof PDFLib === 'undefined') {
+        throw new Error('pdf-lib not loaded');
+    }
+    const { PDFDocument, StandardFonts, rgb } = PDFLib;
+    const doc = await PDFDocument.create();
+    const font = await doc.embedFont(StandardFonts.Helvetica);
+    const fontSize = 11;
+    const lineHeight = fontSize * 1.4;
+    const pageWidth = 595.28;   // A4 in points
+    const pageHeight = 841.89;
+    const margin = 56;
+    const maxWidth = pageWidth - margin * 2;
+
+    // Word-wrap helper
+    function wrapLine(line) {
+        if (line === '') return [''];
+        const words = line.split(/(\s+)/);
+        const lines = [];
+        let current = '';
+        for (const word of words) {
+            const candidate = current + word;
+            const width = font.widthOfTextAtSize(candidate, fontSize);
+            if (width > maxWidth && current.trim().length > 0) {
+                lines.push(current);
+                current = word.replace(/^\s+/, '');
+            } else {
+                current = candidate;
+            }
+        }
+        if (current.length > 0) lines.push(current);
+        return lines;
+    }
+
+    // pdf-lib's WinAnsi font can't render some Unicode chars; substitute safely.
+    const safeText = text.replace(/[^\x00-\xFF]/g, '?');
+
+    const sourceLines = safeText.split(/\r?\n/);
+    const wrapped = [];
+    for (const line of sourceLines) {
+        for (const w of wrapLine(line)) wrapped.push(w);
+    }
+
+    let page = doc.addPage([pageWidth, pageHeight]);
+    let y = pageHeight - margin;
+    for (const line of wrapped) {
+        if (y < margin) {
+            page = doc.addPage([pageWidth, pageHeight]);
+            y = pageHeight - margin;
+        }
+        page.drawText(line, { x: margin, y, size: fontSize, font, color: rgb(0, 0, 0) });
+        y -= lineHeight;
+    }
+
+    const bytes = await doc.save();
+    return new Blob([bytes], { type: 'application/pdf' });
+}
+
 async function extractTextFromDocument(file) {
     const extension = file.name.split('.').pop().toLowerCase();
     if (extension === 'txt') {
@@ -862,6 +1007,8 @@ async function extractTextFromDocument(file) {
         const arrayBuffer = await file.arrayBuffer();
         const result = await mammoth.extractRawText({ arrayBuffer });
         return result.value;
+    } else if (extension === 'pdf') {
+        return await extractTextFromPdf(file);
     } else if (extension === 'xlsx') {
         const data = await file.arrayBuffer();
         anonWorkbook = XLSX.read(data, { type: 'array' });
@@ -1244,10 +1391,19 @@ function escapeHTML(str) {
 }
 
 // ── Downloads ──────────────────────────────────────────────────────────────────
-downloadAnonDocBtn.addEventListener('click', () => {
+downloadAnonDocBtn.addEventListener('click', async () => {
     if (!anonymizedResult || !anonDocument) return;
     const baseName = anonDocument.name.replace(/\.[^/.]+$/, '');
-    if (typeof anonymizedResult === 'string') {
+    if (anonDocType === 'pdf' && typeof anonymizedResult === 'string') {
+        try {
+            const blob = await createAnonymizedPdfBlob(anonymizedResult);
+            saveAs(blob, `${baseName}_anonymized.pdf`);
+        } catch (err) {
+            console.error('PDF generation failed, falling back to .txt:', err);
+            const blob = new Blob([anonymizedResult], { type: 'text/plain' });
+            saveAs(blob, `${baseName}_anonymized.txt`);
+        }
+    } else if (typeof anonymizedResult === 'string') {
         const blob = new Blob([anonymizedResult], { type: 'text/plain' });
         saveAs(blob, `${baseName}_anonymized.txt`);
     } else {
@@ -1295,12 +1451,12 @@ function setupDropArea(area, input, onFile) {
 
 setupDropArea(anonDocUpload, anonDocInput, async (file) => {
     const ext = file.name.split('.').pop().toLowerCase();
-    if (!['xlsx', 'docx', 'txt'].includes(ext)) {
-        alert('Unsupported file type. Please upload .xlsx, .docx, or .txt files.');
+    if (!['xlsx', 'docx', 'txt', 'pdf'].includes(ext)) {
+        alert('Unsupported file type. Please upload .pdf, .xlsx, .docx, or .txt files.');
         return;
     }
     anonDocument = file;
-    anonDocType = ext === 'xlsx' ? 'excel' : 'text';
+    anonDocType = ext === 'xlsx' ? 'excel' : (ext === 'pdf' ? 'pdf' : 'text');
     anonDocName.textContent = file.name;
     anonDocInfo.style.display = 'block';
     anonResults.style.display = 'none';
@@ -1353,10 +1509,19 @@ if (clearAnonMappingBtn) {
 
 if (anonNerModelSelect) {
     anonNerModelSelect.addEventListener('change', async () => {
+        anonNerModelSelect.dataset.userChanged = '1';
         updateNerModelHint();
+        updateModeBanner();
         if (getNERPipeline()) {
             await disposeNERPipeline();
         }
+    });
+}
+
+if (anonModelSelect) {
+    anonModelSelect.addEventListener('change', () => {
+        anonModelSelect.dataset.userChanged = '1';
+        updateModeBanner();
     });
 }
 
@@ -1369,7 +1534,11 @@ if (glinerThresholdInput) {
 }
 
 if (anonPipelineSelect) {
-    anonPipelineSelect.addEventListener('change', updatePipelineControls);
+    anonPipelineSelect.addEventListener('change', () => {
+        anonPipelineSelect.dataset.userChanged = '1';
+        updatePipelineControls();
+        updateModeBanner();
+    });
 }
 
 anonymizeBtn.addEventListener('click', () => performAnonymization());

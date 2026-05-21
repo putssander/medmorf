@@ -1281,6 +1281,80 @@ footer .note {
     margin-bottom: 1.25rem;
 }
 
+/* Smart mode banner — auto-picked detection method */
+.anon-mode-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.85rem 1rem;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08), rgba(59, 130, 246, 0.06));
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    flex-wrap: wrap;
+}
+.anon-mode-banner .anon-mode-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.anon-mode-banner .anon-mode-summary svg {
+    color: #8b5cf6;
+    flex-shrink: 0;
+}
+.anon-mode-banner .anon-mode-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+.anon-mode-banner .anon-mode-text strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+.anon-mode-banner .webgpu-status {
+    margin: 0;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+
+/* Advanced settings collapsible */
+.anon-advanced {
+    margin-bottom: 0.75rem;
+    border: 1px solid var(--border-color, rgba(0,0,0,0.1));
+    border-radius: 8px;
+    background: var(--surface-bg, rgba(0,0,0,0.02));
+}
+.anon-advanced > summary {
+    padding: 0.65rem 0.9rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    user-select: none;
+}
+.anon-advanced > summary:hover {
+    color: var(--text-primary);
+}
+.anon-advanced[open] > summary {
+    border-bottom: 1px solid var(--border-color, rgba(0,0,0,0.08));
+    margin-bottom: 0.75rem;
+}
+.anon-advanced > .anon-settings-row,
+.anon-advanced > p {
+    padding: 0 0.9rem;
+}
+.anon-advanced > .anon-settings-row:last-of-type {
+    padding-bottom: 0.9rem;
+}
+.anon-advanced > p:last-child {
+    padding-bottom: 0.9rem;
+}
+
 .anon-header h2 {
     display: flex;
     align-items: center;

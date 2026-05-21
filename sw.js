@@ -36,6 +36,8 @@ const CDN_DEPS = [
     'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',
     'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js',
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.min.mjs',
+    'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.7.76/build/pdf.worker.min.mjs',
     // Dynamic imports
     'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.82/lib/index.js',
     'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2',
