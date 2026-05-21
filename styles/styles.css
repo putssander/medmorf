@@ -1789,12 +1789,55 @@ footer .note {
     font-size: 0.9rem;
     line-height: 1.7;
     color: var(--text-primary);
-    max-height: 300px;
+    max-height: 600px;
     overflow-y: auto;
     white-space: pre-wrap;
     word-wrap: break-word;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
 }
+
+.anon-preview-meta {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary, #64748b);
+    margin-left: 0.5rem;
+}
+
+/* Inline add-entity row + per-row delete button */
+.mapping-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    align-items: center;
+}
+.mapping-add-input {
+    flex: 1 1 180px;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+}
+.mapping-add-type { flex: 0 0 130px; }
+.mapping-add-btn { flex: 0 0 auto; }
+
+.mapping-table .mapping-delete-btn {
+    background: transparent;
+    border: 1px solid var(--border-color);
+    color: #b91c1c;
+    border-radius: 6px;
+    padding: 0.2rem 0.55rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    line-height: 1;
+}
+.mapping-table .mapping-delete-btn:hover {
+    background: #fef2f2;
+    border-color: #fecaca;
+}
+
+.mapping-table tr.is-manual td { background: #fffbeb; }
+.mapping-table tr.is-manual:hover td { background: #fef3c7; }
 
 /* ═══════════════════════════════════════════════════════════════════════════════ */
 /* STORAGE TAB                                                                   */

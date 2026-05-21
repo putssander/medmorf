@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-integrated-1';
+        window.MEDMORF_BUILD_ID = '2026-05-21-mapping-edit-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -78,7 +78,7 @@
         };
     </script>
 
-    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-brand-1">
+    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-mapping-edit-1">
     <link rel="stylesheet" href="styles/brand.css?v=2026-05-21-brand-1">
     <script type="importmap">
     {
@@ -738,15 +738,30 @@
                     </div>
                     <div class="mapping-table-container">
                         <h4>Entity Mapping</h4>
+                        <div class="mapping-add-row">
+                            <input type="text" id="mappingAddEntity" placeholder="Add missed entity (e.g. Jan Janssen)" class="mapping-add-input" />
+                            <select id="mappingAddType" class="mapping-add-input mapping-add-type">
+                                <option value="PERSON">PERSON</option>
+                                <option value="ORG">ORG</option>
+                                <option value="LOC">LOC</option>
+                                <option value="DATE">DATE</option>
+                                <option value="PHONE">PHONE</option>
+                                <option value="EMAIL">EMAIL</option>
+                                <option value="ID">ID</option>
+                                <option value="MISC">MISC</option>
+                            </select>
+                            <input type="text" id="mappingAddReplacement" placeholder="Replacement (optional, auto if blank)" class="mapping-add-input" />
+                            <button type="button" id="mappingAddBtn" class="btn btn-secondary mapping-add-btn">Add &amp; Re-apply</button>
+                        </div>
                         <div class="mapping-table-scroll">
                             <table id="mappingTable" class="mapping-table">
-                                <thead><tr><th>Original</th><th>Type</th><th>Replacement</th></tr></thead>
+                                <thead><tr><th>Original</th><th>Type</th><th>Replacement</th><th>Actions</th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
                     </div>
                     <div class="anon-preview-container">
-                        <h4>Preview</h4>
+                        <h4>Preview <span id="anonPreviewMeta" class="anon-preview-meta"></span></h4>
                         <pre id="anonPreviewText" class="anon-preview-text"></pre>
                     </div>
                     <div class="actions">
@@ -1718,7 +1733,7 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-integrated-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-mapping-edit-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-21-mic-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>

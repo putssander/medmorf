@@ -68,6 +68,10 @@ let anonDocument = null;
 let anonDocType = null;
 let anonWorkbook = null;
 let anonymizedResult = null;
+// Holds the *original* extracted text for non-Excel docs so we can re-apply
+// `anonymizeText()` instantly whenever the user edits the mapping (add/remove).
+let anonSourceText = null;
+let manualEntities = new Set();
 let isAnonModelLoading = false;
 let isAnonymizing = false;
 let lastDetectionBreakdown = { pipeline: 'llm', ner: [], llm: [], llmAdded: [] };
@@ -106,6 +110,11 @@ const nerFilteredSection = document.getElementById('nerFilteredSection');
 const anonDetectionSummary = document.getElementById('anonDetectionSummary');
 const llmAddedSection = document.getElementById('llmAddedSection');
 const anonPreviewText = document.getElementById('anonPreviewText');
+const anonPreviewMeta = document.getElementById('anonPreviewMeta');
+const mappingAddEntity = document.getElementById('mappingAddEntity');
+const mappingAddType = document.getElementById('mappingAddType');
+const mappingAddReplacement = document.getElementById('mappingAddReplacement');
+const mappingAddBtn = document.getElementById('mappingAddBtn');
 const downloadAnonDocBtn = document.getElementById('downloadAnonDocBtn');
 const downloadMappingBtn = document.getElementById('downloadMappingBtn');
 const anonWebGPUStatus = document.getElementById('anonWebGPUStatus');
@@ -1243,6 +1252,7 @@ async function performAnonymization() {
 
 async function anonymizeTextDocument(pipeline) {
     const text = await extractTextFromDocument(anonDocument);
+    anonSourceText = text;
     const chunks = chunkText(text);
     const totalChunks = chunks.length;
 
@@ -1536,19 +1546,26 @@ function renderResults() {
     const entries = Object.entries(currentMapping.entities).sort((a, b) => a[1].type.localeCompare(b[1].type));
     for (const [entity, info] of entries) {
         const tr = document.createElement('tr');
+        const isManual = manualEntities.has(entity);
+        if (isManual) tr.className = 'is-manual';
         tr.innerHTML = `
             <td>${escapeHTML(entity)}</td>
             <td><span class="entity-tag entity-tag-${info.type.toLowerCase()}">${info.type}</span></td>
             <td><code>${escapeHTML(info.replacement)}</code></td>
+            <td><button type="button" class="mapping-delete-btn" data-entity="${escapeHTML(entity)}" title="Remove and re-apply">✕</button></td>
         `;
         mappingTableBody.appendChild(tr);
     }
 
     if (typeof anonymizedResult === 'string') {
-        const preview = anonymizedResult.substring(0, 2000);
-        anonPreviewText.textContent = preview + (anonymizedResult.length > 2000 ? '\n\n... (truncated)' : '');
+        // Show the FULL anonymized text — no truncation. Container is scrollable.
+        anonPreviewText.textContent = anonymizedResult;
+        if (anonPreviewMeta) {
+            anonPreviewMeta.textContent = `(${anonymizedResult.length.toLocaleString()} chars, ${entries.length} entities)`;
+        }
     } else {
         anonPreviewText.textContent = `Excel file anonymized. ${entries.length} entities replaced across selected columns.`;
+        if (anonPreviewMeta) anonPreviewMeta.textContent = '';
     }
 
     updateMappingCount();
@@ -1558,6 +1575,60 @@ function escapeHTML(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+}
+
+// ── Live mapping edits (add / remove → re-apply on source text) ──────────
+// Re-runs `anonymizeText()` on the saved original source so the preview and
+// downloaded output instantly reflect mapping edits. Excel docs are skipped
+// here — they require a full re-pass through cells (use the Anonymize button
+// again after editing the mapping if you need an updated workbook).
+function recomputeAnonymizedFromSource() {
+    if (anonDocType === 'excel') return;
+    if (typeof anonSourceText !== 'string') return;
+    anonymizedResult = anonymizeText(anonSourceText);
+    renderResults();
+}
+
+if (mappingAddBtn) {
+    mappingAddBtn.addEventListener('click', () => {
+        const entityRaw = (mappingAddEntity?.value || '').trim();
+        if (entityRaw.length < 2) {
+            alert('Entity must be at least 2 characters.');
+            return;
+        }
+        const type = (mappingAddType?.value || 'MISC').trim().toUpperCase();
+        let replacement = (mappingAddReplacement?.value || '').trim();
+        if (!replacement) {
+            // Reuse the existing counter scheme so it matches auto-generated tags
+            if (!currentMapping.counters[type]) currentMapping.counters[type] = 0;
+            currentMapping.counters[type]++;
+            replacement = `[${type}_${currentMapping.counters[type]}]`;
+        }
+        currentMapping.entities[entityRaw] = { type, replacement };
+        manualEntities.add(entityRaw);
+        if (mappingAddEntity) mappingAddEntity.value = '';
+        if (mappingAddReplacement) mappingAddReplacement.value = '';
+        recomputeAnonymizedFromSource();
+        // Excel fallback: at least refresh the table even without re-apply
+        if (anonDocType === 'excel') renderResults();
+    });
+
+    mappingAddEntity?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); mappingAddBtn.click(); }
+    });
+}
+
+if (mappingTableBody) {
+    mappingTableBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mapping-delete-btn');
+        if (!btn) return;
+        const entity = btn.getAttribute('data-entity');
+        if (!entity || !currentMapping.entities[entity]) return;
+        delete currentMapping.entities[entity];
+        manualEntities.delete(entity);
+        recomputeAnonymizedFromSource();
+        if (anonDocType === 'excel') renderResults();
+    });
 }
 
 // ── Downloads ──────────────────────────────────────────────────────────────────
@@ -1574,11 +1645,39 @@ downloadAnonDocBtn.addEventListener('click', async () => {
                 alert('PDF burn-in library not loaded yet. Please reload the page and try again.');
                 return;
             }
-            const targets = Object.keys(currentMapping.entities || {});
-            if (targets.length === 0) {
+            const detected = Object.keys(currentMapping.entities || {});
+            if (detected.length === 0) {
                 alert('No entities detected to redact. Run anonymization first.');
                 return;
             }
+
+            // ── Pre-flight verification gate ────────────────────────────
+            // Burn-in is irreversible: anything missed stays visible in the
+            // rasterized output. Force the user to acknowledge and offer a
+            // chance to add extra strings the detector may have missed.
+            const sample = detected.slice(0, 8).map(s => '  • ' + s).join('\n');
+            const more = detected.length > 8 ? `\n  …and ${detected.length - 8} more` : '';
+            const confirmMsg =
+                `⚠️  Burn-in PDF redaction is PERMANENT.\n\n` +
+                `The output PDF is rasterized — anything NOT in the entity list below ` +
+                `will remain fully visible in the redacted file and cannot be recovered or fixed afterwards.\n\n` +
+                `${detected.length} entities will be redacted, including:\n${sample}${more}\n\n` +
+                `Review the mapping table above before continuing.\n\n` +
+                `Click OK to proceed, or Cancel to go back and re-check the mapping.`;
+            if (!window.confirm(confirmMsg)) return;
+
+            // Optional: let the user add extra strings the detector missed.
+            const extraRaw = window.prompt(
+                'Add any additional strings to redact (comma-separated). Leave empty to use only the detected entities.',
+                ''
+            );
+            if (extraRaw === null) return; // user hit Cancel on the prompt
+            const extras = extraRaw
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s.length >= 2);
+            const targets = Array.from(new Set([...detected, ...extras]));
+
             const origLabel = downloadAnonDocBtn.innerHTML;
             downloadAnonDocBtn.disabled = true;
             downloadAnonDocBtn.textContent = 'Redacting PDF… 0%';
