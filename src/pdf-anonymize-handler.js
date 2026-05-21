@@ -42,18 +42,18 @@ import {
     ];
 
     // ── DOM ──────────────────────────────────────────────────────────────
-    const dropArea = document.getElementById('pdfanonDrop');
-    const fileInput = document.getElementById('pdfanonInput');
+    // No separate file uploader — we observe the main Anonymize tab uploader
+    // (#anonDocInput / #anonDocUpload) so the user only picks the PDF once.
+    const sectionEl = document.getElementById('pdfanonSection');
     const runBtn = document.getElementById('pdfanonRunBtn');
-    const clearBtn = document.getElementById('pdfanonClearBtn');
-    const fileInfoEl = document.getElementById('pdfanonFileInfo');
-    const ocrLangSelect = document.getElementById('pdfanonOcrLang');
     const statusEl = document.getElementById('pdfanonStatus');
     const progressBar = document.getElementById('pdfanonProgressBar');
     const progressWrap = document.getElementById('pdfanonProgress');
     const reportEl = document.getElementById('pdfanonReport');
+    const anonDocInput = document.getElementById('anonDocInput');
+    const anonDocUpload = document.getElementById('anonDocUpload');
 
-    if (!dropArea || !fileInput || !runBtn) {
+    if (!sectionEl || !runBtn || !anonDocInput) {
         // Tab markup not present — nothing to do.
         return;
     }
@@ -76,56 +76,38 @@ import {
         if (progressWrap) progressWrap.style.display = 'none';
         if (progressBar) progressBar.style.width = '0%';
     }
-    function humanSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    }
 
     // ── File selection ───────────────────────────────────────────────────
+    function isPdfFile(file) {
+        if (!file) return false;
+        return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+    }
     function setFile(file) {
-        selectedFile = file || null;
+        selectedFile = isPdfFile(file) ? file : null;
         if (selectedFile) {
-            fileInfoEl.textContent = `${selectedFile.name} (${humanSize(selectedFile.size)})`;
-            fileInfoEl.style.display = '';
+            sectionEl.style.display = '';
             runBtn.disabled = false;
         } else {
-            fileInfoEl.textContent = '';
-            fileInfoEl.style.display = 'none';
+            sectionEl.style.display = 'none';
             runBtn.disabled = true;
         }
         if (reportEl) reportEl.innerHTML = '';
         setStatus('', '');
         hideProgress();
     }
-    function accept(fileList) {
-        for (const f of fileList) {
-            const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
-            if (isPdf) { setFile(f); return; }
-        }
-        setStatus('Only PDF files are supported.', 'error');
+
+    // Observe the main Anonymize uploader. The anonymize handler also listens on
+    // these events — both fire independently and don’t interfere.
+    anonDocInput.addEventListener('change', (e) => {
+        const f = e.target.files && e.target.files[0];
+        setFile(f || null);
+    });
+    if (anonDocUpload) {
+        anonDocUpload.addEventListener('drop', (e) => {
+            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (f) setFile(f);
+        });
     }
-    dropArea.addEventListener('click', () => fileInput.click());
-    dropArea.tabIndex = 0;
-    dropArea.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-    });
-    fileInput.addEventListener('change', (e) => {
-        accept(e.target.files);
-        fileInput.value = '';
-    });
-    ['dragenter', 'dragover'].forEach(evt => dropArea.addEventListener(evt, (e) => {
-        e.preventDefault(); e.stopPropagation();
-        dropArea.classList.add('is-dragover');
-    }));
-    ['dragleave', 'drop'].forEach(evt => dropArea.addEventListener(evt, (e) => {
-        e.preventDefault(); e.stopPropagation();
-        dropArea.classList.remove('is-dragover');
-    }));
-    dropArea.addEventListener('drop', (e) => {
-        if (e.dataTransfer && e.dataTransfer.files) accept(e.dataTransfer.files);
-    });
-    if (clearBtn) clearBtn.addEventListener('click', () => setFile(null));
 
     // ── Lazy CDN loaders ─────────────────────────────────────────────────
     let _pdfjsLib = null;
@@ -405,6 +387,39 @@ import {
         });
     }
 
+    // ── Auto language detection (for OCR) ────────────────────────────────
+    // Heuristic detector over common stop-words; maps to Tesseract lang codes.
+    // We bootstrap OCR with `eng` (small + likely already cached), run this on
+    // the first OCR result, and re-init the worker if a different language wins.
+    const TESS_LANGS = {
+        eng: ['the','is','and','of','to','in','that','for','with','was','on','are','this','but','not','from','have','has','had','been','were','they','will','can','about','which','their','said'],
+        nld: ['de','het','een','van','en','is','dat','voor','niet','met','op','aan','uit','maar','ook','naar','als','nog','wordt','zijn','heeft','deze','dit','bij','kan','over','werd','door'],
+        deu: ['der','die','das','und','ist','nicht','mit','für','von','den','dem','sich','auf','auch','ein','eine','sind','wird','wurde','aber','noch','sein','haben','hat','beim','durch'],
+        fra: ['le','la','les','de','des','et','est','un','une','pour','dans','avec','que','qui','sur','ne','pas','par','plus','au','aux','ce','cette','son','sa','ses','mais','ou','où'],
+        spa: ['el','la','los','las','de','y','que','en','un','una','por','con','no','para','es','se','su','sus','del','al','como','más','pero','también','este','esta','sobre'],
+    };
+    function detectTesseractLang(text) {
+        if (!text || text.length < 40) return null;
+        const sample = text.substring(0, 4000).toLowerCase();
+        const scores = {};
+        for (const code of Object.keys(TESS_LANGS)) {
+            let s = 0;
+            for (const w of TESS_LANGS[code]) {
+                const re = new RegExp('\\b' + w + '\\b', 'g');
+                s += (sample.match(re) || []).length;
+            }
+            scores[code] = s;
+        }
+        let best = 'eng', bestScore = scores.eng;
+        for (const code of Object.keys(scores)) {
+            if (scores[code] > bestScore) { best = code; bestScore = scores[code]; }
+        }
+        // Require a clear margin over English to switch (avoid noisy short OCR text)
+        if (best !== 'eng' && scores[best] < scores.eng * 1.3) return 'eng';
+        if (bestScore < 3) return null; // too little signal — keep current worker
+        return best;
+    }
+
     // ── Main run ─────────────────────────────────────────────────────────
     async function run() {
         if (!selectedFile || isRunning) return;
@@ -414,10 +429,11 @@ import {
         }
         isRunning = true;
         runBtn.disabled = true;
-        if (clearBtn) clearBtn.disabled = true;
         if (reportEl) reportEl.innerHTML = '';
 
-        const ocrLang = (ocrLangSelect && ocrLangSelect.value) || 'eng';
+        // Bootstrap with English; auto-detect after first OCR page and switch if needed.
+        let ocrLang = 'eng';
+        let ocrLangLocked = false;
         const summary = {
             pages: 0,
             textPages: 0,
@@ -460,7 +476,19 @@ import {
                 const { canvas, ctx } = await renderPageToCanvas(page, REDACT_SCALE);
 
                 if (usedOcr) {
-                    const ocr = await ocrSegments(canvas, ocrLang);
+                    let ocr = await ocrSegments(canvas, ocrLang);
+                    // After the first scanned page, detect the dominant language and
+                    // re-OCR with the right Tesseract model if it differs from `eng`.
+                    if (!ocrLangLocked) {
+                        ocrLangLocked = true;
+                        const detected = detectTesseractLang(ocr.joined);
+                        if (detected && detected !== ocrLang) {
+                            setProgress(pageBaseProgress + 15,
+                                `Page ${i} of ${numPages}: detected ${detected.toUpperCase()} — re-OCR’ing…`);
+                            ocrLang = detected;
+                            ocr = await ocrSegments(canvas, ocrLang);
+                        }
+                    }
                     joined = ocr.joined;
                     segments = ocr.segments;
                     summary.ocrPages++;
@@ -511,7 +539,6 @@ import {
         } finally {
             isRunning = false;
             runBtn.disabled = !selectedFile;
-            if (clearBtn) clearBtn.disabled = false;
             setTimeout(hideProgress, 800);
         }
     }
