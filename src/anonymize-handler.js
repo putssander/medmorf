@@ -1589,6 +1589,9 @@ function escapeHTML(str) {
 function recomputeAnonymizedFromSource() {
     if (anonDocType === 'excel') return;
     if (typeof anonSourceText !== 'string') return;
+    // Compact replacement numbers so the user never sees gaps like
+    // [PERSON_1], [PERSON_3], [PERSON_5] after deletions / merges.
+    renumberMapping();
     anonymizedResult = anonymizeText(anonSourceText);
     renderResults();
 }
@@ -1625,6 +1628,154 @@ function typeForReplacement(replacement) {
     return null;
 }
 
+// ── Auto-renumber replacements ───────────────────────────────────────────
+// Keeps each type's numbers contiguous (1, 2, 3, …) and orders them by the
+// first occurrence in the source text so the preview reads naturally.
+// All aliased entities (multiple originals → same replacement) stay aliased.
+function renumberMapping() {
+    const entities = currentMapping.entities;
+    // Group entities by current replacement (preserving aliases)
+    const groups = new Map(); // oldReplacement → { type, originals: [entity, ...] }
+    for (const [entity, info] of Object.entries(entities)) {
+        if (!info || !info.replacement) continue;
+        let g = groups.get(info.replacement);
+        if (!g) { g = { type: info.type, originals: [] }; groups.set(info.replacement, g); }
+        g.originals.push(entity);
+    }
+    // Determine first-occurrence index in source text for ordering
+    const src = typeof anonSourceText === 'string' ? anonSourceText : '';
+    function firstIndex(originals) {
+        let best = Infinity;
+        for (const o of originals) {
+            const idx = src ? src.indexOf(o) : -1;
+            if (idx >= 0 && idx < best) best = idx;
+        }
+        return best === Infinity ? Number.MAX_SAFE_INTEGER : best;
+    }
+    // Bucket groups by type, sort by first occurrence
+    const byType = new Map();
+    for (const [rep, g] of groups.entries()) {
+        if (!byType.has(g.type)) byType.set(g.type, []);
+        byType.get(g.type).push({ oldRep: rep, ...g, firstAt: firstIndex(g.originals) });
+    }
+    // Build old→new replacement map and reset counters
+    const remap = new Map();
+    currentMapping.counters = {};
+    for (const [type, list] of byType.entries()) {
+        list.sort((a, b) => a.firstAt - b.firstAt);
+        currentMapping.counters[type] = list.length;
+        list.forEach((g, i) => {
+            const newRep = `[${type}_${i + 1}]`;
+            remap.set(g.oldRep, newRep);
+        });
+    }
+    // Apply remap (only rewrite when the value actually changes)
+    for (const info of Object.values(entities)) {
+        const next = remap.get(info.replacement);
+        if (next && next !== info.replacement) info.replacement = next;
+    }
+}
+
+// ── Smart bundling (heuristic person grouping) ───────────────────────────
+// Conservative rules — only merges when it's near-certain to be the same person:
+//   1. Both entries are PERSON.
+//   2. Same lowercased surname (last alphabetic token of length >= 2).
+//   3. First-name component is COMPATIBLE:
+//        - one side has no first name (e.g. "Puts"), OR
+//        - first names match exactly (case-insensitive), OR
+//        - one side has just an initial that matches the other side's first
+//          letter (e.g. "S. Puts" ↔ "Sander Puts").
+//   4. After grouping, all members of the group merge into the single most
+//      "complete" original (the one with the most name tokens) and adopt
+//      its replacement tag. Renumbering then closes any resulting gaps.
+function tokenizeName(s) {
+    return String(s).split(/\s+/).filter(Boolean);
+}
+function isInitialToken(tok) {
+    // "S.", "S", "J.P."  → initial-like
+    return /^[A-Z](\.|$)/.test(tok) || /^([A-Z]\.){1,3}$/.test(tok);
+}
+function initialOf(tok) {
+    return tok.replace(/[^A-Za-z]/g, '').charAt(0).toLowerCase();
+}
+function splitName(full) {
+    const toks = tokenizeName(full);
+    if (toks.length === 0) return { firsts: [], surname: '' };
+    // Treat lowercase tussenvoegsel ("van", "de", "der", "den", "ter", "van der") as part of surname
+    const tussen = new Set(['van', 'de', 'der', 'den', 'ter', 'ten', 'op', 'op de', 'in', 'in t', 'het']);
+    // Find first index where the rest is "tussenvoegsel(s) + capitalised surname"
+    let surnameStart = toks.length - 1;
+    for (let i = 0; i < toks.length - 1; i++) {
+        if (tussen.has(toks[i].toLowerCase()) && i < toks.length - 1) {
+            surnameStart = i;
+            break;
+        }
+    }
+    const firsts = toks.slice(0, surnameStart);
+    const surname = toks.slice(surnameStart).join(' ');
+    return { firsts, surname };
+}
+function namesCompatible(a, b) {
+    // a, b → { firsts: [...], surname }
+    if (a.surname.toLowerCase() !== b.surname.toLowerCase()) return false;
+    if (a.firsts.length === 0 || b.firsts.length === 0) return true;
+    // Compare first-name token-by-token
+    const n = Math.min(a.firsts.length, b.firsts.length);
+    for (let i = 0; i < n; i++) {
+        const ai = a.firsts[i], bi = b.firsts[i];
+        const aIni = isInitialToken(ai), bIni = isInitialToken(bi);
+        if (aIni || bIni) {
+            if (initialOf(ai) !== initialOf(bi)) return false;
+        } else if (ai.toLowerCase() !== bi.toLowerCase()) {
+            return false;
+        }
+    }
+    return true;
+}
+function smartBundlePersons() {
+    const persons = Object.entries(currentMapping.entities)
+        .filter(([, info]) => info && info.type === 'PERSON')
+        .map(([entity, info]) => ({ entity, info, parts: splitName(entity) }))
+        .filter(p => p.parts.surname);
+    if (persons.length < 2) return 0;
+    // Union-find by compatibility (group transitively)
+    const parent = persons.map((_, i) => i);
+    const find = (x) => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    const union = (a, b) => { const ra = find(a), rb = find(b); if (ra !== rb) parent[ra] = rb; };
+    for (let i = 0; i < persons.length; i++) {
+        for (let j = i + 1; j < persons.length; j++) {
+            if (namesCompatible(persons[i].parts, persons[j].parts)) union(i, j);
+        }
+    }
+    // Build groups
+    const groups = new Map(); // root → [indices]
+    for (let i = 0; i < persons.length; i++) {
+        const r = find(i);
+        if (!groups.has(r)) groups.set(r, []);
+        groups.get(r).push(i);
+    }
+    let merged = 0;
+    for (const idxs of groups.values()) {
+        if (idxs.length < 2) continue;
+        // Skip groups already collapsed to a single replacement
+        const reps = new Set(idxs.map(i => persons[i].info.replacement));
+        if (reps.size < 2) continue;
+        // Pick the "anchor" = entity with the most name tokens (longest as tie-break)
+        idxs.sort((a, b) => {
+            const ta = tokenizeName(persons[a].entity).length;
+            const tb = tokenizeName(persons[b].entity).length;
+            if (tb !== ta) return tb - ta;
+            return persons[b].entity.length - persons[a].entity.length;
+        });
+        const anchorRep = persons[idxs[0]].info.replacement;
+        for (const i of idxs) {
+            persons[i].info.replacement = anchorRep;
+        }
+        merged += idxs.length - 1;
+    }
+    return merged;
+}
+
 if (mappingAddBtn) {
     mappingAddBtn.addEventListener('click', () => {
         const entityRaw = (mappingAddEntity?.value || '').trim();
@@ -1654,6 +1805,34 @@ if (mappingAddBtn) {
 
     mappingAddEntity?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') { e.preventDefault(); mappingAddBtn.click(); }
+    });
+}
+
+// Smart-bundle button: heuristic person grouping + auto-renumber
+const mappingSmartBundleBtn = document.getElementById('mappingSmartBundleBtn');
+if (mappingSmartBundleBtn) {
+    mappingSmartBundleBtn.addEventListener('click', () => {
+        const merged = smartBundlePersons();
+        if (merged === 0) {
+            // Still renumber in case there are gaps to close.
+            recomputeAnonymizedFromSource();
+            mappingSmartBundleBtn.textContent = 'Smart bundle (no merges)';
+            setTimeout(() => { mappingSmartBundleBtn.textContent = 'Smart bundle'; }, 1500);
+            return;
+        }
+        recomputeAnonymizedFromSource();
+        if (anonDocType === 'excel') renderResults();
+        mappingSmartBundleBtn.textContent = `Smart bundle (−${merged})`;
+        setTimeout(() => { mappingSmartBundleBtn.textContent = 'Smart bundle'; }, 1500);
+    });
+}
+
+// Renumber-only button: just compact the numbers, no merging.
+const mappingRenumberBtn = document.getElementById('mappingRenumberBtn');
+if (mappingRenumberBtn) {
+    mappingRenumberBtn.addEventListener('click', () => {
+        recomputeAnonymizedFromSource();
+        if (anonDocType === 'excel') renderResults();
     });
 }
 

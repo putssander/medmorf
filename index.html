@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-stt-perf-1';
+        window.MEDMORF_BUILD_ID = '2026-05-21-bundle-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -753,6 +753,8 @@
                             <input type="text" id="mappingAddReplacement" placeholder="Replacement (optional, blank = auto, or pick existing tag to merge)" list="mappingReplacementList" class="mapping-add-input" />
                             <datalist id="mappingReplacementList"></datalist>
                             <button type="button" id="mappingAddBtn" class="btn btn-secondary mapping-add-btn">Add &amp; Re-apply</button>
+                            <button type="button" id="mappingSmartBundleBtn" class="btn btn-secondary mapping-add-btn" title="Auto-merge entities that clearly refer to the same person (same surname, compatible first name/initials).">Smart bundle</button>
+                            <button type="button" id="mappingRenumberBtn" class="btn btn-secondary mapping-add-btn" title="Compact replacement numbers so each type is contiguous (1, 2, 3, …).">Renumber</button>
                         </div>
                         <div class="mapping-table-scroll">
                             <table id="mappingTable" class="mapping-table">
@@ -1751,7 +1753,7 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-alias-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-bundle-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-21-stt-perf-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>
