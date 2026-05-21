@@ -1839,6 +1839,49 @@ footer .note {
 .mapping-table tr.is-manual td { background: #fffbeb; }
 .mapping-table tr.is-manual:hover td { background: #fef3c7; }
 
+/* Floating selection popover (preview → quick-tag) */
+.anon-preview-container { position: relative; }
+.anon-selection-popover {
+    position: fixed;
+    z-index: 1000;
+    background: #1f2937;
+    color: #fff;
+    border-radius: 10px;
+    padding: 0.5rem 0.7rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+    font-size: 0.85rem;
+    max-width: 360px;
+}
+.anon-selection-popover[hidden] { display: none; }
+.anon-selection-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: #cbd5e1;
+    word-break: break-all;
+}
+.anon-selection-label #anonSelectionText {
+    color: #fde68a;
+    font-weight: 600;
+}
+.anon-selection-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+}
+.anon-selection-buttons button {
+    background: #374151;
+    color: #fff;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    padding: 0.25rem 0.55rem;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+.anon-selection-buttons button:hover {
+    background: #4f46e5;
+    border-color: #4f46e5;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════════ */
 /* STORAGE TAB                                                                   */
 /* ═══════════════════════════════════════════════════════════════════════════════ */

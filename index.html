@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-mapping-edit-1';
+        window.MEDMORF_BUILD_ID = '2026-05-21-select-tag-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -78,7 +78,7 @@
         };
     </script>
 
-    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-mapping-edit-1">
+    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-select-tag-1">
     <link rel="stylesheet" href="styles/brand.css?v=2026-05-21-brand-1">
     <script type="importmap">
     {
@@ -763,6 +763,19 @@
                     <div class="anon-preview-container">
                         <h4>Preview <span id="anonPreviewMeta" class="anon-preview-meta"></span></h4>
                         <pre id="anonPreviewText" class="anon-preview-text"></pre>
+                        <div id="anonSelectionPopover" class="anon-selection-popover" hidden>
+                            <span class="anon-selection-label">Add "<span id="anonSelectionText"></span>" as:</span>
+                            <div class="anon-selection-buttons">
+                                <button type="button" data-type="PERSON">Person</button>
+                                <button type="button" data-type="ORG">Org</button>
+                                <button type="button" data-type="LOC">Location</button>
+                                <button type="button" data-type="DATE">Date</button>
+                                <button type="button" data-type="PHONE">Phone</button>
+                                <button type="button" data-type="EMAIL">Email</button>
+                                <button type="button" data-type="ID">ID</button>
+                                <button type="button" data-type="MISC">Misc</button>
+                            </div>
+                        </div>
                     </div>
                     <div class="actions">
                         <button id="downloadAnonDocBtn" class="btn btn-success">
@@ -1733,7 +1746,7 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-mapping-edit-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-select-tag-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-21-mic-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>

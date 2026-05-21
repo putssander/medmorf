@@ -1631,6 +1631,92 @@ if (mappingTableBody) {
     });
 }
 
+// ── Quick-tag from preview selection ─────────────────────────────────────
+// Select any text inside the preview → a small floating popover appears with
+// type buttons. Clicking a type adds the selection to the mapping and live-
+// re-applies, just like the inline Add form.
+(function setupSelectionPopover() {
+    const popover = document.getElementById('anonSelectionPopover');
+    const labelText = document.getElementById('anonSelectionText');
+    if (!popover || !anonPreviewText) return;
+
+    function hidePopover() { popover.hidden = true; }
+
+    function showPopoverForSelection() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) { hidePopover(); return; }
+        const range = sel.getRangeAt(0);
+        // Only react when the selection is entirely inside the preview <pre>.
+        if (!anonPreviewText.contains(range.commonAncestorContainer)) { hidePopover(); return; }
+        const raw = sel.toString();
+        const text = raw.trim();
+        if (text.length < 2) { hidePopover(); return; }
+        // Avoid adding the existing replacement tags themselves
+        if (/^\[[A-Z]+_\d+\]$/.test(text)) { hidePopover(); return; }
+
+        labelText.textContent = text.length > 80 ? text.slice(0, 80) + '…' : text;
+        popover.dataset.entity = text;
+
+        // Position just below the selection rect, clamped to viewport.
+        const rect = range.getBoundingClientRect();
+        popover.hidden = false;
+        // Measure after un-hiding so width is correct.
+        const pw = popover.offsetWidth;
+        const ph = popover.offsetHeight;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let left = rect.left + (rect.width / 2) - (pw / 2);
+        let top = rect.bottom + 8;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        if (left < 8) left = 8;
+        if (top + ph > vh - 8) top = rect.top - ph - 8;
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
+    document.addEventListener('mouseup', () => {
+        // Defer so the selection is finalized.
+        setTimeout(showPopoverForSelection, 0);
+    });
+    document.addEventListener('keyup', (e) => {
+        // Keyboard selection (shift+arrow). Ignore typing inside inputs.
+        if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+        showPopoverForSelection();
+    });
+
+    // Hide when clicking outside the popover or scrolling the page.
+    document.addEventListener('mousedown', (e) => {
+        if (popover.hidden) return;
+        if (popover.contains(e.target)) return;
+        hidePopover();
+    });
+    window.addEventListener('scroll', hidePopover, true);
+    window.addEventListener('resize', hidePopover);
+
+    popover.addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-type]');
+        if (!btn) return;
+        const entity = popover.dataset.entity || '';
+        if (entity.length < 2) { hidePopover(); return; }
+        const type = btn.getAttribute('data-type').toUpperCase();
+        if (!currentMapping.counters[type]) currentMapping.counters[type] = 0;
+        // Only mint a fresh replacement if this entity is brand new
+        if (!currentMapping.entities[entity]) {
+            currentMapping.counters[type]++;
+            const replacement = `[${type}_${currentMapping.counters[type]}]`;
+            currentMapping.entities[entity] = { type, replacement };
+            manualEntities.add(entity);
+        } else {
+            // Already mapped — just update the type (keep replacement)
+            currentMapping.entities[entity].type = type;
+        }
+        hidePopover();
+        window.getSelection()?.removeAllRanges();
+        recomputeAnonymizedFromSource();
+        if (anonDocType === 'excel') renderResults();
+    });
+})();
+
 // ── Downloads ──────────────────────────────────────────────────────────────────
 downloadAnonDocBtn.addEventListener('click', async () => {
     if (!anonymizedResult || !anonDocument) return;
@@ -1650,33 +1736,10 @@ downloadAnonDocBtn.addEventListener('click', async () => {
                 alert('No entities detected to redact. Run anonymization first.');
                 return;
             }
-
-            // ── Pre-flight verification gate ────────────────────────────
-            // Burn-in is irreversible: anything missed stays visible in the
-            // rasterized output. Force the user to acknowledge and offer a
-            // chance to add extra strings the detector may have missed.
-            const sample = detected.slice(0, 8).map(s => '  • ' + s).join('\n');
-            const more = detected.length > 8 ? `\n  …and ${detected.length - 8} more` : '';
-            const confirmMsg =
-                `⚠️  Burn-in PDF redaction is PERMANENT.\n\n` +
-                `The output PDF is rasterized — anything NOT in the entity list below ` +
-                `will remain fully visible in the redacted file and cannot be recovered or fixed afterwards.\n\n` +
-                `${detected.length} entities will be redacted, including:\n${sample}${more}\n\n` +
-                `Review the mapping table above before continuing.\n\n` +
-                `Click OK to proceed, or Cancel to go back and re-check the mapping.`;
-            if (!window.confirm(confirmMsg)) return;
-
-            // Optional: let the user add extra strings the detector missed.
-            const extraRaw = window.prompt(
-                'Add any additional strings to redact (comma-separated). Leave empty to use only the detected entities.',
-                ''
-            );
-            if (extraRaw === null) return; // user hit Cancel on the prompt
-            const extras = extraRaw
-                .split(',')
-                .map(s => s.trim())
-                .filter(s => s.length >= 2);
-            const targets = Array.from(new Set([...detected, ...extras]));
+            // No extra confirm / prompt here — the live preview + mapping editor
+            // above is the verification surface. Whatever you can see redacted
+            // in the preview is what gets blacked out in the PDF.
+            const targets = detected;
 
             const origLabel = downloadAnonDocBtn.innerHTML;
             downloadAnonDocBtn.disabled = true;
