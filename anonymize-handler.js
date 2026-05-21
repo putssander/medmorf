@@ -1101,20 +1101,15 @@ async function performAnonymization() {
     resetDetectionBreakdown(pipeline);
 
     try {
-        // Load models based on pipeline
+        // Load models based on pipeline.
+        // For ner+llm we deliberately load NER ONLY here. The LLM is loaded
+        // mid-run AFTER the NER phase completes and the NER pipeline is
+        // disposed, so we never hold both models resident at the same time
+        // (loading both can exhaust GPU/RAM and crash the tab).
         if (pipeline === 'ner+llm') {
             anonProgressText.textContent = 'Loading NER model...';
             updateStatus('loading', 'Loading NER model...');
             await initNerModel();
-            anonProgressText.textContent = 'Loading LLM model...';
-            updateStatus('loading', 'Loading LLM model...');
-            try {
-                await initAnonModel();
-            } catch (llmError) {
-                console.warn('LLM model failed to load, falling back to NER-only:', llmError.message);
-                anonProgressText.textContent = 'LLM unavailable — using NER only...';
-                effectivePipeline = 'ner';
-            }
         } else if (pipeline === 'ner') {
             anonProgressText.textContent = 'Loading NER model...';
             updateStatus('loading', 'Loading NER model...');
@@ -1126,9 +1121,14 @@ async function performAnonymization() {
         }
 
         if (anonDocType === 'excel') {
-            await anonymizeExcel(effectivePipeline);
+            effectivePipeline = await anonymizeExcel(effectivePipeline);
         } else {
-            await anonymizeTextDocument(effectivePipeline);
+            effectivePipeline = await anonymizeTextDocument(effectivePipeline);
+        }
+
+        // Reflect any LLM-load fallback in the rendered summary.
+        if (lastDetectionBreakdown && effectivePipeline !== lastDetectionBreakdown.pipeline) {
+            lastDetectionBreakdown.pipeline = effectivePipeline;
         }
 
         renderResults();
@@ -1155,7 +1155,7 @@ async function anonymizeTextDocument(pipeline) {
     updateStatus('translating', 'Extracting PII entities...');
 
     if (pipeline === 'ner+llm') {
-        // Phase 1: NER pass
+        // Phase 1: NER pass (NER model resident, LLM not loaded yet).
         anonProgressText.textContent = 'NER pass: extracting entities...';
         const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
@@ -1164,6 +1164,34 @@ async function anonymizeTextDocument(pipeline) {
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
             nerChunkResults.push(nerEntities);
+        }
+
+        // Free NER memory BEFORE loading the LLM. Holding both resident at
+        // the same time can crash the tab (the LLM alone needs ~3 GB on q4).
+        anonProgressText.textContent = 'Releasing NER model memory...';
+        await releaseMemoryBetweenStages(disposeNERPipeline);
+
+        // Now load the LLM. If it fails, we still have NER results in memory
+        // and can degrade gracefully to NER-only output.
+        anonProgressText.textContent = 'Loading LLM model...';
+        updateStatus('loading', 'Loading LLM model...');
+        try {
+            await initAnonModel();
+        } catch (llmError) {
+            console.warn('LLM model failed to load, falling back to NER-only:', llmError.message);
+            anonProgressText.textContent = 'LLM unavailable — using NER results only...';
+            for (const nerEntities of nerChunkResults) {
+                recordDetectedEntities('ner', nerEntities);
+                for (const { entity, type } of nerEntities) {
+                    getOrCreateReplacement(entity, type);
+                }
+            }
+            anonProgressText.textContent = 'Applying anonymization...';
+            anonProgressBar.style.width = '90%';
+            anonymizedResult = anonymizeText(text);
+            anonProgressBar.style.width = '100%';
+            anonProgressText.textContent = 'Anonymization complete (NER only) ✓';
+            return 'ner';
         }
 
         // Phase 2: LLM validation — filter NER false positives
@@ -1223,6 +1251,25 @@ async function anonymizeTextDocument(pipeline) {
     anonymizedResult = anonymizeText(text);
     anonProgressBar.style.width = '100%';
     anonProgressText.textContent = 'Anonymization complete ✓';
+    return pipeline;
+}
+
+// Best-effort memory release between heavy model stages. Calls the supplied
+// dispose function, then yields to the event loop and triggers GC where
+// available so the next big allocation has room to land.
+async function releaseMemoryBetweenStages(disposeFn) {
+    try {
+        if (typeof disposeFn === 'function') await disposeFn();
+    } catch (err) {
+        console.warn('[anon] dispose failed:', err);
+    }
+    // Two macrotasks + a microtask drain gives WebGPU/WASM time to actually
+    // release device memory before we ask for the next chunk.
+    await new Promise(r => setTimeout(r, 50));
+    if (typeof globalThis.gc === 'function') {
+        try { globalThis.gc(); } catch { /* ignore */ }
+    }
+    await new Promise(r => setTimeout(r, 50));
 }
 
 async function anonymizeExcel(pipeline) {
@@ -1249,6 +1296,7 @@ async function anonymizeExcel(pipeline) {
     updateStatus('translating', 'Extracting PII entities...');
 
     if (pipeline === 'ner+llm') {
+        // Phase 1: NER pass.
         anonProgressText.textContent = 'NER pass: extracting entities...';
         const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
@@ -1259,27 +1307,51 @@ async function anonymizeExcel(pipeline) {
             nerChunkResults.push(nerEntities);
         }
 
-        anonProgressText.textContent = 'LLM validation: filtering false positives...';
-        for (let i = 0; i < totalChunks; i++) {
-            const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
-            anonProgressBar.style.width = pct + '%';
-            anonProgressText.textContent = `LLM validation: chunk ${i + 1}/${totalChunks}`;
-            const validated = await validateEntitiesWithLLM(nerChunkResults[i], chunks[i]);
-            recordDetectedEntities('ner', validated);
-            for (const { entity, type } of validated) {
-                getOrCreateReplacement(entity, type);
+        // Free NER memory before bringing the LLM online.
+        anonProgressText.textContent = 'Releasing NER model memory...';
+        await releaseMemoryBetweenStages(disposeNERPipeline);
+
+        anonProgressText.textContent = 'Loading LLM model...';
+        updateStatus('loading', 'Loading LLM model...');
+        let llmAvailable = true;
+        try {
+            await initAnonModel();
+        } catch (llmError) {
+            console.warn('LLM model failed to load, falling back to NER-only:', llmError.message);
+            anonProgressText.textContent = 'LLM unavailable — using NER results only...';
+            llmAvailable = false;
+            for (const nerEntities of nerChunkResults) {
+                recordDetectedEntities('ner', nerEntities);
+                for (const { entity, type } of nerEntities) {
+                    getOrCreateReplacement(entity, type);
+                }
             }
+            pipeline = 'ner';
         }
 
-        anonProgressText.textContent = 'LLM pass: finding remaining PII...';
-        for (let i = 0; i < totalChunks; i++) {
-            const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
-            anonProgressBar.style.width = pct + '%';
-            anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
-            const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
-            recordDetectedEntities('llm', llmEntities);
-            for (const { entity, type } of llmEntities) {
-                getOrCreateReplacement(entity, type);
+        if (llmAvailable) {
+            anonProgressText.textContent = 'LLM validation: filtering false positives...';
+            for (let i = 0; i < totalChunks; i++) {
+                const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
+                anonProgressBar.style.width = pct + '%';
+                anonProgressText.textContent = `LLM validation: chunk ${i + 1}/${totalChunks}`;
+                const validated = await validateEntitiesWithLLM(nerChunkResults[i], chunks[i]);
+                recordDetectedEntities('ner', validated);
+                for (const { entity, type } of validated) {
+                    getOrCreateReplacement(entity, type);
+                }
+            }
+
+            anonProgressText.textContent = 'LLM pass: finding remaining PII...';
+            for (let i = 0; i < totalChunks; i++) {
+                const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
+                anonProgressBar.style.width = pct + '%';
+                anonProgressText.textContent = `LLM pass: chunk ${i + 1}/${totalChunks}`;
+                const llmEntities = await extractEntitiesLLM(chunks[i], SYSTEM_PROMPT);
+                recordDetectedEntities('llm', llmEntities);
+                for (const { entity, type } of llmEntities) {
+                    getOrCreateReplacement(entity, type);
+                }
             }
         }
     } else if (pipeline === 'ner') {
@@ -1332,6 +1404,7 @@ async function anonymizeExcel(pipeline) {
     anonymizedResult = newWorkbook;
     anonProgressBar.style.width = '100%';
     anonProgressText.textContent = 'Anonymization complete ✓';
+    return pipeline;
 }
 
 // ── Results Rendering ──────────────────────────────────────────────────────────
