@@ -2,7 +2,7 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v1';
+const CACHE_NAME = 'medmorf-app-v2';
 
 // App shell files (local)
 const APP_SHELL = [
@@ -27,10 +27,10 @@ const APP_SHELL = [
 // CDN dependencies that must be available offline
 const CDN_DEPS = [
     // Import-map entries
-    'https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.3/dist/index.js',
-    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/ort.all.min.mjs',
-    'https://cdn.jsdelivr.net/npm/onnxruntime-common@1.22.0-dev.20250409-89f8206ba4/dist/esm/index.js',
-    'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js',
+    'https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-common@1.26.0-dev.20260416-b7804b056c/dist/esm/index.js',
+    'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js',
     // Script-tag libs
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
     'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js',

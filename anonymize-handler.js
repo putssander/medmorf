@@ -20,7 +20,7 @@ import {
     isGLiNERModel,
     getGLiNERInstance,
     mapNEREntityType,
-} from './privacy-runtime.js?v=2026-03-24-cachefix-9';
+} from './privacy-runtime.js?v=2026-05-21-tfjs4';
 
 const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
 const MAX_CHUNK_CHARS = 1500;
@@ -1067,6 +1067,9 @@ function updatePipelineControls() {
     if (anonModelSelect) {
         anonModelSelect.disabled = pipeline === 'ner';
     }
+    // Hide LLM model picker when running NER-only.
+    const llmGroup = document.getElementById('anonLlmModelGroup');
+    if (llmGroup) llmGroup.style.display = pipeline === 'ner' ? 'none' : '';
     // Hide NER model picker, GLiNER threshold and NER hint when running LLM-only.
     const nerVisible = pipeline !== 'llm';
     const nerGroup = document.getElementById('anonNerModelGroup');

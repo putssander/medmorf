@@ -1,5 +1,5 @@
-const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.web.js';
-const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/';
+const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js';
+const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
 // Externalize @xenova/transformers so the browser import map resolves it to v3.
 // gliner@0.0.19 depends on @xenova/transformers@2.17.2 whose BPE tokenizer
 // cannot handle ModernBERT's byte-level tokenizer format (causes t.split error).
