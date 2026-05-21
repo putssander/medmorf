@@ -387,6 +387,7 @@ function refreshNerCardDetails() {
             multilang_pii: 'Multilingual PII NER · ~280 MB',
             gliner_pii: 'GLiNER PII Edge · ~46 MB',
             multilingual_ner: 'Multilingual BERT · ~100 MB',
+            openai_privacy_filter: 'OpenAI Privacy Filter · ~800 MB (q4)',
         };
         offlineNERMeta.textContent = sizeLabels[option.id] || option.label;
     }
