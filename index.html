@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-cache-4';
+        window.MEDMORF_BUILD_ID = '2026-05-21-integrated-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -754,6 +754,10 @@
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                             Download Anonymized File
                         </button>
+                        <select id="anonPdfFormat" class="format-select" style="display:none;" title="PDF output format">
+                            <option value="text" selected>PDF (text rebuild)</option>
+                            <option value="burnin">PDF (burn-in, preserves layout)</option>
+                        </select>
                         <button id="downloadMappingBtn" class="btn btn-success">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                             Download Mapping
@@ -765,34 +769,11 @@
                     </div>
                 </section>
 
-                <!-- ─────────── Anonymize PDF (real burn-in redaction) ─────────── -->
-                <!-- Reuses the file dropped into the main "Medical Document" uploader above.
-                     Only shown when the selected file is a PDF. OCR language is auto-detected. -->
-                <section class="upload-section" id="pdfanonSection" style="margin-top:2rem; display:none;">
-                    <h3 class="section-label">PDF burn-in redaction (preserves layout)</h3>
-                    <p class="section-description">
-                        Burns redactions directly into the PDF you uploaded above. Pages with a text
-                        layer are read in place; scanned / image-only pages are auto-OCR'd with
-                        language detection. The output is re-rasterized — the original glyph and
-                        image text are removed, not just covered.
-                    </p>
-
-                    <div style="display:flex; gap:.5rem; flex-wrap:wrap; margin-top:1rem;">
-                        <button type="button" class="btn btn-primary" id="pdfanonRunBtn" disabled>
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg>
-                            Burn-in redact &amp; download
-                        </button>
-                    </div>
-                    <div id="pdfanonProgress" style="display:none; margin-top:.75rem;">
-                        <div style="background:#e5e7eb; border-radius:6px; overflow:hidden; height:8px;">
-                            <div id="pdfanonProgressBar" style="background:var(--mm-blue,#2563eb); height:100%; width:0%; transition:width .2s;"></div>
-                        </div>
-                    </div>
-                    <div id="pdfanonStatus" style="margin-top:.5rem; font-size:.9rem;"></div>
-                    <div id="pdfanonReport" style="margin-top:1rem;"></div>
-                </section>
+                <!-- ─────────── (removed) ───────────
+                     PDF burn-in redaction is now integrated into the main
+                     "Download Anonymized File" flow via the format selector
+                     below — no separate uploader / button needed.
+                -->
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
@@ -1737,14 +1718,14 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-integrated-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-21-mic-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>
     <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>
-    <script type="module" src="src/pdf-anonymize-handler.js?v=2026-05-21-pdfanon-3"></script>
+    <script type="module" src="src/pdf-anonymize-handler.js?v=2026-05-21-integrated-1"></script>
     <script>
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {

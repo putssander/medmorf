@@ -23,7 +23,7 @@ Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and sta
 | 📚 **Summarize** | Clinical-summary generation with the same WebLLM stack (Qwen3 4B by default) |
 | 🩻 **DICOM** | In-browser DICOM tag editing, anonymization presets, modality-aware sorting |
 | 📄 **Documents** | `.xlsx` (sheet/column-aware), `.docx`, and `.pdf` ingestion + export |
-| 🔳 **PDF redaction** | True burn-in PDF anonymization — auto OCR on scanned pages, output is re-rasterized so the original glyph/image text is gone, not just covered |
+| 🔳 **PDF redaction** | Burn-in redaction is integrated into the Anonymize tab — detection runs with the user-selected NER/LLM pipeline, then choosing the **PDF (burn-in)** download format produces a re-rasterized PDF with the original glyph/image text physically removed (auto-OCR on scanned pages) |
 | 💾 **Offline-first** | Full PWA — service worker caches the app shell + CDN deps; model weights persist in IndexedDB / Cache API |
 | 🔄 **App updates** | Storage tab → *App Updates* lets you refresh code without redownloading model weights |
 
@@ -254,7 +254,7 @@ medmorf/
 │   ├── stt-handler.js               # Speech-to-text tab
 │   ├── dicom-handler.js             # DICOM tag editor + sort tab
 │   ├── pdf-handler.js               # PDF merge tab
-│   ├── pdf-anonymize-handler.js     # PDF anonymize (text-layer + auto-OCR + burn-in)
+│   ├── pdf-anonymize-handler.js     # PDF burn-in library (text-layer + auto-OCR + black-box rasterization), used by anonymize-handler
 │   ├── word-handler.js              # .docx ingestion
 │   ├── excel-handler.js             # .xlsx sheet/column UI
 │   └── stubs/{empty,null}-module.js # Browser shims for Node-only modules

@@ -1,28 +1,23 @@
-// pdf-anonymize-handler.js — Real, burned-in PDF redaction, 100% in-browser.
+// pdf-anonymize-handler.js — Burn-in PDF redaction library, 100% in-browser.
 //
-// Pipeline per page (auto-detected):
-//   1. PDF.js parses the page. If it has a text layer (>= MIN_TEXT_CHARS of
-//      extractable text), use text-item bounding boxes. Otherwise run OCR via
-//      Tesseract.js against the rasterized page (always-on auto-OCR for scans).
-//   2. The reconstructed text is sent through Medmorf's existing NER pipeline
-//      (privacy-runtime.js). Entities returned as character offsets are mapped
-//      back to per-word / per-text-item bounding boxes in canvas pixel space.
-//   3. The page is rendered to a canvas at REDACT_SCALE; black rectangles are
-//      painted over each PII bounding box (with small padding); the canvas is
-//      embedded as a JPEG page into a freshly-created PDF via pdf-lib.
+// This is now a *helper module* used by the main Anonymize tab. It exposes
+// `window.medmorfPdfBurnIn.redactPdf(file, targets, opts) → Blob`.
 //
-// The output PDF contains rasterized pages only — the original glyph stream
-// and any image-embedded text are gone. This is the only way to be sure the
-// underlying PII data is removed (overlay-only redaction is insecure).
-
-import {
-    initNERPipeline,
-    getNERPipeline,
-    getGLiNERInstance,
-    isGLiNERModel,
-    getActiveNERModelId,
-    DEFAULT_NER_MODEL_ID,
-} from './privacy-runtime.js';
+// The caller (anonymize-handler.js) is responsible for picking the entities to
+// redact using its currently-selected pipeline (NER, LLM, or NER+LLM). We
+// receive the list of original entity *strings* (the keys of `currentMapping`)
+// and locate them on each page — no extra NER/LLM pass happens here, so the
+// same model the user picked drives both the on-screen preview/mapping and
+// the burn-in PDF output.
+//
+// Per page (auto-detected):
+//   1. PDF.js: if the page has an extractable text layer, use text-item
+//      bounding boxes; otherwise rasterize and run Tesseract.js OCR.
+//   2. Search the reconstructed string for each target (case-insensitive
+//      substring) → spans → rects via segment intersection.
+//   3. Render to canvas, paint black over rects, embed as JPEG into a fresh
+//      pdf-lib document. The output PDF is fully rasterized; the original
+//      glyph stream is gone, so the underlying text really is removed.
 
 (function () {
     'use strict';
@@ -34,80 +29,6 @@ import {
     const REDACT_SCALE = 2.0;          // canvas DPI multiplier
     const REDACT_PADDING_PX = 2;
     const JPEG_QUALITY = 0.85;
-    const GLINER_LABELS = [
-        'person', 'name', 'organization', 'location', 'address',
-        'phone number', 'email', 'date', 'date of birth',
-        'social security number', 'identification number',
-        'medical record number', 'patient id',
-    ];
-
-    // ── DOM ──────────────────────────────────────────────────────────────
-    // No separate file uploader — we observe the main Anonymize tab uploader
-    // (#anonDocInput / #anonDocUpload) so the user only picks the PDF once.
-    const sectionEl = document.getElementById('pdfanonSection');
-    const runBtn = document.getElementById('pdfanonRunBtn');
-    const statusEl = document.getElementById('pdfanonStatus');
-    const progressBar = document.getElementById('pdfanonProgressBar');
-    const progressWrap = document.getElementById('pdfanonProgress');
-    const reportEl = document.getElementById('pdfanonReport');
-    const anonDocInput = document.getElementById('anonDocInput');
-    const anonDocUpload = document.getElementById('anonDocUpload');
-
-    if (!sectionEl || !runBtn || !anonDocInput) {
-        // Tab markup not present — nothing to do.
-        return;
-    }
-
-    let selectedFile = null;
-    let isRunning = false;
-
-    // ── Status helpers ───────────────────────────────────────────────────
-    function setStatus(message, type) {
-        if (!statusEl) return;
-        statusEl.textContent = message || '';
-        statusEl.className = 'mergepdf-status' + (type ? ' is-' + type : '');
-    }
-    function setProgress(pct, text) {
-        if (progressWrap) progressWrap.style.display = 'block';
-        if (progressBar) progressBar.style.width = Math.max(0, Math.min(100, pct)) + '%';
-        if (text) setStatus(text, 'progress');
-    }
-    function hideProgress() {
-        if (progressWrap) progressWrap.style.display = 'none';
-        if (progressBar) progressBar.style.width = '0%';
-    }
-
-    // ── File selection ───────────────────────────────────────────────────
-    function isPdfFile(file) {
-        if (!file) return false;
-        return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-    }
-    function setFile(file) {
-        selectedFile = isPdfFile(file) ? file : null;
-        if (selectedFile) {
-            sectionEl.style.display = '';
-            runBtn.disabled = false;
-        } else {
-            sectionEl.style.display = 'none';
-            runBtn.disabled = true;
-        }
-        if (reportEl) reportEl.innerHTML = '';
-        setStatus('', '');
-        hideProgress();
-    }
-
-    // Observe the main Anonymize uploader. The anonymize handler also listens on
-    // these events — both fire independently and don’t interfere.
-    anonDocInput.addEventListener('change', (e) => {
-        const f = e.target.files && e.target.files[0];
-        setFile(f || null);
-    });
-    if (anonDocUpload) {
-        anonDocUpload.addEventListener('drop', (e) => {
-            const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-            if (f) setFile(f);
-        });
-    }
 
     // ── Lazy CDN loaders ─────────────────────────────────────────────────
     let _pdfjsLib = null;
@@ -147,7 +68,6 @@ import {
         }
         const worker = await Tesseract.createWorker(lang, 1, {
             logger: () => {},
-            // Cache traineddata via Cache Storage so the service-worker can persist it
             cacheMethod: 'write',
         });
         _ocrWorker = worker;
@@ -155,75 +75,7 @@ import {
         return worker;
     }
 
-    // ── NER ──────────────────────────────────────────────────────────────
-    async function ensureNERLoaded() {
-        if (getNERPipeline() || getGLiNERInstance()) return;
-        setProgress(2, 'Loading NER model (first time only)…');
-        await initNERPipeline({
-            modelId: getActiveNERModelId() || DEFAULT_NER_MODEL_ID,
-            progressCallback: (p) => {
-                if (p && typeof p.progress === 'number') {
-                    setProgress(2 + p.progress * 8, `Loading NER model… ${Math.round(p.progress * 100)}%`);
-                }
-            },
-        });
-    }
-
-    /**
-     * Run NER on a text string and return entities with char-offset spans.
-     * Returns: [{ start, end, text, label, score }]
-     */
-    async function detectEntities(text) {
-        if (!text || !text.trim()) return [];
-        const modelId = getActiveNERModelId() || DEFAULT_NER_MODEL_ID;
-
-        if (isGLiNERModel(modelId)) {
-            const gliner = getGLiNERInstance();
-            if (!gliner) return [];
-            const results = await gliner.inference({
-                texts: [text],
-                entities: GLINER_LABELS,
-                threshold: 0.45,
-            });
-            const out = [];
-            const arr = (results && results[0]) || [];
-            for (const r of arr) {
-                if (typeof r.start !== 'number' || typeof r.end !== 'number') continue;
-                out.push({
-                    start: r.start,
-                    end: r.end,
-                    text: r.spanText || text.slice(r.start, r.end),
-                    label: (r.label || 'PII').toUpperCase(),
-                    score: r.score || 0,
-                });
-            }
-            return out;
-        }
-
-        // Generic Transformers.js token-classification path
-        const pipeline = getNERPipeline();
-        if (!pipeline) return [];
-        const aggregated = await pipeline(text, { aggregation_strategy: 'simple' });
-        const out = [];
-        for (const r of aggregated) {
-            if (typeof r.start !== 'number' || typeof r.end !== 'number') continue;
-            out.push({
-                start: r.start,
-                end: r.end,
-                text: r.word || text.slice(r.start, r.end),
-                label: String(r.entity_group || r.entity || 'PII').toUpperCase(),
-                score: r.score || 0,
-            });
-        }
-        return out;
-    }
-
     // ── Text-layer extraction with offset → rect map ─────────────────────
-    /**
-     * Extract text from a PDF page and produce:
-     *   - joined: the concatenated string sent to NER
-     *   - segments: [{ start, end, rect: {x,y,w,h} }] in canvas px (top-left origin)
-     */
     async function extractTextLayerSegments(page, pdfjs, viewport) {
         const tc = await page.getTextContent();
         const segments = [];
@@ -236,12 +88,9 @@ import {
                 if (item.hasEOL) joined += '\n';
                 continue;
             }
-            // Effective transform = viewport * item.transform
             const tx = pdfjs.Util.transform(viewport.transform, item.transform);
             const fontHeight = Math.hypot(tx[2], tx[3]) || (item.height * viewport.scale);
-            // Approximate width in canvas px — pdfjs reports `width` in text units
-            const widthPx = item.width * viewport.scale;
-            // tx[4], tx[5] is the baseline origin (canvas coords, top-left after viewport)
+            const widthPx = (item.width || 0) * viewport.scale || (fontHeight * str.length * 0.5);
             const x = tx[4];
             const yTop = tx[5] - fontHeight;
             const segStart = joined.length;
@@ -252,7 +101,6 @@ import {
                 end: segEnd,
                 rect: { x, y: yTop, w: widthPx, h: fontHeight },
             });
-            // Insert a space between non-adjacent runs so NER tokenises correctly
             if (item.hasEOL) joined += '\n';
             else joined += ' ';
         }
@@ -260,23 +108,15 @@ import {
         return { joined, segments };
     }
 
-    /**
-     * For an entity span [start,end), return one or more canvas rects by
-     * intersecting with text-layer segments. For partial overlaps we narrow
-     * the rect proportionally by character index within the segment.
-     */
     function spanToRects(span, segments) {
         const rects = [];
         for (const seg of segments) {
             if (seg.end <= span.start || seg.start >= span.end) continue;
             const segLen = Math.max(1, seg.end - seg.start);
-            const charsPerPx = segLen / seg.rect.w;
             const lo = Math.max(span.start, seg.start) - seg.start;
             const hi = Math.min(span.end, seg.end) - seg.start;
             const x = seg.rect.x + (lo / segLen) * seg.rect.w;
             const w = ((hi - lo) / segLen) * seg.rect.w;
-            // ignore charsPerPx — informational only
-            void charsPerPx;
             rects.push({
                 x: x - REDACT_PADDING_PX,
                 y: seg.rect.y - REDACT_PADDING_PX,
@@ -288,11 +128,6 @@ import {
     }
 
     // ── OCR path: words with bboxes in canvas px ─────────────────────────
-    /**
-     * Run OCR on a canvas. Returns:
-     *   - joined: text built by concatenating words with single spaces / newlines
-     *   - segments: [{ start, end, rect }] in canvas px (top-left origin)
-     */
     async function ocrSegments(canvas, lang) {
         const worker = await getOcrWorker(lang);
         const { data } = await worker.recognize(canvas, {}, { blocks: true, text: true });
@@ -332,7 +167,6 @@ import {
         } else if (data.lines && data.lines.length) {
             walkLines(data.lines);
         } else if (data.words && data.words.length) {
-            // Fallback flat words list
             for (const w of data.words) {
                 const txt = (w.text || '').trim();
                 if (!txt) continue;
@@ -371,9 +205,7 @@ import {
     function paintRedactions(ctx, rects) {
         ctx.save();
         ctx.fillStyle = '#000';
-        for (const r of rects) {
-            ctx.fillRect(r.x, r.y, r.w, r.h);
-        }
+        for (const r of rects) ctx.fillRect(r.x, r.y, r.w, r.h);
         ctx.restore();
     }
 
@@ -388,9 +220,6 @@ import {
     }
 
     // ── Auto language detection (for OCR) ────────────────────────────────
-    // Heuristic detector over common stop-words; maps to Tesseract lang codes.
-    // We bootstrap OCR with `eng` (small + likely already cached), run this on
-    // the first OCR result, and re-init the worker if a different language wins.
     const TESS_LANGS = {
         eng: ['the','is','and','of','to','in','that','for','with','was','on','are','this','but','not','from','have','has','had','been','were','they','will','can','about','which','their','said'],
         nld: ['de','het','een','van','en','is','dat','voor','niet','met','op','aan','uit','maar','ook','naar','als','nog','wordt','zijn','heeft','deze','dit','bij','kan','over','werd','door'],
@@ -414,161 +243,148 @@ import {
         for (const code of Object.keys(scores)) {
             if (scores[code] > bestScore) { best = code; bestScore = scores[code]; }
         }
-        // Require a clear margin over English to switch (avoid noisy short OCR text)
         if (best !== 'eng' && scores[best] < scores.eng * 1.3) return 'eng';
-        if (bestScore < 3) return null; // too little signal — keep current worker
+        if (bestScore < 3) return null;
         return best;
     }
 
-    // ── Main run ─────────────────────────────────────────────────────────
-    async function run() {
-        if (!selectedFile || isRunning) return;
-        if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
-            setStatus('PDF library failed to load. Reload the page and try again.', 'error');
-            return;
+    // ── Target-string → spans ────────────────────────────────────────────
+    // Find every case-insensitive occurrence of `target` in `joined`.
+    // Returns [{ start, end }] in `joined` offsets.
+    function findSpans(joined, target) {
+        const spans = [];
+        if (!target) return spans;
+        const t = target.trim();
+        if (t.length < 2) return spans;
+        const hay = joined.toLowerCase();
+        const needle = t.toLowerCase();
+        let from = 0;
+        while (from <= hay.length - needle.length) {
+            const idx = hay.indexOf(needle, from);
+            if (idx === -1) break;
+            spans.push({ start: idx, end: idx + needle.length });
+            from = idx + needle.length;
         }
-        isRunning = true;
-        runBtn.disabled = true;
-        if (reportEl) reportEl.innerHTML = '';
+        return spans;
+    }
 
-        // Bootstrap with English; auto-detect after first OCR page and switch if needed.
-        let ocrLang = 'eng';
-        let ocrLangLocked = false;
+    // ── Public API: redactPdf ────────────────────────────────────────────
+    /**
+     * @param {File|Blob} file       The PDF to redact.
+     * @param {string[]}  targets    Entity strings (original text) to burn over.
+     * @param {object}    [opts]
+     * @param {(pct:number, msg?:string) => void} [opts.onProgress]
+     * @returns {Promise<{ blob: Blob, summary: object }>}
+     */
+    async function redactPdf(file, targets, opts) {
+        opts = opts || {};
+        const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : () => {};
+        if (!file) throw new Error('No file provided.');
+        if (typeof PDFLib === 'undefined' || !PDFLib.PDFDocument) {
+            throw new Error('PDF library (pdf-lib) failed to load.');
+        }
+
+        // De-duplicate and sort targets longest-first so longer matches win.
+        const uniqTargets = Array.from(new Set((targets || [])
+            .filter(t => typeof t === 'string' && t.trim().length >= 2)))
+            .sort((a, b) => b.length - a.length);
+
         const summary = {
             pages: 0,
             textPages: 0,
             ocrPages: 0,
-            entities: 0,
-            byLabel: {},
+            targets: uniqTargets.length,
+            hits: 0,
+            ocrLang: null,
         };
 
-        try {
-            setProgress(0, 'Loading PDF…');
-            const pdfjs = await loadPdfjs();
-            const bytes = await selectedFile.arrayBuffer();
-            const pdf = await pdfjs.getDocument({ data: bytes }).promise;
-            const numPages = pdf.numPages;
-            summary.pages = numPages;
+        onProgress(0, 'Loading PDF…');
+        const pdfjs = await loadPdfjs();
+        const bytes = await file.arrayBuffer();
+        const pdf = await pdfjs.getDocument({ data: bytes }).promise;
+        const numPages = pdf.numPages;
+        summary.pages = numPages;
 
-            await ensureNERLoaded();
+        let ocrLang = 'eng';
+        let ocrLangLocked = false;
+        const outDoc = await PDFLib.PDFDocument.create();
 
-            const outDoc = await PDFLib.PDFDocument.create();
+        for (let i = 1; i <= numPages; i++) {
+            const pageBase = 5 + ((i - 1) / numPages) * 90;
+            onProgress(pageBase, `Page ${i} of ${numPages}: reading…`);
 
-            for (let i = 1; i <= numPages; i++) {
-                const pageBaseProgress = 10 + ((i - 1) / numPages) * 85;
-                setProgress(pageBaseProgress, `Page ${i} of ${numPages}: analysing…`);
+            const page = await pdf.getPage(i);
+            const baseViewport = page.getViewport({ scale: 1 });
+            const probeViewport = page.getViewport({ scale: REDACT_SCALE });
 
-                const page = await pdf.getPage(i);
-                const baseViewport = page.getViewport({ scale: 1 });
-
-                // 1) Try the text layer first
-                const probeViewport = page.getViewport({ scale: REDACT_SCALE });
-                let { joined, segments } = await extractTextLayerSegments(page, pdfjs, probeViewport);
-                let usedOcr = false;
-
-                // 2) Auto-fallback to OCR if the text layer is empty/tiny
-                if (joined.trim().length < MIN_TEXT_CHARS) {
-                    usedOcr = true;
-                    setProgress(pageBaseProgress + 5, `Page ${i} of ${numPages}: no text layer — running OCR…`);
-                }
-
-                // Render page (we always need the canvas for burn-in)
-                const { canvas, ctx } = await renderPageToCanvas(page, REDACT_SCALE);
-
-                if (usedOcr) {
-                    let ocr = await ocrSegments(canvas, ocrLang);
-                    // After the first scanned page, detect the dominant language and
-                    // re-OCR with the right Tesseract model if it differs from `eng`.
-                    if (!ocrLangLocked) {
-                        ocrLangLocked = true;
-                        const detected = detectTesseractLang(ocr.joined);
-                        if (detected && detected !== ocrLang) {
-                            setProgress(pageBaseProgress + 15,
-                                `Page ${i} of ${numPages}: detected ${detected.toUpperCase()} — re-OCR’ing…`);
-                            ocrLang = detected;
-                            ocr = await ocrSegments(canvas, ocrLang);
-                        }
-                    }
-                    joined = ocr.joined;
-                    segments = ocr.segments;
-                    summary.ocrPages++;
-                } else {
-                    summary.textPages++;
-                }
-
-                // 3) NER
-                setProgress(pageBaseProgress + 50 / numPages, `Page ${i} of ${numPages}: detecting PII…`);
-                const entities = await detectEntities(joined);
-
-                // 4) Map entities → rects and burn redactions
-                const allRects = [];
-                for (const e of entities) {
-                    summary.entities++;
-                    summary.byLabel[e.label] = (summary.byLabel[e.label] || 0) + 1;
-                    const rects = spanToRects(e, segments);
-                    for (const r of rects) allRects.push(r);
-                }
-                if (allRects.length) paintRedactions(ctx, allRects);
-
-                // 5) Embed as image into the output PDF, preserving page size
-                const jpegBytes = await canvasToJpegBytes(canvas, JPEG_QUALITY);
-                const img = await outDoc.embedJpg(jpegBytes);
-                const outPage = outDoc.addPage([baseViewport.width, baseViewport.height]);
-                outPage.drawImage(img, {
-                    x: 0, y: 0,
-                    width: baseViewport.width,
-                    height: baseViewport.height,
-                });
-
-                // Free per-page memory aggressively
-                page.cleanup();
+            // 1) Text layer first
+            let { joined, segments } = await extractTextLayerSegments(page, pdfjs, probeViewport);
+            let usedOcr = false;
+            if (joined.trim().length < MIN_TEXT_CHARS) {
+                usedOcr = true;
+                onProgress(pageBase + 2, `Page ${i} of ${numPages}: no text layer — OCR…`);
             }
 
-            setProgress(98, 'Saving redacted PDF…');
-            const outBytes = await outDoc.save();
-            const blob = new Blob([outBytes], { type: 'application/pdf' });
-            const outName = selectedFile.name.replace(/\.pdf$/i, '') + '.redacted.pdf';
-            downloadBlob(blob, outName);
+            // 2) Render to canvas (always — needed for burn-in output)
+            const { canvas, ctx } = await renderPageToCanvas(page, REDACT_SCALE);
 
-            setProgress(100, `Done — saved as "${outName}".`);
-            renderReport(summary);
-            setStatus(`Done — saved as "${outName}". ${summary.entities} entities redacted across ${summary.pages} page(s).`, 'success');
-        } catch (err) {
-            console.error('[PDF-ANON] failed:', err);
-            setStatus((err && err.message) || 'PDF anonymization failed.', 'error');
-        } finally {
-            isRunning = false;
-            runBtn.disabled = !selectedFile;
-            setTimeout(hideProgress, 800);
+            // 3) OCR if needed (with auto language detection on first OCR page)
+            if (usedOcr) {
+                let ocr = await ocrSegments(canvas, ocrLang);
+                if (!ocrLangLocked) {
+                    ocrLangLocked = true;
+                    const detected = detectTesseractLang(ocr.joined);
+                    if (detected && detected !== ocrLang) {
+                        onProgress(pageBase + 6, `Page ${i}: detected ${detected.toUpperCase()} — re-OCR…`);
+                        ocrLang = detected;
+                        ocr = await ocrSegments(canvas, ocrLang);
+                    }
+                    summary.ocrLang = ocrLang;
+                }
+                joined = ocr.joined;
+                segments = ocr.segments;
+                summary.ocrPages++;
+            } else {
+                summary.textPages++;
+            }
+
+            // 4) Locate every target string → rects, then burn black
+            onProgress(pageBase + 10, `Page ${i} of ${numPages}: redacting…`);
+            const allRects = [];
+            for (const target of uniqTargets) {
+                const spans = findSpans(joined, target);
+                for (const span of spans) {
+                    summary.hits++;
+                    const rects = spanToRects(span, segments);
+                    for (const r of rects) allRects.push(r);
+                }
+            }
+            if (allRects.length) paintRedactions(ctx, allRects);
+
+            // 5) Embed page
+            const jpegBytes = await canvasToJpegBytes(canvas, JPEG_QUALITY);
+            const img = await outDoc.embedJpg(jpegBytes);
+            const outPage = outDoc.addPage([baseViewport.width, baseViewport.height]);
+            outPage.drawImage(img, {
+                x: 0, y: 0,
+                width: baseViewport.width,
+                height: baseViewport.height,
+            });
+
+            page.cleanup();
         }
+
+        onProgress(98, 'Saving redacted PDF…');
+        const outBytes = await outDoc.save();
+        const blob = new Blob([outBytes], { type: 'application/pdf' });
+        onProgress(100, 'Done.');
+        return { blob, summary };
     }
 
-    function renderReport(summary) {
-        if (!reportEl) return;
-        const labelRows = Object.entries(summary.byLabel)
-            .sort((a, b) => b[1] - a[1])
-            .map(([label, count]) => `<li><strong>${label}</strong>: ${count}</li>`)
-            .join('');
-        reportEl.innerHTML = `
-            <h4 class="mergepdf-step">Redaction summary</h4>
-            <ul class="pdfanon-summary">
-                <li>Pages processed: <strong>${summary.pages}</strong> (text-layer: ${summary.textPages}, OCR: ${summary.ocrPages})</li>
-                <li>Total entities redacted: <strong>${summary.entities}</strong></li>
-            </ul>
-            ${labelRows ? `<ul class="pdfanon-summary">${labelRows}</ul>` : ''}
-            <p class="mergepdf-hint">The output PDF contains rasterized image pages — the original glyph and text data are gone. Always spot-check the result before sharing.</p>
-        `;
+    function isAvailable() {
+        return typeof PDFLib !== 'undefined' && !!PDFLib.PDFDocument;
     }
 
-    function downloadBlob(blob, filename) {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = filename;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-
-    runBtn.addEventListener('click', run);
-
-    console.log('[PDF-ANON] handler ready');
+    window.medmorfPdfBurnIn = { redactPdf, isAvailable };
+    console.log('[PDF-BURNIN] library ready');
 })();

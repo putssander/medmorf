@@ -121,6 +121,19 @@ const glinerThresholdRow = document.getElementById('glinerThresholdRow');
 const glinerThresholdInput = document.getElementById('glinerThreshold');
 const glinerThresholdValue = document.getElementById('glinerThresholdValue');
 const mappingExportFormat = document.getElementById('mappingExportFormat');
+const anonPdfFormat = document.getElementById('anonPdfFormat');
+
+// ── Persisted preferences (anonymize tab) ──────────────────────────────────
+// Saved in localStorage so the user's model picks survive page reloads.
+const LS_KEY_PIPELINE = 'medmorf.anon.pipeline';
+const LS_KEY_NER_MODEL = 'medmorf.anon.nerModel';
+const LS_KEY_LLM_MODEL = 'medmorf.anon.llmModel';
+function loadStoredPref(key) {
+    try { return localStorage.getItem(key); } catch { return null; }
+}
+function savePref(key, value) {
+    try { if (value == null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch {}
+}
 
 const systemStatusIndicator = document.querySelector('.status-indicator');
 const systemStatusText = document.getElementById('systemStatusText');
@@ -155,6 +168,24 @@ let hasWebGPU = false;
         }
     }
     populateLLMModelSelect();
+    // Restore persisted pipeline + NER picks BEFORE smart defaults run so
+    // they're treated as "user-set" and won't be overwritten by the auto-picker.
+    const storedPipeline = loadStoredPref(LS_KEY_PIPELINE);
+    if (storedPipeline && anonPipelineSelect) {
+        const hasOpt = Array.from(anonPipelineSelect.options).some(o => o.value === storedPipeline);
+        if (hasOpt) {
+            anonPipelineSelect.value = storedPipeline;
+            anonPipelineSelect.dataset.userChanged = '1';
+        }
+    }
+    const storedNer = loadStoredPref(LS_KEY_NER_MODEL);
+    if (storedNer && anonNerModelSelect) {
+        const hasOpt = Array.from(anonNerModelSelect.options).some(o => o.value === storedNer);
+        if (hasOpt) {
+            anonNerModelSelect.value = storedNer;
+            anonNerModelSelect.dataset.userChanged = '1';
+        }
+    }
     applySmartDefaults();
     updateModeBanner();
 })();
@@ -204,23 +235,30 @@ function populateLLMModelSelect() {
     // Auto-downshift: if device profile is known, recommend a smaller default
     // to avoid OOM on first-load before the user opens the model picker.
     const candidates = Object.entries(LLM_MODEL_OPTIONS).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
+    // Honour any persisted user choice first; otherwise fall back to recommended.
+    const stored = loadStoredPref(LS_KEY_LLM_MODEL);
     const recommended = recommendDefault(candidates) || DEFAULT_MODEL;
+    const desired = (stored && LLM_MODEL_OPTIONS[stored]) ? stored : recommended;
     for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
         el.textContent = `${opt.label} (${opt.size})`;
-        if (id === recommended) el.selected = true;
+        if (id === desired) el.selected = true;
         anonModelSelect.appendChild(el);
     }
+    if (stored) anonModelSelect.dataset.userChosen = '1';
 }
 
 // Re-evaluate the default once the device probe completes (only if the user
 // hasn't already changed it manually).
 let _llmSelectAutoSet = false;
 getCapabilities().then(() => {
-    if (anonModelSelect && (!_llmSelectAutoSet || !anonModelSelect.dataset.userChosen)) {
+    // Only re-pick a default if the user has NOT made a manual choice (either
+    // this session or persisted from a previous one).
+    if (anonModelSelect && !_llmSelectAutoSet && !anonModelSelect.dataset.userChosen) {
         populateLLMModelSelect();
         _llmSelectAutoSet = true;
+        updateModeBanner();
     }
 });
 if (anonModelSelect) {
@@ -1527,6 +1565,43 @@ downloadAnonDocBtn.addEventListener('click', async () => {
     if (!anonymizedResult || !anonDocument) return;
     const baseName = anonDocument.name.replace(/\.[^/.]+$/, '');
     if (anonDocType === 'pdf' && typeof anonymizedResult === 'string') {
+        const fmt = anonPdfFormat ? anonPdfFormat.value : 'text';
+        if (fmt === 'burnin') {
+            // True burn-in redaction on the ORIGINAL PDF, reusing the entities
+            // already detected by whichever pipeline the user selected.
+            const lib = window.medmorfPdfBurnIn;
+            if (!lib || !lib.isAvailable()) {
+                alert('PDF burn-in library not loaded yet. Please reload the page and try again.');
+                return;
+            }
+            const targets = Object.keys(currentMapping.entities || {});
+            if (targets.length === 0) {
+                alert('No entities detected to redact. Run anonymization first.');
+                return;
+            }
+            const origLabel = downloadAnonDocBtn.innerHTML;
+            downloadAnonDocBtn.disabled = true;
+            downloadAnonDocBtn.textContent = 'Redacting PDF… 0%';
+            try {
+                const { blob, summary } = await lib.redactPdf(anonDocument, targets, {
+                    onProgress: (pct, msg) => {
+                        const p = Math.max(0, Math.min(100, Math.round(pct)));
+                        downloadAnonDocBtn.textContent =
+                            (msg ? `${msg} ` : 'Redacting… ') + p + '%';
+                    },
+                });
+                saveAs(blob, `${baseName}_redacted.pdf`);
+                console.log('[ANON] burn-in summary', summary);
+            } catch (err) {
+                console.error('Burn-in redaction failed:', err);
+                alert('Burn-in redaction failed: ' + (err && err.message ? err.message : err));
+            } finally {
+                downloadAnonDocBtn.disabled = false;
+                downloadAnonDocBtn.innerHTML = origLabel;
+            }
+            return;
+        }
+        // Default: text-rebuild PDF
         try {
             const blob = await createAnonymizedPdfBlob(anonymizedResult);
             saveAs(blob, `${baseName}_anonymized.pdf`);
@@ -1594,6 +1669,9 @@ setupDropArea(anonDocUpload, anonDocInput, async (file) => {
     anonResults.style.display = 'none';
     anonymizedResult = null;
 
+    // Show the PDF output-format picker only for PDFs.
+    if (anonPdfFormat) anonPdfFormat.style.display = (anonDocType === 'pdf') ? '' : 'none';
+
     if (anonDocType === 'excel') {
         const data = await file.arrayBuffer();
         anonWorkbook = XLSX.read(data, { type: 'array' });
@@ -1642,6 +1720,7 @@ if (clearAnonMappingBtn) {
 if (anonNerModelSelect) {
     anonNerModelSelect.addEventListener('change', async () => {
         anonNerModelSelect.dataset.userChanged = '1';
+        savePref(LS_KEY_NER_MODEL, anonNerModelSelect.value);
         updateNerModelHint();
         updateModeBanner();
         if (getNERPipeline()) {
@@ -1653,6 +1732,8 @@ if (anonNerModelSelect) {
 if (anonModelSelect) {
     anonModelSelect.addEventListener('change', () => {
         anonModelSelect.dataset.userChanged = '1';
+        anonModelSelect.dataset.userChosen = '1';
+        savePref(LS_KEY_LLM_MODEL, anonModelSelect.value);
         updateModeBanner();
     });
 }
@@ -1668,6 +1749,7 @@ if (glinerThresholdInput) {
 if (anonPipelineSelect) {
     anonPipelineSelect.addEventListener('change', () => {
         anonPipelineSelect.dataset.userChanged = '1';
+        savePref(LS_KEY_PIPELINE, anonPipelineSelect.value);
         updatePipelineControls();
         updateModeBanner();
     });
