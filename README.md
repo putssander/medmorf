@@ -292,11 +292,15 @@ The `index.html` import map resolves bare specifiers:
 
 ```json
 {
-  "@huggingface/transformers": "...transformers@3.8.1/dist/transformers.web.js",
-  "@xenova/transformers": "...transformers@3.8.1/dist/transformers.web.js",
-  "onnxruntime-web": "...onnxruntime-web@1.22.0-.../dist/ort.all.min.mjs"
+  "@huggingface/transformers": "...transformers@4.2.0/dist/transformers.web.js",
+  "@xenova/transformers": "...transformers@4.2.0/dist/transformers.web.js",
+  "onnxruntime-web":         "...onnxruntime-web@1.26.0-dev.../dist/ort.bundle.min.mjs",
+  "onnxruntime-web/webgpu":  "...onnxruntime-web@1.26.0-dev.../dist/ort.webgpu.bundle.min.mjs",
+  "onnxruntime-web/wasm":    "...onnxruntime-web@1.26.0-dev.../dist/ort.wasm.bundle.min.mjs"
 }
 ```
+
+> **Why `.bundle.min.mjs`?** `@huggingface/transformers@4.2.0` pins `onnxruntime-web@1.26.0-dev.20260416-b7804b056c`, whose `package.json` `exports` map resolves the bare `onnxruntime-web` specifier to the `.bundle.min.mjs` flavor (WASM embedded). Pointing the import map at the extern-wasm `ort.all.min.mjs` / `ort.webgpu.min.mjs` variants instead causes `S().webgpuInit is not a function` at STT load time because the WebGPU init export isn't on the same module surface.
 
 The `@xenova/transformers` alias is critical: `gliner@0.0.19` internally `import`s from `@xenova/transformers` (a bare specifier), so the import map redirects it to v3. Without this, gliner would bundle its own v2 copy, which can't tokenize ModernBERT models.
 

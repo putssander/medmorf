@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-21-select-tag-1';
+        window.MEDMORF_BUILD_ID = '2026-05-21-alias-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -78,7 +78,7 @@
         };
     </script>
 
-    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-select-tag-1">
+    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-alias-1">
     <link rel="stylesheet" href="styles/brand.css?v=2026-05-21-brand-1">
     <script type="importmap">
     {
@@ -89,9 +89,9 @@
             "url": "./src/stubs/empty-module.js",
             "onnxruntime-node": "./src/stubs/null-module.js",
             "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js",
-            "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs",
-            "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.min.mjs",
-            "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.wasm.min.mjs",
+            "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.bundle.min.mjs",
+            "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.bundle.min.mjs",
+            "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.wasm.bundle.min.mjs",
             "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.24.0-dev.20251116-b39e144322/dist/esm/index.js",
             "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js",
             "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js"
@@ -750,7 +750,8 @@
                                 <option value="ID">ID</option>
                                 <option value="MISC">MISC</option>
                             </select>
-                            <input type="text" id="mappingAddReplacement" placeholder="Replacement (optional, auto if blank)" class="mapping-add-input" />
+                            <input type="text" id="mappingAddReplacement" placeholder="Replacement (optional, blank = auto, or pick existing tag to merge)" list="mappingReplacementList" class="mapping-add-input" />
+                            <datalist id="mappingReplacementList"></datalist>
                             <button type="button" id="mappingAddBtn" class="btn btn-secondary mapping-add-btn">Add &amp; Re-apply</button>
                         </div>
                         <div class="mapping-table-scroll">
@@ -774,6 +775,10 @@
                                 <button type="button" data-type="EMAIL">Email</button>
                                 <button type="button" data-type="ID">ID</button>
                                 <button type="button" data-type="MISC">Misc</button>
+                            </div>
+                            <div class="anon-selection-alias">
+                                <label for="anonSelectionAlias">or alias of existing:</label>
+                                <select id="anonSelectionAlias"><option value="">—</option></select>
                             </div>
                         </div>
                     </div>
@@ -1746,7 +1751,7 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-select-tag-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-21-alias-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-21-mic-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>

@@ -1881,6 +1881,37 @@ footer .note {
     background: #4f46e5;
     border-color: #4f46e5;
 }
+.anon-selection-alias {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #374151;
+    font-size: 0.78rem;
+    color: #cbd5e1;
+}
+.anon-selection-alias select {
+    flex: 1;
+    background: #374151;
+    color: #fff;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    padding: 0.2rem 0.4rem;
+    font-size: 0.78rem;
+}
+
+.mapping-table .mapping-replacement-cell {
+    cursor: text;
+}
+.mapping-table .mapping-replacement-cell:hover code {
+    outline: 1px dashed #6366f1;
+    outline-offset: 2px;
+}
+.mapping-table .mapping-replacement-cell[contenteditable="true"] {
+    background: #eef2ff;
+    outline: 2px solid #6366f1;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════════ */
 /* STORAGE TAB                                                                   */

@@ -115,6 +115,7 @@ const mappingAddEntity = document.getElementById('mappingAddEntity');
 const mappingAddType = document.getElementById('mappingAddType');
 const mappingAddReplacement = document.getElementById('mappingAddReplacement');
 const mappingAddBtn = document.getElementById('mappingAddBtn');
+const mappingReplacementList = document.getElementById('mappingReplacementList');
 const downloadAnonDocBtn = document.getElementById('downloadAnonDocBtn');
 const downloadMappingBtn = document.getElementById('downloadMappingBtn');
 const anonWebGPUStatus = document.getElementById('anonWebGPUStatus');
@@ -1551,11 +1552,14 @@ function renderResults() {
         tr.innerHTML = `
             <td>${escapeHTML(entity)}</td>
             <td><span class="entity-tag entity-tag-${info.type.toLowerCase()}">${info.type}</span></td>
-            <td><code>${escapeHTML(info.replacement)}</code></td>
+            <td class="mapping-replacement-cell" data-entity="${escapeHTML(entity)}" title="Click to edit. Set to an existing tag (e.g. [PERSON_1]) to merge."><code>${escapeHTML(info.replacement)}</code></td>
             <td><button type="button" class="mapping-delete-btn" data-entity="${escapeHTML(entity)}" title="Remove and re-apply">✕</button></td>
         `;
         mappingTableBody.appendChild(tr);
     }
+
+    // Refresh autocomplete + popover alias picker with the unique replacements
+    refreshReplacementChoices();
 
     if (typeof anonymizedResult === 'string') {
         // Show the FULL anonymized text — no truncation. Container is scrollable.
@@ -1589,6 +1593,38 @@ function recomputeAnonymizedFromSource() {
     renderResults();
 }
 
+// Build the list of unique replacements currently in use (so users can pick
+// one as an alias for a new/existing entity → multiple originals collapse to
+// the same tag). Used by the inline add datalist and the selection popover.
+function refreshReplacementChoices() {
+    const seen = new Map(); // replacement → type (for display hint)
+    for (const info of Object.values(currentMapping.entities)) {
+        if (info && info.replacement && !seen.has(info.replacement)) {
+            seen.set(info.replacement, info.type);
+        }
+    }
+    const replacements = [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    if (mappingReplacementList) {
+        mappingReplacementList.innerHTML = replacements
+            .map(([rep, type]) => `<option value="${escapeHTML(rep)}">${escapeHTML(type)}</option>`)
+            .join('');
+    }
+    const aliasSelect = document.getElementById('anonSelectionAlias');
+    if (aliasSelect) {
+        aliasSelect.innerHTML = '<option value="">—</option>' + replacements
+            .map(([rep, type]) => `<option value="${escapeHTML(rep)}">${escapeHTML(rep)} (${escapeHTML(type)})</option>`)
+            .join('');
+    }
+}
+
+// Helper: infer type from an existing replacement (the type the alias group uses)
+function typeForReplacement(replacement) {
+    for (const info of Object.values(currentMapping.entities)) {
+        if (info && info.replacement === replacement) return info.type;
+    }
+    return null;
+}
+
 if (mappingAddBtn) {
     mappingAddBtn.addEventListener('click', () => {
         const entityRaw = (mappingAddEntity?.value || '').trim();
@@ -1596,10 +1632,14 @@ if (mappingAddBtn) {
             alert('Entity must be at least 2 characters.');
             return;
         }
-        const type = (mappingAddType?.value || 'MISC').trim().toUpperCase();
+        let type = (mappingAddType?.value || 'MISC').trim().toUpperCase();
         let replacement = (mappingAddReplacement?.value || '').trim();
-        if (!replacement) {
-            // Reuse the existing counter scheme so it matches auto-generated tags
+        // If the chosen replacement is an existing tag → alias to that group
+        // and adopt the group's type so the type tag stays consistent.
+        const aliasedType = replacement ? typeForReplacement(replacement) : null;
+        if (aliasedType) {
+            type = aliasedType;
+        } else if (!replacement) {
             if (!currentMapping.counters[type]) currentMapping.counters[type] = 0;
             currentMapping.counters[type]++;
             replacement = `[${type}_${currentMapping.counters[type]}]`;
@@ -1609,7 +1649,6 @@ if (mappingAddBtn) {
         if (mappingAddEntity) mappingAddEntity.value = '';
         if (mappingAddReplacement) mappingAddReplacement.value = '';
         recomputeAnonymizedFromSource();
-        // Excel fallback: at least refresh the table even without re-apply
         if (anonDocType === 'excel') renderResults();
     });
 
@@ -1620,15 +1659,60 @@ if (mappingAddBtn) {
 
 if (mappingTableBody) {
     mappingTableBody.addEventListener('click', (e) => {
-        const btn = e.target.closest('.mapping-delete-btn');
-        if (!btn) return;
-        const entity = btn.getAttribute('data-entity');
-        if (!entity || !currentMapping.entities[entity]) return;
-        delete currentMapping.entities[entity];
-        manualEntities.delete(entity);
+        const delBtn = e.target.closest('.mapping-delete-btn');
+        if (delBtn) {
+            const entity = delBtn.getAttribute('data-entity');
+            if (!entity || !currentMapping.entities[entity]) return;
+            delete currentMapping.entities[entity];
+            manualEntities.delete(entity);
+            recomputeAnonymizedFromSource();
+            if (anonDocType === 'excel') renderResults();
+            return;
+        }
+        // Click the replacement cell → make it inline-editable
+        const cell = e.target.closest('.mapping-replacement-cell');
+        if (cell && cell.getAttribute('contenteditable') !== 'true') {
+            const entity = cell.getAttribute('data-entity');
+            if (!entity || !currentMapping.entities[entity]) return;
+            cell.setAttribute('contenteditable', 'true');
+            cell.textContent = currentMapping.entities[entity].replacement;
+            cell.focus();
+            // Select all contents for quick overwrite
+            const range = document.createRange();
+            range.selectNodeContents(cell);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    });
+
+    mappingTableBody.addEventListener('keydown', (e) => {
+        const cell = e.target.closest('.mapping-replacement-cell[contenteditable="true"]');
+        if (!cell) return;
+        if (e.key === 'Enter') { e.preventDefault(); cell.blur(); }
+        if (e.key === 'Escape') { e.preventDefault(); cell.dataset.cancel = '1'; cell.blur(); }
+    });
+
+    mappingTableBody.addEventListener('blur', (e) => {
+        const cell = e.target.closest('.mapping-replacement-cell[contenteditable="true"]');
+        if (!cell) return;
+        const entity = cell.getAttribute('data-entity');
+        const cancelled = cell.dataset.cancel === '1';
+        delete cell.dataset.cancel;
+        cell.removeAttribute('contenteditable');
+        if (cancelled || !entity || !currentMapping.entities[entity]) {
+            renderResults();
+            return;
+        }
+        const newRep = (cell.textContent || '').trim();
+        if (!newRep) { renderResults(); return; }
+        // If the new replacement matches an existing group, adopt that group's type.
+        const aliasedType = typeForReplacement(newRep);
+        currentMapping.entities[entity].replacement = newRep;
+        if (aliasedType) currentMapping.entities[entity].type = aliasedType;
         recomputeAnonymizedFromSource();
         if (anonDocType === 'excel') renderResults();
-    });
+    }, true);
 }
 
 // ── Quick-tag from preview selection ─────────────────────────────────────
@@ -1710,6 +1794,24 @@ if (mappingTableBody) {
             // Already mapped — just update the type (keep replacement)
             currentMapping.entities[entity].type = type;
         }
+        hidePopover();
+        window.getSelection()?.removeAllRanges();
+        recomputeAnonymizedFromSource();
+        if (anonDocType === 'excel') renderResults();
+    });
+
+    // Alias picker: choosing an existing replacement maps the selection to
+    // that group (e.g. "Jan", "J. Janssen" → same [PERSON_1]).
+    const aliasSelect = document.getElementById('anonSelectionAlias');
+    aliasSelect?.addEventListener('change', () => {
+        const replacement = aliasSelect.value;
+        if (!replacement) return;
+        const entity = popover.dataset.entity || '';
+        if (entity.length < 2) { hidePopover(); return; }
+        const type = typeForReplacement(replacement) || 'MISC';
+        currentMapping.entities[entity] = { type, replacement };
+        manualEntities.add(entity);
+        aliasSelect.value = '';
         hidePopover();
         window.getSelection()?.removeAllRanges();
         recomputeAnonymizedFromSource();
