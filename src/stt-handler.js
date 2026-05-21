@@ -288,6 +288,17 @@ async function initSTTModel(externalProgressCb) {
             env.allowLocalModels = false;
             env.useBrowserCache = true;
 
+            // Pin onnxruntime-web's WASM/JSEP glue to the exact nightly we use
+            // in the import map. Without this, transformers.js builds the path
+            // from ONNX_ENV.versions.web which can drift, and the JSEP glue
+            // (ort-wasm-simd-threaded.jsep.mjs) fails to load — in which case
+            // Module.webgpuInit is never attached and the WebGPU backend errors
+            // with: "z().webgpuInit is not a function".
+            const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
+            if (env.backends?.onnx?.wasm) {
+                env.backends.onnx.wasm.wasmPaths = ORT_DIST;
+            }
+
             const fileProgress = {};
             const loggedFiles = new Set();
             const { dtype: modelDtype, device: modelDevice } = getModelConfig();

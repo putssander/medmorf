@@ -294,13 +294,20 @@ The `index.html` import map resolves bare specifiers:
 {
   "@huggingface/transformers": "...transformers@4.2.0/dist/transformers.web.js",
   "@xenova/transformers": "...transformers@4.2.0/dist/transformers.web.js",
-  "onnxruntime-web":         "...onnxruntime-web@1.26.0-dev.../dist/ort.bundle.min.mjs",
-  "onnxruntime-web/webgpu":  "...onnxruntime-web@1.26.0-dev.../dist/ort.webgpu.bundle.min.mjs",
-  "onnxruntime-web/wasm":    "...onnxruntime-web@1.26.0-dev.../dist/ort.wasm.bundle.min.mjs"
+  "onnxruntime-web":         "...onnxruntime-web@1.26.0-dev.../dist/ort.all.min.mjs",
+  "onnxruntime-web/webgpu":  "...onnxruntime-web@1.26.0-dev.../dist/ort.webgpu.min.mjs",
+  "onnxruntime-web/wasm":    "...onnxruntime-web@1.26.0-dev.../dist/ort.wasm.min.mjs"
 }
 ```
 
-> **Why `.bundle.min.mjs`?** `@huggingface/transformers@4.2.0` pins `onnxruntime-web@1.26.0-dev.20260416-b7804b056c`, whose `package.json` `exports` map resolves the bare `onnxruntime-web` specifier to the `.bundle.min.mjs` flavor (WASM embedded). Pointing the import map at the extern-wasm `ort.all.min.mjs` / `ort.webgpu.min.mjs` variants instead causes `S().webgpuInit is not a function` at STT load time because the WebGPU init export isn't on the same module surface.
+> **WebGPU/JSEP wasm path.** The extern-wasm ORT builds above lazy-load
+> `ort-wasm-simd-threaded.jsep.{mjs,wasm}` at runtime to install
+> `Module.webgpuInit`. `src/stt-handler.js` sets
+> `env.backends.onnx.wasm.wasmPaths` to the exact pinned ORT nightly
+> directory so the JSEP glue resolves correctly; otherwise the WebGPU
+> backend errors with `Module.webgpuInit is not a function`. The
+> service worker also pre-caches those JSEP files (see `CDN_DEPS` in
+> `sw.js`) so STT works offline.
 
 The `@xenova/transformers` alias is critical: `gliner@0.0.19` internally `import`s from `@xenova/transformers` (a bare specifier), so the import map redirects it to v3. Without this, gliner would bundle its own v2 copy, which can't tokenize ModernBERT models.
 
