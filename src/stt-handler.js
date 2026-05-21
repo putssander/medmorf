@@ -35,16 +35,31 @@ let hasWebGPU = false;
 const STT_FORCE_WASM = !/[?&]stt-gpu=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 
 function getModelConfig() {
-    // Mobile: q4 on WASM (smallest footprint)
-    // Desktop WASM: q8 on WASM
-    // WebGPU: opt-in via ?stt-gpu=1
+    // Whisper on transformers.js works best with a PER-MODULE dtype:
+    //   - encoder: fp32 (small, accuracy-critical, no quant artifacts)
+    //   - decoder_model_merged: q4 (large, can be quantized safely)
+    // A single `dtype: 'q8'` triggers ORT's QDQ optimizer to look for scales
+    // that aren't present in the published merged ONNX file and fails with:
+    //   "Missing required scale: model.decoder.embed_tokens.weight_merged_0_scale"
+    // The per-module form is the configuration the Xenova examples ship with
+    // and is verified to load on every Whisper variant.
+    //
+    // WebGPU (opt-in) keeps the fp16 fast-path for the whole graph.
     if (!STT_FORCE_WASM && hasWebGPU && !isMobile) {
         return { dtype: 'fp16', device: 'webgpu', suffix: 'GPU' };
-    } else if (isMobile) {
-        return { dtype: 'q4', device: 'wasm', suffix: 'q4' };
-    } else {
-        return { dtype: 'q8', device: 'wasm', suffix: '' };
     }
+    if (isMobile) {
+        return {
+            dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+            device: 'wasm',
+            suffix: 'q4',
+        };
+    }
+    return {
+        dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+        device: 'wasm',
+        suffix: '',
+    };
 }
 
 const STT_MODEL_OPTIONS = {
@@ -317,7 +332,7 @@ async function initSTTModel(externalProgressCb) {
             const fileProgress = {};
             const loggedFiles = new Set();
             const { dtype: modelDtype, device: modelDevice } = getModelConfig();
-            console.log(`[STT] Using device: ${modelDevice}, dtype: ${modelDtype}`);
+            console.log(`[STT] Using device: ${modelDevice}, dtype:`, modelDtype);
 
             pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
                 dtype: modelDtype,
