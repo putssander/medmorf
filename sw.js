@@ -2,7 +2,7 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v2';
+const CACHE_NAME = 'medmorf-app-v3';
 
 // App shell files (local)
 const APP_SHELL = [
@@ -29,7 +29,9 @@ const CDN_DEPS = [
     // Import-map entries
     'https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js',
     'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs',
-    'https://cdn.jsdelivr.net/npm/onnxruntime-common@1.26.0-dev.20260416-b7804b056c/dist/esm/index.js',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.min.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.wasm.min.mjs',
+    'https://cdn.jsdelivr.net/npm/onnxruntime-common@1.24.0-dev.20251116-b39e144322/dist/esm/index.js',
     'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js',
     // Script-tag libs
     'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',

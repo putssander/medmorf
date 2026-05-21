@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MedMorf — Transformers.js v4.2 upgrade smoke tests</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Mirror the import map used by index.html so we exercise the SAME pinned URLs. -->
+<script type="importmap">
+{
+    "imports": {
+        "fs": "./stubs/empty-module.js",
+        "path": "./stubs/empty-module.js",
+        "url": "./stubs/empty-module.js",
+        "onnxruntime-node": "./stubs/null-module.js",
+        "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js",
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs",
+        "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.min.mjs",
+        "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.wasm.min.mjs",
+        "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.24.0-dev.20251116-b39e144322/dist/esm/index.js",
+        "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js",
+        "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js"
+    }
+}
+</script>
+<style>
+    :root {
+        --bg: #f8fafc; --card: #fff; --border: #e5e7eb;
+        --primary: #3b82f6; --ok: #10b981; --err: #dc2626; --warn: #d97706;
+        --muted: #6b7280; --text: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: -apple-system, system-ui, sans-serif;
+        background: var(--bg); color: var(--text);
+        margin: 0; padding: 1.5rem; max-width: 1100px; margin: 0 auto;
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+    .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem; }
+    .panel {
+        background: var(--card); border: 1px solid var(--border);
+        border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem;
+    }
+    .panel h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+    .row { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+    button {
+        background: var(--primary); color: #fff; border: 0;
+        padding: 0.45rem 0.9rem; border-radius: 6px; cursor: pointer;
+        font-size: 0.9rem; font-weight: 600;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+    .test {
+        display: grid; grid-template-columns: 1.4rem 1fr auto auto;
+        gap: 0.5rem; align-items: center;
+        padding: 0.5rem 0.6rem; border-bottom: 1px solid #f1f5f9;
+        font-size: 0.9rem;
+    }
+    .test:last-child { border-bottom: 0; }
+    .test .badge {
+        width: 1.4rem; height: 1.4rem; border-radius: 50%;
+        display: inline-flex; align-items: center; justify-content: center;
+        background: #f1f5f9; color: var(--muted); font-weight: 700; font-size: 0.7rem;
+    }
+    .test.pass .badge { background: var(--ok); color: #fff; }
+    .test.fail .badge { background: var(--err); color: #fff; }
+    .test.run  .badge { background: var(--warn); color: #fff; animation: pulse 1s infinite; }
+    @keyframes pulse { 50% { opacity: 0.4; } }
+    .test .name { font-weight: 600; }
+    .test .detail { color: var(--muted); font-size: 0.78rem; grid-column: 2 / 5; }
+    .test.fail .detail { color: var(--err); }
+    .timing { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.8rem; }
+    pre {
+        background: #0f172a; color: #e2e8f0; padding: 0.6rem 0.8rem;
+        border-radius: 6px; font-size: 0.78rem; overflow-x: auto;
+        max-height: 12rem; margin: 0.4rem 0 0;
+    }
+    .versions {
+        display: grid; grid-template-columns: max-content 1fr; gap: 0.25rem 0.75rem;
+        font-size: 0.85rem; font-family: ui-monospace, Menlo, monospace;
+    }
+    .versions .k { color: var(--muted); }
+    .summary {
+        display: flex; gap: 1rem; font-size: 0.95rem; font-weight: 600;
+        padding: 0.6rem 0.8rem; border-radius: 6px; background: #f1f5f9;
+    }
+    .summary .ok-cnt { color: var(--ok); }
+    .summary .fail-cnt { color: var(--err); }
+    label { font-size: 0.85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<h1>Transformers.js v4.2.0 upgrade — smoke tests</h1>
+<div class="sub">
+    Loads each model used by MedMorf and runs a small inference. Open the browser
+    DevTools console for full stack traces. Models download lazily on first run; subsequent
+    runs use the browser cache.
+</div>
+
+<div class="panel">
+    <h2>1. Runtime</h2>
+    <div class="row">
+        <button id="btnLoadRuntime">Load Transformers.js</button>
+        <button id="btnRunAll" class="secondary" disabled>Run all tests</button>
+        <label><input type="checkbox" id="chkWebgpu"> Prefer WebGPU when supported</label>
+    </div>
+    <div id="versions" class="versions" style="margin-top: 0.75rem;"></div>
+</div>
+
+<div class="panel">
+    <h2>2. NER models (privacy-runtime.js)</h2>
+    <div id="testsNer"></div>
+</div>
+
+<div class="panel">
+    <h2>3. Translation (translation-runtime.js)</h2>
+    <div id="testsTrans"></div>
+</div>
+
+<div class="panel">
+    <h2>4. Speech-to-text (stt-handler.js)</h2>
+    <div id="testsStt"></div>
+</div>
+
+<div class="panel">
+    <h2>Summary</h2>
+    <div class="summary" id="summary">
+        <span class="ok-cnt" id="okCnt">0 passed</span>
+        <span class="fail-cnt" id="failCnt">0 failed</span>
+        <span class="muted" id="pendingCnt">— pending</span>
+    </div>
+</div>
+
+<script type="module">
+const SAMPLE_TEXT = "Patient John Smith, born 1985-04-12, lives at Hoofdstraat 12, 1011AA Amsterdam. " +
+    "Phone +31 6 12345678, email j.smith@example.com. SSN 123-45-6789.";
+
+const NER_TESTS = [
+    { id: 'multilang_pii',         model: 'onnx-community/multilang-pii-ner-ONNX',    task: 'token-classification', dtype: 'q8' },
+    { id: 'multilingual_ner',      model: 'Xenova/bert-base-multilingual-cased-ner-hrl', task: 'token-classification', dtype: 'q8' },
+    { id: 'openai_privacy_filter', model: 'openai/privacy-filter',                    task: 'token-classification', dtype: 'q4', preferWebgpu: true },
+    // GLiNER uses a separate runtime (gliner@0.0.19 npm package) — out of scope for this harness.
+];
+const TRANS_TESTS = [
+    { id: 'nllb_600m', model: 'Xenova/nllb-200-distilled-600M', task: 'translation',
+      input: 'Goedemorgen, hoe gaat het?', opts: { src_lang: 'nld_Latn', tgt_lang: 'eng_Latn' } },
+];
+const STT_TESTS = [
+    { id: 'whisper_tiny', model: 'onnx-community/whisper-tiny', task: 'automatic-speech-recognition' },
+];
+
+const tests = new Map();
+let transformers = null;
+
+function el(html) {
+    const d = document.createElement('div');
+    d.innerHTML = html.trim();
+    return d.firstElementChild;
+}
+function row(container, key, name) {
+    const node = el(`<div class="test" id="t-${key}">
+        <span class="badge">·</span>
+        <span class="name">${name}</span>
+        <span class="timing"></span>
+        <button class="secondary" data-key="${key}">Run</button>
+        <span class="detail">Idle.</span>
+    </div>`);
+    container.appendChild(node);
+    tests.set(key, { node, name, status: 'idle' });
+    node.querySelector('button').addEventListener('click', () => runTest(key));
+    return node;
+}
+function setStatus(key, status, detail, ms) {
+    const t = tests.get(key); if (!t) return;
+    t.status = status;
+    t.node.classList.remove('pass', 'fail', 'run');
+    if (status !== 'idle') t.node.classList.add(status);
+    const badge = t.node.querySelector('.badge');
+    badge.textContent = status === 'pass' ? '✓' : status === 'fail' ? '✗' : status === 'run' ? '…' : '·';
+    if (detail !== undefined) t.node.querySelector('.detail').textContent = detail;
+    if (ms !== undefined) t.node.querySelector('.timing').textContent = `${ms.toFixed(0)} ms`;
+    refreshSummary();
+}
+function refreshSummary() {
+    let ok = 0, fail = 0, pending = 0;
+    for (const t of tests.values()) {
+        if (t.status === 'pass') ok++;
+        else if (t.status === 'fail') fail++;
+        else pending++;
+    }
+    document.getElementById('okCnt').textContent = `${ok} passed`;
+    document.getElementById('failCnt').textContent = `${fail} failed`;
+    document.getElementById('pendingCnt').textContent = `${pending} pending`;
+}
+
+// Render rows.
+const nerHost = document.getElementById('testsNer');
+NER_TESTS.forEach(t => row(nerHost, `ner:${t.id}`, `${t.id} — ${t.model}`));
+TRANS_TESTS.forEach(t => row(document.getElementById('testsTrans'), `trans:${t.id}`, `${t.id} — ${t.model}`));
+STT_TESTS.forEach(t => row(document.getElementById('testsStt'), `stt:${t.id}`, `${t.id} — ${t.model}`));
+refreshSummary();
+
+document.getElementById('btnLoadRuntime').addEventListener('click', loadRuntime);
+document.getElementById('btnRunAll').addEventListener('click', runAll);
+
+async function loadRuntime() {
+    const btn = document.getElementById('btnLoadRuntime');
+    btn.disabled = true; btn.textContent = 'Loading…';
+    try {
+        transformers = await import('@huggingface/transformers');
+        const { env } = transformers;
+        env.allowLocalModels = false;
+        env.useBrowserCache = true;
+        env.backends.onnx.wasm.wasmPaths =
+            'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
+
+        const versions = document.getElementById('versions');
+        const ortVer = transformers?.env?.versions?.['onnxruntime-web']
+                    ?? transformers?.env?.backends?.onnx?.version
+                    ?? '(unknown)';
+        const lib = transformers?.env?.version ?? transformers?.VERSION ?? '(unknown)';
+        const webgpu = !!navigator.gpu;
+        versions.innerHTML = `
+            <span class="k">@huggingface/transformers</span><span>${lib} (expected 4.2.0)</span>
+            <span class="k">onnxruntime-web</span><span>${ortVer}</span>
+            <span class="k">navigator.gpu (WebGPU)</span><span>${webgpu ? 'available' : 'not available'}</span>
+            <span class="k">env.backends.onnx.wasm.wasmPaths</span><span>${env.backends.onnx.wasm.wasmPaths}</span>
+        `;
+        btn.textContent = 'Loaded ✓';
+        document.getElementById('btnRunAll').disabled = false;
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Load Transformers.js';
+        alert('Failed to load Transformers.js: ' + err.message);
+        console.error(err);
+    }
+}
+
+async function runTest(key) {
+    if (!transformers) {
+        alert('Load the runtime first.');
+        return;
+    }
+    const [kind, id] = key.split(':');
+    const cfg =
+        kind === 'ner'   ? NER_TESTS.find(x => x.id === id) :
+        kind === 'trans' ? TRANS_TESTS.find(x => x.id === id) :
+                           STT_TESTS.find(x => x.id === id);
+    if (!cfg) return;
+    setStatus(key, 'run', `Loading ${cfg.model}…`);
+    const t0 = performance.now();
+    try {
+        const preferWg = document.getElementById('chkWebgpu').checked;
+        const opts = {};
+        if (cfg.dtype) opts.dtype = cfg.dtype;
+        if ((cfg.preferWebgpu || preferWg) && navigator.gpu) opts.device = 'webgpu';
+
+        const pipe = await transformers.pipeline(cfg.task, cfg.model, opts);
+        const tLoad = performance.now() - t0;
+        setStatus(key, 'run', `Model loaded in ${tLoad.toFixed(0)} ms — running inference…`);
+
+        let result;
+        if (kind === 'ner') {
+            result = await pipe(SAMPLE_TEXT, { ignore_labels: [] });
+        } else if (kind === 'trans') {
+            result = await pipe(cfg.input, cfg.opts);
+        } else if (kind === 'stt') {
+            // Synthesize 1 s of silence at 16 kHz so the pipeline accepts a Float32Array input.
+            const audio = new Float32Array(16000);
+            result = await pipe(audio);
+        }
+        const tTotal = performance.now() - t0;
+        const summary = summarize(kind, result);
+        setStatus(key, 'pass', summary, tTotal);
+        console.log(`[${key}]`, result);
+    } catch (err) {
+        const ms = performance.now() - t0;
+        setStatus(key, 'fail', `${err.name}: ${err.message}`, ms);
+        console.error(`[${key}] failed`, err);
+    }
+}
+
+function summarize(kind, result) {
+    if (kind === 'ner') {
+        const arr = Array.isArray(result) ? result : [];
+        const top = arr.slice(0, 5).map(r => `${r.entity_group ?? r.entity}:${(r.word ?? '').trim()}`).join(', ');
+        return `OK — ${arr.length} tokens. ${top ? 'Sample: ' + top : ''}`;
+    }
+    if (kind === 'trans') {
+        const t = Array.isArray(result) ? result[0]?.translation_text : result?.translation_text;
+        return `OK — "${t ?? ''}"`;
+    }
+    if (kind === 'stt') {
+        const t = result?.text ?? '';
+        return `OK — transcript length ${t.length}`;
+    }
+    return 'OK';
+}
+
+async function runAll() {
+    for (const key of tests.keys()) {
+        // eslint-disable-next-line no-await-in-loop
+        await runTest(key);
+    }
+}
+</script>
+</body>
+</html>
