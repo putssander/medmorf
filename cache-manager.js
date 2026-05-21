@@ -337,6 +337,100 @@ async function deleteAllStorage() {
 if (storageRefreshBtn) storageRefreshBtn.addEventListener('click', refreshStorageView);
 if (storageDeleteAllBtn) storageDeleteAllBtn.addEventListener('click', deleteAllStorage);
 
+// ── App Update controls ────────────────────────────────────────────────────────
+// Wipes only the app-shell caches (keeps model weights) and reloads.
+async function refreshAppShellKeepModels() {
+    const statusEl = document.getElementById('appUpdateStatus');
+    if (statusEl) statusEl.textContent = 'Refreshing app code…';
+    try {
+        const names = await caches.keys();
+        await Promise.all(
+            names
+                .filter(n => n.startsWith('medmorf-app-'))
+                .map(n => caches.delete(n))
+        );
+        // Tell any waiting SW to take over immediately
+        if (navigator.serviceWorker?.controller) {
+            const reg = await navigator.serviceWorker.getRegistration();
+            if (reg?.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+        location.reload();
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Refresh failed: ' + (e?.message || e);
+    }
+}
+
+async function checkForUpdates() {
+    const statusEl = document.getElementById('appUpdateStatus');
+    if (!('serviceWorker' in navigator)) {
+        if (statusEl) statusEl.textContent = 'Service Worker not supported.';
+        return;
+    }
+    if (statusEl) statusEl.textContent = 'Checking…';
+    try {
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (!reg) {
+            if (statusEl) statusEl.textContent = 'No service worker registered.';
+            return;
+        }
+        await reg.update();
+        if (reg.waiting) {
+            if (statusEl) statusEl.innerHTML = 'Update ready. <a href="#" id="appApplyUpdateLink">Apply now</a>';
+            const link = document.getElementById('appApplyUpdateLink');
+            if (link) link.addEventListener('click', (e) => {
+                e.preventDefault();
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            });
+        } else if (reg.installing) {
+            if (statusEl) statusEl.textContent = 'Downloading update…';
+        } else {
+            if (statusEl) statusEl.textContent = 'You\'re on the latest version.';
+        }
+    } catch (e) {
+        if (statusEl) statusEl.textContent = 'Check failed: ' + (e?.message || e);
+    }
+}
+
+// Auto-detect when a new SW takes control (after SKIP_WAITING) and reload once.
+if ('serviceWorker' in navigator) {
+    let _reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (_reloaded) return;
+        _reloaded = true;
+        location.reload();
+    });
+    // Surface waiting SW that exists at page load
+    navigator.serviceWorker.getRegistration().then(reg => {
+        if (!reg) return;
+        const showWaiting = () => {
+            const statusEl = document.getElementById('appUpdateStatus');
+            if (statusEl && reg.waiting) {
+                statusEl.innerHTML = 'Update ready. <a href="#" id="appApplyUpdateLink">Apply now</a>';
+                const link = document.getElementById('appApplyUpdateLink');
+                if (link) link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+                });
+            }
+        };
+        if (reg.waiting) showWaiting();
+        reg.addEventListener('updatefound', () => {
+            const sw = reg.installing;
+            if (!sw) return;
+            sw.addEventListener('statechange', () => {
+                if (sw.state === 'installed' && navigator.serviceWorker.controller) {
+                    showWaiting();
+                }
+            });
+        });
+    }).catch(() => {});
+}
+
+const appCheckUpdateBtn = document.getElementById('appCheckUpdateBtn');
+const appRefreshShellBtn = document.getElementById('appRefreshShellBtn');
+if (appCheckUpdateBtn) appCheckUpdateBtn.addEventListener('click', checkForUpdates);
+if (appRefreshShellBtn) appRefreshShellBtn.addEventListener('click', refreshAppShellKeepModels);
+
 // ── Offline Download UI Elements ───────────────────────────────────────────────
 const offlineTranslationBtn = document.getElementById('offlineTranslationBtn');
 const offlineTranslationText = document.getElementById('offlineTranslationText');

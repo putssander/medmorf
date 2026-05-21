@@ -3887,3 +3887,15 @@ details summary:hover {
 .mergepdf-status.is-progress {
     color: var(--primary-color);
 }
+
+/* App update controls (Storage tab) */
+.storage-app-update .app-update-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+.storage-app-update .app-update-row #appUpdateStatus a {
+    color: var(--primary-color);
+    text-decoration: underline;
+}

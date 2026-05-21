@@ -1409,6 +1409,25 @@
                     </button>
                 </section>
 
+                <!-- App Updates -->
+                <section class="storage-section storage-app-update">
+                    <div class="storage-section-header">
+                        <h3>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                            App Updates
+                        </h3>
+                        <p class="storage-hint">Force-refresh the app code without redownloading model weights. Useful after a new version is deployed.</p>
+                    </div>
+                    <div class="app-update-row">
+                        <button class="btn btn-small btn-primary" id="appCheckUpdateBtn">Check for updates</button>
+                        <button class="btn btn-small btn-ghost" id="appRefreshShellBtn">Refresh app (keep models)</button>
+                        <span id="appUpdateStatus" class="storage-hint" style="margin-left:0.5rem;"></span>
+                    </div>
+                    <p class="storage-hint" style="margin-top:0.6rem;font-size:0.78rem;opacity:0.8;">
+                        Note: Private/incognito browser windows discard <strong>all</strong> caches when closed — including model weights. To keep models between sessions, use a normal window.
+                    </p>
+                </section>
+
                 <!-- Personal Data Flow -->
                 <section class="storage-section storage-personal-data">
                     <div class="storage-section-header">

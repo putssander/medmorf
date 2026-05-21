@@ -2,7 +2,7 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v4';
+const CACHE_NAME = 'medmorf-app-v5';
 
 // App shell files (local)
 const APP_SHELL = [
@@ -54,6 +54,13 @@ const CDN_HOSTS = ['cdn.jsdelivr.net', 'cdnjs.cloudflare.com', 'esm.sh'];
 // Hostnames where WebLLM/Transformers.js store model files in their own caches
 // We intercept these to serve from any cache (including WebLLM's own caches) when offline
 const MODEL_HOSTS = ['huggingface.co'];
+
+// Allow page to trigger immediate activation of a new SW
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+});
 
 self.addEventListener('install', (event) => {
     event.waitUntil(
