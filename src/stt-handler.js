@@ -678,8 +678,8 @@ async function startRecording() {
         }
     };
 
-    // 1. Acquire mic FIRST — keeps us inside the user-gesture window so the
-    //    permission prompt is guaranteed to appear (model load can take seconds).
+    // Acquire mic synchronously inside the user-gesture so the permission
+    // prompt is guaranteed to appear.
     if (sttRecordBtn) sttRecordBtn.disabled = true;
     const stream = await acquireMicStream(report);
     if (!stream) {
@@ -688,20 +688,16 @@ async function startRecording() {
     }
 
     try {
-        // 2. Now load the model.
-        report('Loading model...', 'info');
-        await initSTTModel();
+        // Live transcription has been removed (was unreliable). Recording now
+        // just captures audio to a blob; the user clicks “Transcribe” after
+        // stopping, which loads the model and runs inference on the full clip.
         if (sttRecordBtn) sttRecordBtn.disabled = false;
 
         audioChunks = [];
         recordedBlob = null;
-        liveSegments = [];
-        pcmChunks = [];
-        pcmSampleCount = 0;
-        lastProcessedSample = 0;
         transcriptionResult = null;
 
-        // MediaRecorder for final blob (re-transcription / download)
+        // MediaRecorder for the final blob (transcription + download).
         mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
         mediaRecorder.ondataavailable = (e) => {
             if (e.data.size > 0) audioChunks.push(e.data);
@@ -710,27 +706,20 @@ async function startRecording() {
             recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
         };
 
-        // Set up raw PCM capture for live transcription
-        await setupPCMCapture(stream);
-
-        // Set up waveform visualizer
+        // Waveform visualiser (visual feedback only, no transcription).
         startWaveform(stream, sttWaveformCanvas, 'stt');
 
         mediaRecorder.start(1000);
         isRecording = true;
 
-        // UI: show recording state
+        // UI: show recording state. The live-transcript box is intentionally
+        // hidden — it caused confusion when the live path was unreliable.
         if (sttRecordingIndicator) sttRecordingIndicator.style.display = 'flex';
         if (sttRecordBtn) sttRecordBtn.style.display = 'none';
         if (sttStopBtn) sttStopBtn.style.display = '';
         if (sttResults) sttResults.style.display = 'none';
-        if (sttLiveTranscript) sttLiveTranscript.style.display = 'block';
-        if (sttLiveText) sttLiveText.textContent = '';
-        if (sttLiveStatus) sttLiveStatus.textContent = 'Listening...';
+        if (sttLiveTranscript) sttLiveTranscript.style.display = 'none';
         if (sttWaveformCanvas) sttWaveformCanvas.style.display = 'block';
-
-        // Model is already loaded — start live transcription loop immediately
-        startLiveLoop();
     } catch (error) {
         console.error('[stt] recording setup failed after mic acquired:', error);
         // Release the mic since we never started recording.

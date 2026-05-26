@@ -17,9 +17,9 @@ Nothing to install — open the link in Chrome, Edge, Firefox, or Safari and sta
 
 | Pillar | Capability |
 |---|---|
-| 🎙 **Transcribe** | Speech-to-text for clinical audio (Whisper / Transformers.js, WebGPU when available) |
+| 🎙 **Transcribe** | Speech-to-text for clinical audio (Whisper / Transformers.js on WASM by default; WebGPU opt-in via `?stt-gpu=1`). Record → stop → click **Transcribe**, or upload an audio file. Live/streaming transcription has been removed for stability. |
 | 🌐 **Translate** | Multilingual medical translation (NLLB-200) — Dutch, English, German, French, Spanish, Italian, Portuguese, +200 languages |
-| 🛡 **Protect** | De-identify PII via XLM-RoBERTa, GLiNER (ModernBERT), mBERT, optionally verified by an in-browser LLM (Qwen3 0.6B/1.7B/4B/8B via WebLLM + WebGPU) |
+| 🛡 **Protect** | De-identify PII via XLM-RoBERTa, GLiNER (ModernBERT), mBERT, optionally verified by an in-browser LLM (Qwen3 0.6B/1.7B/4B/8B via WebLLM + WebGPU). Accepts file uploads (`.pdf`, `.xlsx`, `.docx`, `.txt`) **or** direct paste via the “Or paste text directly” panel. Includes smart bundling for person aliases (e.g. `S. Puts` ↔ `Puts`) and auto-renumbering so replacement tags stay contiguous. |
 | 📚 **Summarize** | Clinical-summary generation with the same WebLLM stack (Qwen3 4B by default) |
 | 🩻 **DICOM** | In-browser DICOM tag editing, anonymization presets, modality-aware sorting |
 | 📄 **Documents** | `.xlsx` (sheet/column-aware), `.docx`, and `.pdf` ingestion + export |

@@ -2151,6 +2151,47 @@ setupDropArea(anonMappingUpload, anonMappingInput, async (file) => {
     }
 });
 
+// ── Free-text input ────────────────────────────────────────────────────────────
+// Lets users paste raw text instead of uploading a file. We synthesise a
+// File object so the rest of the anonymize pipeline works unchanged.
+const anonPasteText = document.getElementById('anonPasteText');
+const anonPasteUseBtn = document.getElementById('anonPasteUseBtn');
+const anonPasteClearBtn = document.getElementById('anonPasteClearBtn');
+const anonPasteStatus = document.getElementById('anonPasteStatus');
+
+if (anonPasteUseBtn && anonPasteText) {
+    anonPasteUseBtn.addEventListener('click', () => {
+        const text = (anonPasteText.value || '').trim();
+        if (text.length < 1) {
+            if (anonPasteStatus) anonPasteStatus.textContent = 'Paste some text first.';
+            return;
+        }
+        // Synthesise a text/plain File so the existing extractTextFromDocument()
+        // → file.text() path works without any branching.
+        const name = `pasted-text-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.txt`;
+        const file = new File([text], name, { type: 'text/plain' });
+        anonDocument = file;
+        anonDocType = 'text';
+        if (anonDocName) anonDocName.textContent = name;
+        if (anonDocInfo) anonDocInfo.style.display = 'block';
+        if (anonResults) anonResults.style.display = 'none';
+        anonymizedResult = null;
+        if (anonPdfFormat) anonPdfFormat.style.display = 'none';
+        if (anonExcelSettings) anonExcelSettings.style.display = 'none';
+        if (anonymizeBtn) anonymizeBtn.disabled = false;
+        if (anonPasteStatus) {
+            anonPasteStatus.textContent = `Loaded ${text.length.toLocaleString()} characters. Click Anonymize to process.`;
+        }
+    });
+}
+
+if (anonPasteClearBtn && anonPasteText) {
+    anonPasteClearBtn.addEventListener('click', () => {
+        anonPasteText.value = '';
+        if (anonPasteStatus) anonPasteStatus.textContent = '';
+    });
+}
+
 if (clearAnonMappingBtn) {
     clearAnonMappingBtn.addEventListener('click', () => {
         currentMapping = { version: 1, entities: {}, counters: {} };
