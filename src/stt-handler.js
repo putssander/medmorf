@@ -2,7 +2,7 @@
 // Uses whisper-small or whisper-tiny for browser-based transcription.
 // Zero data leaves the browser — all processing is local.
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-21-stability-1';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';

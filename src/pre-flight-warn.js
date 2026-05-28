@@ -5,7 +5,12 @@
 // never start downloading / compiling at the same time (a frequent OOM
 // trigger on Safari + low-RAM Chrome).
 
-import { getCapabilities, classifyModelRisk } from './device-capabilities.js?v=2026-05-21-stability-1';
+import {
+    getCapabilities,
+    classifyModelRisk,
+    describeMemoryCeiling,
+    getRuntimeMemorySnapshot,
+} from './device-capabilities.js?v=2026-05-28-resource-1';
 
 const RISK_LABELS = {
     low:      { label: 'Low risk',      color: '#10b981' },
@@ -44,10 +49,19 @@ function fmtSize(mb) {
 
 function buildModal({ title, model, sizeMB, risk, snap, why }) {
     const tier = RISK_LABELS[risk] || RISK_LABELS.unknown;
+    const runtime = getRuntimeMemorySnapshot();
+    const ceiling = describeMemoryCeiling(snap, runtime);
+    const jsHeap = runtime.jsHeapSupported
+        ? `${fmtSize(runtime.jsHeapUsedMB)} / ${fmtSize(runtime.jsHeapLimitMB)}`
+        : 'Not exposed by this browser';
+    const safeHeadroom = sizeMB > 0
+        ? `${fmtSize(Math.max(0, ceiling.safeModelCeilingMB - sizeMB))} after this model`
+        : 'Unknown';
     const wgpu = snap?.webgpu?.supported
         ? `WebGPU ${snap.webgpu.adapterInfo?.vendor || ''} (max buffer ${fmtSize(snap.webgpu.maxBufferSizeMB)})`
         : 'WebGPU not available — will fall back to WASM (much slower)';
     const ios = snap?.isIosSafari ? '<div class="pf-warn">⚠️ iOS Safari has a strict ~1.5 GB per-tab memory cap. Tabs that exceed it crash.</div>' : '';
+    const visibilityNote = '<div class="pf-note">Browsers do not expose exact total tab memory or total VRAM. Reported values are shown when available; the model ceiling is a conservative estimate.</div>';
 
     return `
         <div class="pf-overlay" data-action="cancel"></div>
@@ -62,8 +76,12 @@ function buildModal({ title, model, sizeMB, risk, snap, why }) {
                 <div class="pf-row"><span class="pf-k">Device RAM</span><span class="pf-v">${snap?.deviceMemoryGB ?? '?'} GB (reported)</span></div>
                 <div class="pf-row"><span class="pf-k">CPU cores</span><span class="pf-v">${snap?.cores ?? '?'}</span></div>
                 <div class="pf-row"><span class="pf-k">Backend</span><span class="pf-v">${wgpu}</span></div>
+                <div class="pf-row"><span class="pf-k">JS heap now</span><span class="pf-v">${jsHeap}</span></div>
+                <div class="pf-row"><span class="pf-k">Main bottleneck</span><span class="pf-v">${ceiling.bottleneck.label}: ${fmtSize(ceiling.bottleneck.valueMB)}</span></div>
+                <div class="pf-row"><span class="pf-k">Model headroom</span><span class="pf-v">${safeHeadroom}</span></div>
                 ${snap?.storageQuotaGB ? `<div class="pf-row"><span class="pf-k">Cache quota</span><span class="pf-v">${snap.storageQuotaGB.toFixed(1)} GB</span></div>` : ''}
                 ${ios}
+                ${visibilityNote}
                 ${why ? `<p class="pf-why">${why}</p>` : ''}
                 <label class="pf-skip"><input type="checkbox" data-action="dont-show"> Don't show this warning again for this model</label>
             </div>
@@ -95,6 +113,7 @@ function injectStylesOnce() {
         #preflightRoot .pf-k { color: #6b7280; }
         #preflightRoot .pf-v { font-weight: 600; text-align: right; }
         #preflightRoot .pf-warn { margin-top: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 6px; background: #fef3c7; color: #92400e; font-size: 0.83rem; }
+        #preflightRoot .pf-note { margin-top: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 6px; background: #eff6ff; color: #1e40af; font-size: 0.8rem; line-height: 1.35; }
         #preflightRoot .pf-why { margin: 0.6rem 0 0; color: #475569; font-size: 0.85rem; }
         #preflightRoot .pf-skip { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.7rem; font-size: 0.82rem; color: #6b7280; }
         #preflightRoot .pf-foot { display: flex; justify-content: flex-end; gap: 0.5rem; }

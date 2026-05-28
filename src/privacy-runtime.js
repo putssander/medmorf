@@ -6,7 +6,7 @@ const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.2
 // v3's AutoTokenizer handles it correctly.
 const GLINER_URL = 'https://esm.sh/gliner@0.0.19?external=@xenova/transformers';
 
-export const PRIVACY_RUNTIME_LABEL = 'Hugging Face Transformers.js v3';
+export const PRIVACY_RUNTIME_LABEL = 'Hugging Face Transformers.js';
 export const DEFAULT_NER_MODEL_ID = 'gliner_pii';
 
 export const NER_MODEL_OPTIONS = {
@@ -112,12 +112,13 @@ export const NER_MODEL_OPTIONS = {
         description: 'OpenAI bidirectional token classifier for PII detection (8 span categories incl. names, emails, addresses, dates, URLs, account numbers, secrets).',
         sizeMB: 800,
         supportedLanguages: ['English (primary)', 'Multilingual robustness reported'],
-        qualityNote: '~1.5B params, q4 quantized. Runs in-browser via WebGPU; falls back to WASM if WebGPU is unavailable (slower).',
+        qualityNote: '~1.5B params, q4 quantized. Requires WebGPU in-browser; the quantized embedding op is not available on the WASM backend.',
         categoriesLabel: 'PERSON, EMAIL, PHONE, ADDRESS, DATE, URL, ID_NUMBER, OTHER',
         cacheMatchers: ['privacy-filter'],
         dtypes: ['q4', 'q8'],
         device: 'webgpu',
-        deviceFallback: true,
+        deviceFallback: false,
+        wasmSupported: false,
         typeMap: {
             private_person: 'PERSON',
             private_email: 'EMAIL',
@@ -135,6 +136,7 @@ let transformersModulePromise = null;
 let nerPipeline = null;
 let activeNerModelId = null;
 let activeNerDtype = null;
+let activeNerExecutionMode = 'default';
 let nerInitPromise = null;
 
 // GLiNER state
@@ -196,11 +198,13 @@ export function mapNEREntityType(rawType, modelId = activeNerModelId || DEFAULT_
     return option.typeMap[rawType] || rawType;
 }
 
-async function createNERPipelineWithFallback(pipeline, option, progressCallback) {
+async function createNERPipelineWithFallback(pipeline, option, progressCallback, { executionMode = 'default' } = {}) {
     const dtypes = Array.isArray(option.dtypes) && option.dtypes.length ? option.dtypes : ['q8'];
-    const devices = option.device
-        ? (option.deviceFallback ? [option.device, undefined] : [option.device])
-        : [undefined];
+    const devices = executionMode === 'low-memory'
+        ? (option.wasmSupported === false ? [option.device || 'webgpu'] : ['wasm'])
+        : (option.device
+            ? (option.deviceFallback ? [option.device, undefined] : [option.device])
+            : [undefined]);
     let lastError = null;
 
     for (const device of devices) {
@@ -212,8 +216,10 @@ async function createNERPipelineWithFallback(pipeline, option, progressCallback)
                 };
                 if (device) opts.device = device;
                 const instance = await pipeline('token-classification', option.model, opts);
-                activeNerDtype = device ? `${dtype} (${device})` : dtype;
-                console.log(`[NER] Loaded ${option.label} with dtype ${dtype}${device ? ' on ' + device : ''}`);
+                const deviceLabel = device || 'wasm';
+                activeNerDtype = `${dtype} (${deviceLabel}${executionMode === 'low-memory' ? ', low-memory' : ''})`;
+                activeNerExecutionMode = executionMode;
+                console.log(`[NER] Loaded ${option.label} with dtype ${dtype} on ${deviceLabel}${executionMode === 'low-memory' ? ' low-memory mode' : ''}`);
                 return instance;
             } catch (error) {
                 lastError = error;
@@ -225,17 +231,18 @@ async function createNERPipelineWithFallback(pipeline, option, progressCallback)
     throw lastError || new Error(`Failed to load ${option.label}`);
 }
 
-export async function initNERPipeline({ modelId = DEFAULT_NER_MODEL_ID, progressCallback } = {}) {
+export async function initNERPipeline({ modelId = DEFAULT_NER_MODEL_ID, progressCallback, executionMode = 'default' } = {}) {
     const option = getNERModelOption(modelId);
-    if (nerPipeline && activeNerModelId === option.id) {
-        return nerPipeline;
+    const activePipeline = nerPipeline || glinerInstance;
+    if (activePipeline && activeNerModelId === option.id && activeNerExecutionMode === executionMode) {
+        return activePipeline;
     }
     if (nerInitPromise) {
         return nerInitPromise;
     }
 
     nerInitPromise = (async () => {
-        if ((nerPipeline || glinerInstance) && activeNerModelId !== option.id) {
+        if ((nerPipeline || glinerInstance) && (activeNerModelId !== option.id || activeNerExecutionMode !== executionMode)) {
             await disposeNERPipeline();
         }
 
@@ -243,13 +250,14 @@ export async function initNERPipeline({ modelId = DEFAULT_NER_MODEL_ID, progress
             glinerInstance = await initGLiNERInstance(option, progressCallback);
             activeNerModelId = option.id;
             activeNerDtype = 'quint8';
+            activeNerExecutionMode = executionMode;
             return glinerInstance;
         }
 
         const { pipeline, env } = await loadTransformersModule();
         configureEnv(env);
 
-        nerPipeline = await createNERPipelineWithFallback(pipeline, option, progressCallback);
+        nerPipeline = await createNERPipelineWithFallback(pipeline, option, progressCallback, { executionMode });
         activeNerModelId = option.id;
         return nerPipeline;
     })();
@@ -277,14 +285,21 @@ export async function preloadNERModel({ modelId = DEFAULT_NER_MODEL_ID, progress
 
 export async function disposeNERPipeline() {
     const pipelineToDispose = nerPipeline;
+    const glinerToDispose = glinerInstance;
     nerPipeline = null;
     glinerInstance = null;
     activeNerModelId = null;
     activeNerDtype = null;
+    activeNerExecutionMode = 'default';
     nerInitPromise = null;
 
     if (pipelineToDispose && typeof pipelineToDispose.dispose === 'function') {
         await pipelineToDispose.dispose();
+    }
+    if (glinerToDispose && typeof glinerToDispose.dispose === 'function') {
+        await glinerToDispose.dispose();
+    } else if (glinerToDispose?.model && typeof glinerToDispose.model.dispose === 'function') {
+        await glinerToDispose.model.dispose();
     }
 }
 

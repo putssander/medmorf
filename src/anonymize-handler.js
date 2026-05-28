@@ -20,13 +20,21 @@ import {
     isGLiNERModel,
     getGLiNERInstance,
     mapNEREntityType,
-} from './privacy-runtime.js?v=2026-05-21-tfjs4';
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-21-stability-1';
-import { getCapabilities, recommendDefault } from './device-capabilities.js?v=2026-05-21-stability-1';
+} from './privacy-runtime.js?v=2026-05-28-browser-limits-1';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
+import {
+    classifyModelRisk,
+    describeMemoryCeiling,
+    getCapabilities,
+    getCapabilitiesSync,
+    getRuntimeMemorySnapshot,
+    recommendDefault,
+} from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
-const MAX_CHUNK_CHARS = 1500;
+const DEFAULT_MAX_CHUNK_CHARS = 1200;
+const LOW_MEMORY_MAX_CHUNK_CHARS = 700;
 
 const LLM_MODEL_OPTIONS = {
     'Qwen3-0.6B-q4f16_1-MLC': {
@@ -132,6 +140,9 @@ const glinerThresholdInput = document.getElementById('glinerThreshold');
 const glinerThresholdValue = document.getElementById('glinerThresholdValue');
 const mappingExportFormat = document.getElementById('mappingExportFormat');
 const anonPdfFormat = document.getElementById('anonPdfFormat');
+const anonResourceStatus = document.getElementById('anonResourceStatus');
+const anonResourceInfoBtn = document.getElementById('anonResourceInfoBtn');
+const anonResourceInfo = document.getElementById('anonResourceInfo');
 
 // ── Persisted preferences (anonymize tab) ──────────────────────────────────
 // Saved in localStorage so the user's model picks survive page reloads.
@@ -155,6 +166,8 @@ function updateStatus(state, message) {
 
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
 let hasWebGPU = false;
+let resourceMonitorTimer = null;
+let activeResourceStage = { label: 'Idle', modelMB: 0, detail: 'No model running' };
 (async function checkWebGPU() {
     if (anonWebGPUStatus) {
         if (navigator.gpu) {
@@ -177,33 +190,17 @@ let hasWebGPU = false;
             anonWebGPUStatus.className = 'webgpu-status fallback';
         }
     }
-    populateLLMModelSelect();
-    // Restore persisted pipeline + NER picks BEFORE smart defaults run so
-    // they're treated as "user-set" and won't be overwritten by the auto-picker.
-    const storedPipeline = loadStoredPref(LS_KEY_PIPELINE);
-    if (storedPipeline && anonPipelineSelect) {
-        const hasOpt = Array.from(anonPipelineSelect.options).some(o => o.value === storedPipeline);
-        if (hasOpt) {
-            anonPipelineSelect.value = storedPipeline;
-            anonPipelineSelect.dataset.userChanged = '1';
-        }
-    }
-    const storedNer = loadStoredPref(LS_KEY_NER_MODEL);
-    if (storedNer && anonNerModelSelect) {
-        const hasOpt = Array.from(anonNerModelSelect.options).some(o => o.value === storedNer);
-        if (hasOpt) {
-            anonNerModelSelect.value = storedNer;
-            anonNerModelSelect.dataset.userChanged = '1';
-        }
-    }
-    applySmartDefaults();
-    updateModeBanner();
+    initializeAnonymizeControls();
 })();
 
 // Pick the best pipeline for this device automatically
 function applySmartDefaults() {
     if (!anonPipelineSelect) return;
-    if (anonPipelineSelect.dataset.userChanged === '1') return; // respect user override
+    if (anonPipelineSelect.dataset.userChanged === '1') {
+        updatePipelineControls();
+        if (typeof updateNerModelHint === 'function') updateNerModelHint();
+        return; // respect user override
+    }
     if (hasWebGPU) {
         anonPipelineSelect.value = 'llm';
     } else {
@@ -231,12 +228,111 @@ function updateModeBanner() {
         const nerOpt = getNERModelOption(getSelectedNerModelId());
         const llmOpt = getSelectedLLMOption();
         anonModeTitle.textContent = `NER + LLM · ${nerOpt.label} + ${llmOpt.label}`;
-        anonModeSubtitle.textContent = 'Two-pass detection: NER first, LLM verifies and adds.';
+        anonModeSubtitle.textContent = isOpenAIPrivacyHybrid(pipeline)
+            ? 'Two-pass detection: OpenAI NER uses WebGPU, unloads, then Qwen verifies and adds.'
+            : 'Two-pass detection: NER first, LLM verifies and adds.';
     } else {
         const nerOpt = getNERModelOption(getSelectedNerModelId());
         anonModeTitle.textContent = `NER detection · ${nerOpt.label}`;
         anonModeSubtitle.textContent = 'Fast, no GPU required.';
     }
+    updateResourceStatus();
+}
+
+function fmtResourceSize(mb) {
+    if (mb === null || mb === undefined || Number.isNaN(mb) || mb <= 0) return 'n/a';
+    if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
+    return `${Math.round(mb)} MB`;
+}
+
+function getSelectedPeakModelMB() {
+    const pipeline = getSelectedPipeline();
+    const nerSize = getNERModelOption(getSelectedNerModelId()).sizeMB || 0;
+    const llmSize = getSelectedLLMOption().sizeMB || 0;
+    if (pipeline === 'ner') return nerSize;
+    if (pipeline === 'llm') return llmSize;
+    // NER + LLM runs sequentially, so model peak is max(stage A, stage B),
+    // not their sum. Document chunks and model runtime overhead still add to it.
+    return Math.max(nerSize, llmSize);
+}
+
+function getPipelineMemoryNote() {
+    const pipeline = getSelectedPipeline();
+    if (isOpenAIPrivacyHybrid(pipeline)) {
+        return 'OpenAI NER requires WebGPU for its quantized ops, then unloads before Qwen loads. Exact live tab RAM and total VRAM are not exposed by this browser.';
+    }
+    if (pipeline === 'ner+llm') {
+        return 'NER and Qwen run sequentially and unload between stages. Exact live tab RAM and total VRAM are not exposed by this browser.';
+    }
+    return 'Live JS heap is shown only when the browser exposes it; WebGPU exposes buffer limits, not total VRAM.';
+}
+
+function setResourceStage(label, modelMB = 0, detail = '') {
+    activeResourceStage = { label, modelMB, detail };
+    updateResourceStatus();
+}
+
+function updateResourceStatus() {
+    if (!anonResourceStatus) return;
+    const snap = getCapabilitiesSync();
+    if (!snap) {
+        anonResourceStatus.innerHTML = '<span>Checking resource headroom...</span>';
+        return;
+    }
+
+    const runtime = getRuntimeMemorySnapshot();
+    const ceiling = describeMemoryCeiling(snap, runtime);
+    const peakMB = getSelectedPeakModelMB();
+    const risk = classifyModelRisk(peakMB, snap);
+    const jsHeap = runtime.jsHeapSupported
+        ? `${fmtResourceSize(runtime.jsHeapUsedMB)} / ${fmtResourceSize(runtime.jsHeapLimitMB)}`
+        : 'hidden by browser';
+    const gpu = snap.webgpu.supported
+        ? `${snap.webgpu.adapterInfo?.vendor || 'WebGPU'} · buffer ${fmtResourceSize(snap.webgpu.maxBufferSizeMB)}`
+        : 'not available';
+    const headroom = peakMB > 0
+        ? `${fmtResourceSize(Math.max(0, ceiling.safeModelCeilingMB - peakMB))}`
+        : 'n/a';
+
+    anonResourceStatus.dataset.risk = risk;
+    anonResourceStatus.innerHTML = `
+        <div class="resource-metric resource-active">
+            <span class="resource-label">Active now</span>
+            <span class="resource-value">${escapeHTML(activeResourceStage.label)} · ${fmtResourceSize(activeResourceStage.modelMB)}</span>
+        </div>
+        <div class="resource-metric resource-peak">
+            <span class="resource-label">Selected peak</span>
+            <span class="resource-value">${fmtResourceSize(peakMB)} · ${escapeHTML(risk)}</span>
+        </div>
+        <div class="resource-metric">
+            <span class="resource-label">Safe ceiling</span>
+            <span class="resource-value">${fmtResourceSize(ceiling.safeModelCeilingMB)} est.</span>
+        </div>
+        <div class="resource-metric">
+            <span class="resource-label">JS heap</span>
+            <span class="resource-value">${escapeHTML(jsHeap)}</span>
+        </div>
+        <div class="resource-metric">
+            <span class="resource-label">GPU / CPU</span>
+            <span class="resource-value">${escapeHTML(gpu)} · ${snap.cores} cores</span>
+        </div>
+        <div class="resource-note">
+            Headroom: ${escapeHTML(headroom)}. Main visible bottleneck: ${escapeHTML(ceiling.bottleneck.label)} (${fmtResourceSize(ceiling.bottleneck.valueMB)}). ${escapeHTML(activeResourceStage.detail || getPipelineMemoryNote())}
+        </div>
+    `;
+}
+
+function startResourceMonitor() {
+    updateResourceStatus();
+    if (resourceMonitorTimer) return;
+    resourceMonitorTimer = setInterval(updateResourceStatus, 1000);
+}
+
+function stopResourceMonitor() {
+    if (!resourceMonitorTimer) return;
+    clearInterval(resourceMonitorTimer);
+    resourceMonitorTimer = null;
+    updateResourceStatus();
 }
 
 function populateLLMModelSelect() {
@@ -259,6 +355,44 @@ function populateLLMModelSelect() {
     if (stored) anonModelSelect.dataset.userChosen = '1';
 }
 
+function restoreStoredAnonPreferences() {
+    const storedPipeline = loadStoredPref(LS_KEY_PIPELINE);
+    if (storedPipeline && anonPipelineSelect) {
+        const hasOpt = Array.from(anonPipelineSelect.options).some(o => o.value === storedPipeline);
+        if (hasOpt) {
+            anonPipelineSelect.value = storedPipeline;
+            anonPipelineSelect.dataset.userChanged = '1';
+        }
+    }
+
+    const storedNer = loadStoredPref(LS_KEY_NER_MODEL);
+    if (storedNer && anonNerModelSelect) {
+        const hasOpt = Array.from(anonNerModelSelect.options).some(o => o.value === storedNer);
+        if (hasOpt) {
+            anonNerModelSelect.value = storedNer;
+            anonNerModelSelect.dataset.userChanged = '1';
+        }
+    }
+
+    const storedLLM = loadStoredPref(LS_KEY_LLM_MODEL);
+    if (storedLLM && anonModelSelect && LLM_MODEL_OPTIONS[storedLLM]) {
+        anonModelSelect.value = storedLLM;
+        anonModelSelect.dataset.userChanged = '1';
+        anonModelSelect.dataset.userChosen = '1';
+    }
+}
+
+function initializeAnonymizeControls() {
+    populateLLMModelSelect();
+    populateNerModelSelect();
+    restoreStoredAnonPreferences();
+    applySmartDefaults();
+    updatePipelineControls();
+    updateNerModelHint();
+    updateModeBanner();
+    updateMappingCount();
+}
+
 // Re-evaluate the default once the device probe completes (only if the user
 // hasn't already changed it manually).
 let _llmSelectAutoSet = false;
@@ -270,6 +404,7 @@ getCapabilities().then(() => {
         _llmSelectAutoSet = true;
         updateModeBanner();
     }
+    updateResourceStatus();
 });
 if (anonModelSelect) {
     anonModelSelect.addEventListener('change', () => {
@@ -298,6 +433,7 @@ async function initAnonModel() {
 
     const modelOption = getSelectedLLMOption();
     const modelLabel = modelOption.label;
+    setResourceStage(`Loading ${modelLabel}`, modelOption.sizeMB || 0, 'Active now is a stage estimate; this browser does not expose total live RAM or VRAM.');
 
     const proceed = await preflightWarn({
         key: `llm:${selectedModel}`,
@@ -451,19 +587,43 @@ function populateNerModelSelect() {
     updateNerModelHint();
 }
 
-async function initNerModel() {
+function isOpenAIPrivacyHybrid(pipeline = getSelectedPipeline()) {
+    return pipeline === 'ner+llm' && getSelectedNerModelId() === 'openai_privacy_filter';
+}
+
+function shouldUseLowMemoryNERForHybrid() {
+    // OpenAI Privacy Filter cannot use the WASM backend because ONNX Runtime
+    // does not implement its GatherBlockQuantized op there. Keep this hook for
+    // future NER models that support CPU/WASM low-memory mode.
+    return false;
+}
+
+async function initNerModel({ executionMode = 'default' } = {}) {
     const selectedNerModelId = getSelectedNerModelId();
     const loadedNerModelId = getActiveNERModelId();
-    if (getNERPipeline() && loadedNerModelId === selectedNerModelId) return;
+    const activeLoadLabel = getActiveNERLoadLabel() || '';
+    if (getNERPipeline() && loadedNerModelId === selectedNerModelId) {
+        if (executionMode !== 'low-memory' || activeLoadLabel.includes('low-memory')) return;
+        await disposeNERPipeline();
+    }
     if (isNerLoading) return;
 
     const nerOption = getNERModelOption(selectedNerModelId);
+    setResourceStage(`Loading ${nerOption.label}`, nerOption.sizeMB || 0, isOpenAIPrivacyHybrid()
+        ? 'OpenAI Privacy Filter needs WebGPU for quantized ops; it will unload before Qwen loads.'
+        : 'Active now is a stage estimate; this browser may hide exact live memory.');
+    const lowMemoryNote = executionMode === 'low-memory'
+        ? ' This model is loaded in low-memory CPU/WASM mode where supported.'
+        : '';
+    if (selectedNerModelId === 'openai_privacy_filter' && !hasWebGPU) {
+        throw new Error('OpenAI Privacy Filter requires WebGPU in this browser. Choose GLiNER, Multilingual PII NER, or another CPU-capable NER model on this device.');
+    }
     const proceed = await preflightWarn({
-        key: `ner:${selectedNerModelId}`,
+        key: `ner:${selectedNerModelId}:${executionMode}`,
         title: 'Load NER model?',
         model: `${nerOption.label} — ${nerOption.model}`,
         sizeMB: nerOption.sizeMB || 0,
-        why: `This NER model runs locally for PII detection. ${nerOption.qualityNote || ''}`,
+        why: `This NER model runs locally for PII detection. ${nerOption.qualityNote || ''}${lowMemoryNote}`,
     });
     if (!proceed) {
         throw new Error('Model load cancelled by user');
@@ -482,6 +642,7 @@ async function initNerModel() {
         try {
             await initNERPipeline({
                 modelId: selectedNerModelId,
+                executionMode,
                 progressCallback: (progress) => {
                     if (progress.status === 'progress' && progress.total > 0) {
                         const pct = Math.round((progress.loaded / progress.total) * 100);
@@ -497,9 +658,13 @@ async function initNerModel() {
             setTimeout(() => { anonModelStatus.style.display = 'none'; }, 1500);
         } catch (error) {
             console.error('NER model loading error:', error);
-            anonModelStatusText.textContent = 'NER error: ' + error.message;
+            let message = error.message || String(error);
+            if (selectedNerModelId === 'openai_privacy_filter' && /GatherBlockQuantized|WASM|wasm/i.test(message)) {
+                message = 'OpenAI Privacy Filter requires WebGPU for its quantized embedding op. WASM/CPU loading is not supported; choose a CPU-capable NER model if WebGPU fails.';
+            }
+            anonModelStatusText.textContent = 'NER error: ' + message;
             updateStatus('idle', 'NER model loading failed');
-            throw error;
+            throw new Error(message);
         } finally {
             isNerLoading = false;
         }
@@ -985,12 +1150,43 @@ function updateMappingCount() {
 }
 
 // ── Text Chunking ──────────────────────────────────────────────────────────────
-function chunkText(text) {
+function splitLongTextSegment(segment, maxChars) {
+    const chunks = [];
+    let remaining = segment.trim();
+    while (remaining.length > maxChars) {
+        const windowText = remaining.slice(0, maxChars + 1);
+        const sentenceBreak = Math.max(
+            windowText.lastIndexOf('. '),
+            windowText.lastIndexOf('! '),
+            windowText.lastIndexOf('? '),
+            windowText.lastIndexOf('; ')
+        );
+        const lineBreak = windowText.lastIndexOf('\n');
+        const spaceBreak = windowText.lastIndexOf(' ');
+        let splitAt = Math.max(sentenceBreak > maxChars * 0.45 ? sentenceBreak + 1 : -1, lineBreak, spaceBreak);
+        if (splitAt < maxChars * 0.35) splitAt = maxChars;
+        chunks.push(remaining.slice(0, splitAt).trim());
+        remaining = remaining.slice(splitAt).trim();
+    }
+    if (remaining) chunks.push(remaining);
+    return chunks;
+}
+
+function chunkText(text, maxChars = DEFAULT_MAX_CHUNK_CHARS) {
     const paragraphs = text.split(/\n+/);
     const chunks = [];
     let current = '';
     for (const para of paragraphs) {
-        if ((current + '\n' + para).length > MAX_CHUNK_CHARS && current.length > 0) {
+        if (!para.trim()) continue;
+        if (para.length > maxChars) {
+            if (current.trim()) {
+                chunks.push(current.trim());
+                current = '';
+            }
+            chunks.push(...splitLongTextSegment(para, maxChars));
+            continue;
+        }
+        if ((current + '\n' + para).length > maxChars && current.length > 0) {
             chunks.push(current.trim());
             current = para;
         } else {
@@ -999,6 +1195,14 @@ function chunkText(text) {
     }
     if (current.trim()) chunks.push(current.trim());
     return chunks.length > 0 ? chunks : [text];
+}
+
+function getChunkSizeForPipeline(pipeline) {
+    return isOpenAIPrivacyHybrid(pipeline) ? LOW_MEMORY_MAX_CHUNK_CHARS : DEFAULT_MAX_CHUNK_CHARS;
+}
+
+async function yieldBetweenChunks() {
+    await new Promise(resolve => setTimeout(resolve, 0));
 }
 
 // ── Document Extraction ────────────────────────────────────────────────────────
@@ -1019,27 +1223,35 @@ async function extractTextFromPdf(file) {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
     const pageTexts = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const content = await page.getTextContent();
-        // Reconstruct text with line breaks based on item.hasEOL or absent newlines
-        let pageText = '';
-        let lastY = null;
-        for (const item of content.items) {
-            const text = item.str || '';
-            const y = item.transform ? item.transform[5] : null;
-            if (lastY !== null && y !== null && Math.abs(y - lastY) > 1) {
-                pageText += '\n';
-            } else if (pageText && !pageText.endsWith(' ') && text && !text.startsWith(' ')) {
-                pageText += ' ';
+    try {
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            try {
+                const content = await page.getTextContent();
+                // Reconstruct text with line breaks based on item.hasEOL or absent newlines
+                let pageText = '';
+                let lastY = null;
+                for (const item of content.items) {
+                    const text = item.str || '';
+                    const y = item.transform ? item.transform[5] : null;
+                    if (lastY !== null && y !== null && Math.abs(y - lastY) > 1) {
+                        pageText += '\n';
+                    } else if (pageText && !pageText.endsWith(' ') && text && !text.startsWith(' ')) {
+                        pageText += ' ';
+                    }
+                    pageText += text;
+                    if (item.hasEOL) pageText += '\n';
+                    lastY = y;
+                }
+                pageTexts.push(pageText.trim());
+            } finally {
+                page.cleanup?.();
             }
-            pageText += text;
-            if (item.hasEOL) pageText += '\n';
-            lastY = y;
         }
-        pageTexts.push(pageText.trim());
+        return pageTexts.join('\n\n');
+    } finally {
+        await pdf.destroy?.();
     }
-    return pageTexts.join('\n\n');
 }
 
 // Build a new PDF containing the anonymized plain text using pdf-lib.
@@ -1184,6 +1396,8 @@ function updatePipelineControls() {
             glinerThresholdRow.style.display = 'none';
         } else if (isGLiNERModel(getSelectedNerModelId())) {
             glinerThresholdRow.style.display = '';
+        } else {
+            glinerThresholdRow.style.display = 'none';
         }
     }
 }
@@ -1199,6 +1413,7 @@ async function performAnonymization() {
     anonResults.style.display = 'none';
     anonProgress.style.display = 'block';
     anonProgressBar.style.width = '0%';
+    startResourceMonitor();
 
     const pipeline = getSelectedPipeline();
     let effectivePipeline = pipeline;
@@ -1213,14 +1428,17 @@ async function performAnonymization() {
         if (pipeline === 'ner+llm') {
             anonProgressText.textContent = 'Loading NER model...';
             updateStatus('loading', 'Loading NER model...');
-            await initNerModel();
+            setResourceStage('Loading NER', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, getPipelineMemoryNote());
+            await initNerModel({ executionMode: 'default' });
         } else if (pipeline === 'ner') {
             anonProgressText.textContent = 'Loading NER model...';
             updateStatus('loading', 'Loading NER model...');
+            setResourceStage('Loading NER', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, getPipelineMemoryNote());
             await initNerModel();
         } else {
             anonProgressText.textContent = 'Loading LLM model...';
             updateStatus('loading', 'Loading LLM model...');
+            setResourceStage('Loading LLM', getSelectedLLMOption().sizeMB || 0, getPipelineMemoryNote());
             await initAnonModel();
         }
 
@@ -1241,12 +1459,18 @@ async function performAnonymization() {
         anonProgressText.textContent = 'Error: ' + error.message;
         updateStatus('idle', 'Anonymization failed');
     } finally {
+        await releaseMemoryBetweenStages(async () => {
+            await disposeNERPipeline();
+            await disposeAnonModel();
+        });
         isAnonymizing = false;
         anonymizeBtn.disabled = false;
         if (anonModelSelect) anonModelSelect.disabled = false;
         if (anonPipelineSelect) anonPipelineSelect.disabled = false;
         if (anonNerModelSelect) anonNerModelSelect.disabled = false;
         anonProgress.style.display = 'none';
+        setResourceStage('Idle', 0, 'No model running');
+        stopResourceMonitor();
         updateStatus('idle', 'System Ready');
     }
 }
@@ -1254,7 +1478,7 @@ async function performAnonymization() {
 async function anonymizeTextDocument(pipeline) {
     const text = await extractTextFromDocument(anonDocument);
     anonSourceText = text;
-    const chunks = chunkText(text);
+    const chunks = chunkText(text, getChunkSizeForPipeline(pipeline));
     const totalChunks = chunks.length;
 
     updateStatus('translating', 'Extracting PII entities...');
@@ -1262,6 +1486,7 @@ async function anonymizeTextDocument(pipeline) {
     if (pipeline === 'ner+llm') {
         // Phase 1: NER pass (NER model resident, LLM not loaded yet).
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        setResourceStage('NER pass', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, 'NER model resident. Per-chunk text is processed and released between chunks where possible.');
         const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 20);
@@ -1269,17 +1494,20 @@ async function anonymizeTextDocument(pipeline) {
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
             nerChunkResults.push(nerEntities);
+            await yieldBetweenChunks();
         }
 
         // Free NER memory BEFORE loading the LLM. Holding both resident at
         // the same time can crash the tab (the LLM alone needs ~3 GB on q4).
         anonProgressText.textContent = 'Releasing NER model memory...';
+        setResourceStage('Releasing NER', 0, 'NER model is being unloaded before the LLM stage.');
         await releaseMemoryBetweenStages(disposeNERPipeline);
 
         // Now load the LLM. If it fails, we still have NER results in memory
         // and can degrade gracefully to NER-only output.
         anonProgressText.textContent = 'Loading LLM model...';
         updateStatus('loading', 'Loading LLM model...');
+        setResourceStage('Loading LLM', getSelectedLLMOption().sizeMB || 0, 'Qwen is loading after the NER model was released.');
         try {
             await initAnonModel();
         } catch (llmError) {
@@ -1291,6 +1519,7 @@ async function anonymizeTextDocument(pipeline) {
                     getOrCreateReplacement(entity, type);
                 }
             }
+            nerChunkResults.length = 0;
             anonProgressText.textContent = 'Applying anonymization...';
             anonProgressBar.style.width = '90%';
             anonymizedResult = anonymizeText(text);
@@ -1301,6 +1530,7 @@ async function anonymizeTextDocument(pipeline) {
 
         // Phase 2: LLM validation — filter NER false positives
         anonProgressText.textContent = 'LLM validation: filtering false positives...';
+        setResourceStage('LLM validation', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. JS heap may stay hidden, so this is a stage estimate.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
             anonProgressBar.style.width = pct + '%';
@@ -1310,10 +1540,13 @@ async function anonymizeTextDocument(pipeline) {
             for (const { entity, type } of validated) {
                 getOrCreateReplacement(entity, type);
             }
+            nerChunkResults[i] = null;
+            await yieldBetweenChunks();
         }
 
         // Phase 3: LLM discovery — find additional PII the NER missed
         anonProgressText.textContent = 'LLM pass: finding remaining PII...';
+        setResourceStage('LLM discovery', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. Chunks are cleared after processing.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
             anonProgressBar.style.width = pct + '%';
@@ -1323,9 +1556,12 @@ async function anonymizeTextDocument(pipeline) {
             for (const { entity, type } of llmEntities) {
                 getOrCreateReplacement(entity, type);
             }
+            chunks[i] = '';
+            await yieldBetweenChunks();
         }
     } else if (pipeline === 'ner') {
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        setResourceStage('NER pass', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, 'NER model resident. Chunks are cleared after processing.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 75);
             anonProgressBar.style.width = pct + '%';
@@ -1335,10 +1571,13 @@ async function anonymizeTextDocument(pipeline) {
             for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
+            chunks[i] = '';
+            await yieldBetweenChunks();
         }
     } else {
         // LLM-only mode
         anonProgressText.textContent = 'Extracting entities...';
+        setResourceStage('LLM pass', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. JS heap may stay hidden, so this is a stage estimate.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 75);
             anonProgressBar.style.width = pct + '%';
@@ -1348,10 +1587,20 @@ async function anonymizeTextDocument(pipeline) {
             for (const { entity, type } of entities) {
                 getOrCreateReplacement(entity, type);
             }
+            chunks[i] = '';
+            await yieldBetweenChunks();
         }
     }
 
+    anonProgressText.textContent = 'Releasing model memory...';
+    setResourceStage('Releasing model', 0, 'Loaded model is being unloaded; browser memory release may lag briefly.');
+    await releaseMemoryBetweenStages(async () => {
+        await disposeNERPipeline();
+        await disposeAnonModel();
+    });
+
     anonProgressText.textContent = 'Applying anonymization...';
+    setResourceStage('Applying mapping', 0, 'No model should be resident; applying replacements to the extracted text.');
     anonProgressBar.style.width = '90%';
     anonymizedResult = anonymizeText(text);
     anonProgressBar.style.width = '100%';
@@ -1370,11 +1619,11 @@ async function releaseMemoryBetweenStages(disposeFn) {
     }
     // Two macrotasks + a microtask drain gives WebGPU/WASM time to actually
     // release device memory before we ask for the next chunk.
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 150));
     if (typeof globalThis.gc === 'function') {
         try { globalThis.gc(); } catch { /* ignore */ }
     }
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 150));
 }
 
 async function anonymizeExcel(pipeline) {
@@ -1395,7 +1644,7 @@ async function anonymizeExcel(pipeline) {
     }
 
     const allText = textCells.join('\n---\n');
-    const chunks = chunkText(allText);
+    const chunks = chunkText(allText, getChunkSizeForPipeline(pipeline));
     const totalChunks = chunks.length;
 
     updateStatus('translating', 'Extracting PII entities...');
@@ -1403,6 +1652,7 @@ async function anonymizeExcel(pipeline) {
     if (pipeline === 'ner+llm') {
         // Phase 1: NER pass.
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        setResourceStage('NER pass', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, 'NER model resident. Excel text is chunked before detection.');
         const nerChunkResults = [];
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 20);
@@ -1410,14 +1660,17 @@ async function anonymizeExcel(pipeline) {
             anonProgressText.textContent = `NER pass: chunk ${i + 1}/${totalChunks}`;
             const nerEntities = await extractEntitiesNER(chunks[i]);
             nerChunkResults.push(nerEntities);
+            await yieldBetweenChunks();
         }
 
         // Free NER memory before bringing the LLM online.
         anonProgressText.textContent = 'Releasing NER model memory...';
+        setResourceStage('Releasing NER', 0, 'NER model is being unloaded before the LLM stage.');
         await releaseMemoryBetweenStages(disposeNERPipeline);
 
         anonProgressText.textContent = 'Loading LLM model...';
         updateStatus('loading', 'Loading LLM model...');
+        setResourceStage('Loading LLM', getSelectedLLMOption().sizeMB || 0, 'Qwen is loading after the NER model was released.');
         let llmAvailable = true;
         try {
             await initAnonModel();
@@ -1431,11 +1684,13 @@ async function anonymizeExcel(pipeline) {
                     getOrCreateReplacement(entity, type);
                 }
             }
+            nerChunkResults.length = 0;
             pipeline = 'ner';
         }
 
         if (llmAvailable) {
             anonProgressText.textContent = 'LLM validation: filtering false positives...';
+            setResourceStage('LLM validation', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. JS heap may stay hidden, so this is a stage estimate.');
             for (let i = 0; i < totalChunks; i++) {
                 const pct = 20 + Math.round(((i + 1) / totalChunks) * 20);
                 anonProgressBar.style.width = pct + '%';
@@ -1445,9 +1700,12 @@ async function anonymizeExcel(pipeline) {
                 for (const { entity, type } of validated) {
                     getOrCreateReplacement(entity, type);
                 }
+                nerChunkResults[i] = null;
+                await yieldBetweenChunks();
             }
 
             anonProgressText.textContent = 'LLM pass: finding remaining PII...';
+            setResourceStage('LLM discovery', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. Chunks are cleared after processing.');
             for (let i = 0; i < totalChunks; i++) {
                 const pct = 40 + Math.round(((i + 1) / totalChunks) * 35);
                 anonProgressBar.style.width = pct + '%';
@@ -1457,10 +1715,13 @@ async function anonymizeExcel(pipeline) {
                 for (const { entity, type } of llmEntities) {
                     getOrCreateReplacement(entity, type);
                 }
+                chunks[i] = '';
+                await yieldBetweenChunks();
             }
         }
     } else if (pipeline === 'ner') {
         anonProgressText.textContent = 'NER pass: extracting entities...';
+        setResourceStage('NER pass', getNERModelOption(getSelectedNerModelId()).sizeMB || 0, 'NER model resident. Chunks are cleared after processing.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 75);
             anonProgressBar.style.width = pct + '%';
@@ -1470,9 +1731,12 @@ async function anonymizeExcel(pipeline) {
             for (const { entity, type } of nerEntities) {
                 getOrCreateReplacement(entity, type);
             }
+            chunks[i] = '';
+            await yieldBetweenChunks();
         }
     } else {
         anonProgressText.textContent = 'Extracting entities...';
+        setResourceStage('LLM pass', getSelectedLLMOption().sizeMB || 0, 'Qwen is resident. JS heap may stay hidden, so this is a stage estimate.');
         for (let i = 0; i < totalChunks; i++) {
             const pct = Math.round(((i + 1) / totalChunks) * 75);
             anonProgressBar.style.width = pct + '%';
@@ -1482,10 +1746,20 @@ async function anonymizeExcel(pipeline) {
             for (const { entity, type } of entities) {
                 getOrCreateReplacement(entity, type);
             }
+            chunks[i] = '';
+            await yieldBetweenChunks();
         }
     }
 
+    anonProgressText.textContent = 'Releasing model memory...';
+    setResourceStage('Releasing model', 0, 'Loaded model is being unloaded; browser memory release may lag briefly.');
+    await releaseMemoryBetweenStages(async () => {
+        await disposeNERPipeline();
+        await disposeAnonModel();
+    });
+
     anonProgressText.textContent = 'Applying anonymization...';
+    setResourceStage('Applying mapping', 0, 'No model should be resident; applying replacements to workbook cells.');
     anonProgressBar.style.width = '90%';
 
     const newData = [jsonData[0]];
@@ -2230,6 +2504,14 @@ if (glinerThresholdInput) {
     });
 }
 
+if (anonResourceInfoBtn && anonResourceInfo) {
+    anonResourceInfoBtn.addEventListener('click', () => {
+        const nextHidden = !anonResourceInfo.hidden ? true : false;
+        anonResourceInfo.hidden = nextHidden;
+        anonResourceInfoBtn.setAttribute('aria-expanded', String(!nextHidden));
+    });
+}
+
 if (anonPipelineSelect) {
     anonPipelineSelect.addEventListener('change', () => {
         anonPipelineSelect.dataset.userChanged = '1';
@@ -2279,8 +2561,6 @@ window.medmorfAnonymizeData = {
 };
 
 // Init
-populateNerModelSelect();
-updatePipelineControls();
-updateMappingCount();
+initializeAnonymizeControls();
 console.log('[ANONYMIZE] Anonymization module loaded');
 console.log('[ANONYMIZE] Default model:', DEFAULT_MODEL);

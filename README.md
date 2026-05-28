@@ -115,7 +115,7 @@ See [docs/PRIVACY.md](docs/PRIVACY.md) for complete privacy documentation.
 ### Technologies Used
 
 - **[Transformers.js v2](https://github.com/xenova/transformers.js)**: Translation pipeline (`@xenova/transformers@2.17.2`)
-- **[Transformers.js v3](https://huggingface.co/docs/transformers.js)**: NER pipeline (`@huggingface/transformers@3.8.1`)
+- **[Transformers.js](https://huggingface.co/docs/transformers.js)**: NER pipeline (`@huggingface/transformers@4.2.0`)
 - **[GLiNER.js](https://github.com/nicholasgriffintn/gliner.js)**: Zero-shot NER via ONNX (`gliner@0.0.19`)
 - **[WebLLM](https://webllm.mlc.ai/)**: In-browser LLM for PII verification (`@mlc-ai/web-llm`, Qwen3-4B, WebGPU)
 - **[ONNX Runtime Web](https://onnxruntime.ai/)**: Model inference backend
@@ -151,12 +151,13 @@ The NLLB-200 model supports translation between 200+ languages. Currently config
 - **GLiNER PII**: `knowledgator/gliner-pii-edge-v1.0` — ModernBERT, ~46MB, zero-shot PII detection
 - **Multilang PII**: XLM-RoBERTa token-classification, multilingual (Dutch, English, French, German)
 - **Multilingual NER**: mBERT, general-purpose named entity recognition
+- **OpenAI Privacy Filter**: `openai/privacy-filter` — 1.5B token classifier that requires WebGPU in this browser stack; NER + LLM runs it first, unloads it, then loads Qwen
 - **LLM (optional)**: Qwen3 4B via WebGPU — additional PII verification pass
 
 ## ⚡ Performance
 
 - **Speed**: Varies by device and text length. Expect ~0.5-2 seconds per paragraph on modern hardware
-- **Memory**: Requires ~2-3GB of available RAM for optimal performance
+- **Memory**: Requires ~2-3GB of available RAM for optimal performance. The Anonymize tab shows a resource-headroom panel with reported CPU cores, coarse device RAM, JS heap usage when the browser exposes it, WebGPU buffer limits, selected model peak, active-stage estimate, a conservative safe-ceiling estimate, and an info button explaining browser-specific visibility.
 - **Browser**: Works best on Chrome/Edge (V8 engine optimization)
 
 ## 🔧 Customization
@@ -254,10 +255,10 @@ medmorf/
 │   ├── app.js                       # Translation tab UI
 │   ├── security.js                  # Runtime privacy guards + auto-clear
 │   ├── cache-manager.js             # Storage tab + offline downloads + app-update logic
-│   ├── device-capabilities.js       # GPU/RAM probing + model risk classification
-│   ├── pre-flight-warn.js           # Pre-load capability warning UI + heavy-load lock
+│   ├── device-capabilities.js       # GPU/RAM/JS-heap probing + model risk/headroom classification
+│   ├── pre-flight-warn.js           # Pre-load capability warning UI + reported/estimated memory ceilings + heavy-load lock
 │   ├── lifecycle-manager.js         # Loaded-model registry + idle eviction
-│   ├── privacy-runtime.js           # NER pipeline (Transformers.js v3 + GLiNER patches)
+│   ├── privacy-runtime.js           # NER pipeline (Transformers.js + GLiNER patches)
 │   ├── translation-runtime.js       # NLLB-200 (Transformers.js v2)
 │   ├── anonymize-handler.js         # Anonymize tab UI + LLM verification
 │   ├── summarize-handler.js         # Summarize tab UI + LLM
@@ -286,15 +287,19 @@ Medmorf uses **two separate Transformers.js runtimes** to balance memory efficie
 | Feature | Runtime | Library | Why |
 |---|---|---|---|
 | **Translation** | `translation-runtime.js` | `@xenova/transformers@2.17.2` (full CDN URL) | v3 consumed too much memory for the 600M NLLB model |
-| **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@3.8.1` (import map) | v3 supports modern model architectures (ModernBERT) |
-| **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses v3's `AutoTokenizer` via import map alias |
+| **Token-class NER** | `privacy-runtime.js` | `@huggingface/transformers@4.2.0` (import map) | Current Transformers.js runtime supports the selected token-classification models |
+| **GLiNER NER** | `privacy-runtime.js` | `gliner@0.0.19` (esm.sh, externalized) | Uses the shared Transformers.js `AutoTokenizer` via import map alias |
 | **LLM verification** | `anonymize-handler.js` | `@mlc-ai/web-llm@0.2.83` (WebGPU) | Qwen3 (0.6B / 1.7B / 4B / 8B) for additional PII verification |
 
 ### Why Two Runtimes?
 
 The translation pipeline uses the 600M-parameter NLLB model which requires significant memory. Transformers.js v3 introduced breaking API changes and higher memory overhead that caused OOM issues with this model. The v2 runtime (`@xenova/transformers@2.17.2`) handles it efficiently.
 
-The NER pipeline requires v3 because it supports newer model architectures like ModernBERT (used by `gliner-pii-edge-v1.0`). The translation runtime loads via a **full CDN URL** (`https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2`), which bypasses the import map entirely — so both runtimes coexist without conflicts.
+The NER pipeline uses the current Transformers.js runtime because it supports newer model architectures like ModernBERT (used by `gliner-pii-edge-v1.0`) and OpenAI's privacy filter. The translation runtime loads via a **full CDN URL** (`https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2`), which bypasses the import map entirely — so both runtimes coexist without conflicts.
+
+For memory-heavy hybrid anonymization, `src/anonymize-handler.js` keeps NER and LLM execution sequential: it chunks long text, runs the NER pass, disposes the NER model, yields for browser memory cleanup, and only then loads Qwen. When `openai/privacy-filter` is selected with `NER + LLM`, the OpenAI NER pass still uses WebGPU because its quantized embedding op is not implemented on WASM; Medmorf unloads it before the Qwen LLM stage starts.
+
+The Anonymize tab also surfaces runtime headroom to the end user. Chromium browsers expose current JS heap usage and a JS heap limit through `performance.memory`; other browsers often hide that value. WebGPU exposes adapter limits such as maximum buffer size, but not total VRAM. A reported `maxBufferSize` such as 2 GB is a browser/WebGPU single-buffer limit, not total device RAM and not total GPU memory. Medmorf labels hard reported values separately from conservative estimates and uses the estimates only as crash-risk guidance, not as exact memory accounting. When live heap is hidden, the panel still updates the active model stage (loading NER, LLM validation, releasing model, etc.) so users can see which resident model is responsible for current pressure.
 
 ### Import Map Configuration
 
@@ -366,9 +371,10 @@ During inference:
 
 | Model ID | Engine | Architecture | Best For |
 |---|---|---|---|
-| `multilang_pii` | Transformers.js v3 | XLM-RoBERTa | Multilingual PII (Dutch, English, French, German) |
+| `multilang_pii` | Transformers.js | XLM-RoBERTa | Multilingual PII (Dutch, English, French, German) |
 | `gliner_pii` | GLiNER | ModernBERT (32M params) | Zero-shot English PII, ~46 MB |
-| `multilingual_ner` | Transformers.js v3 | mBERT | General-purpose multilingual NER |
+| `multilingual_ner` | Transformers.js | mBERT | General-purpose multilingual NER |
+| `openai_privacy_filter` | Transformers.js | OpenAI Privacy Filter (1.5B) | PII token classification; WebGPU required, then unloaded before Qwen in NER + LLM |
 
 ### Known Cosmetic Issues
 

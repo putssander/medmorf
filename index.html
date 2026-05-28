@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-28-footer-notes-1';
+        window.MEDMORF_BUILD_ID = '2026-05-28-browser-limits-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -79,7 +79,7 @@
     </script>
 
     <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-alias-1">
-    <link rel="stylesheet" href="styles/brand.css?v=2026-05-26-paste-1">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-05-28-browser-limits-1">
     <script type="importmap">
     {
         "imports": {
@@ -538,6 +538,13 @@
                             </div>
                         </div>
                         <div id="anonWebGPUStatus" class="webgpu-status">Checking WebGPU…</div>
+                        <div id="anonResourceStatus" class="anon-resource-status" aria-live="polite">
+                            <span>Checking resource headroom…</span>
+                        </div>
+                        <button type="button" id="anonResourceInfoBtn" class="anon-resource-info-btn" aria-expanded="false" aria-controls="anonResourceInfo" title="Explain resource limits">i</button>
+                        <div id="anonResourceInfo" class="anon-resource-info" hidden>
+                            <strong>About the 2 GB limit:</strong> this is the browser/WebGPU adapter's maximum single-buffer size, not total device RAM or total GPU memory. Chrome-based browsers may expose live JS heap usage; Safari and Firefox usually hide it. No browser exposes exact total tab memory or total VRAM, so Medmorf uses reported WebGPU limits plus conservative estimates.
+                        </div>
                     </div>
 
                     <details class="anon-advanced">
@@ -591,7 +598,7 @@
                             <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
                             <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
                             <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER (people, places, organizations).</li>
-                            <li><strong>OpenAI Privacy Filter</strong> — ~1.5 B params (q4 ≈ 800 MB). OpenAI's bidirectional token classifier with 8 PII categories: person, email, phone, address, date, URL, account number, secret. Runs in-browser via <a href="https://huggingface.co/openai/privacy-filter" target="_blank" rel="noopener noreferrer">Transformers.js + WebGPU</a>; falls back to WASM if WebGPU is unavailable (slower). Primarily English with multilingual robustness reported. Pick it under <em>Advanced settings → NER Model</em> with the <em>NER only</em> or <em>NER + LLM</em> pipeline.</li>
+                            <li><strong>OpenAI Privacy Filter</strong> — ~1.5 B params (q4 ≈ 800 MB). OpenAI's bidirectional token classifier with 8 PII categories: person, email, phone, address, date, URL, account number, secret. Runs in-browser via <a href="https://huggingface.co/openai/privacy-filter" target="_blank" rel="noopener noreferrer">Transformers.js + WebGPU</a>; WASM/CPU is not supported for its quantized embedding op in this browser stack. Primarily English with multilingual robustness reported. Pick it under <em>Advanced settings → NER Model</em> with the <em>NER only</em> or <em>NER + LLM</em> pipeline.</li>
                         </ul>
                         <p>Always manually review the output. First load downloads the selected model; subsequent runs use the browser cache.</p>
                     </details>
@@ -1778,11 +1785,11 @@
 
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
-    <script type="module" src="src/app.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-26-paste-1"></script>
-    <script type="module" src="src/summarize-handler.js?v=2026-05-21-stability-1"></script>
-    <script type="module" src="src/stt-handler.js?v=2026-05-26-paste-1"></script>
-    <script type="module" src="src/cache-manager.js?v=2026-05-21-stability-1"></script>
+    <script type="module" src="src/app.js?v=2026-05-28-resource-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-05-28-browser-limits-1"></script>
+    <script type="module" src="src/summarize-handler.js?v=2026-05-28-resource-1"></script>
+    <script type="module" src="src/stt-handler.js?v=2026-05-28-resource-1"></script>
+    <script type="module" src="src/cache-manager.js?v=2026-05-28-resource-1"></script>
     <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>

@@ -105,6 +105,31 @@ export function onCapabilities(fn) {
     return () => _state.listeners.delete(fn);
 }
 
+function bytesToMB(bytes) {
+    return bytes ? bytes / (1024 * 1024) : 0;
+}
+
+// Browser memory visibility is intentionally limited. Chromium exposes JS heap
+// stats via performance.memory; Safari/Firefox usually do not. WebGPU does not
+// expose total VRAM, only adapter limits such as max single-buffer size.
+export function getRuntimeMemorySnapshot() {
+    const memory = typeof performance !== 'undefined' ? performance.memory : null;
+    if (!memory) {
+        return {
+            jsHeapSupported: false,
+            jsHeapUsedMB: null,
+            jsHeapTotalMB: null,
+            jsHeapLimitMB: null,
+        };
+    }
+    return {
+        jsHeapSupported: true,
+        jsHeapUsedMB: bytesToMB(memory.usedJSHeapSize),
+        jsHeapTotalMB: bytesToMB(memory.totalJSHeapSize),
+        jsHeapLimitMB: bytesToMB(memory.jsHeapSizeLimit),
+    };
+}
+
 // ── Risk-tier helpers ──────────────────────────────────────────────────────────
 // Heuristic ceilings, in MB, for "safely loadable" model weights based on
 // device class. These are intentionally conservative — better to warn
@@ -118,6 +143,42 @@ export function safeModelCeilingMB(snap = _state.snapshot) {
     const buf = snap.webgpu.maxBufferSizeMB;
     const mem = snap.deviceMemoryGB * 1024;
     return Math.max(1500, Math.min(buf > 0 ? buf : 4096, mem * 0.6));
+}
+
+export function describeMemoryCeiling(snap = _state.snapshot, runtime = getRuntimeMemorySnapshot()) {
+    const safeCeilingMB = safeModelCeilingMB(snap);
+    const jsLimitMB = runtime?.jsHeapLimitMB || null;
+    const gpuBufferMB = snap?.webgpu?.supported ? snap.webgpu.maxBufferSizeMB || null : null;
+    const knownLimits = [];
+    if (jsLimitMB) {
+        knownLimits.push({
+            label: 'Browser JS heap',
+            valueMB: jsLimitMB,
+            note: 'Known Chromium tab heap limit; model weights may also use WASM/GPU memory outside this number.',
+            certainty: 'reported',
+        });
+    }
+    if (gpuBufferMB) {
+        knownLimits.push({
+            label: 'GPU single-buffer limit',
+            valueMB: gpuBufferMB,
+            note: 'Reported WebGPU adapter limit. Browsers do not expose total VRAM.',
+            certainty: 'reported',
+        });
+    }
+    knownLimits.sort((a, b) => a.valueMB - b.valueMB);
+
+    return {
+        safeModelCeilingMB: safeCeilingMB,
+        bottleneck: knownLimits[0] || {
+            label: 'Estimated browser-safe ceiling',
+            valueMB: safeCeilingMB,
+            note: 'Estimated from device class, reported RAM and WebGPU availability.',
+            certainty: 'estimated',
+        },
+        knownLimits,
+        jsHeapSupported: !!runtime?.jsHeapSupported,
+    };
 }
 
 export function classifyModelRisk(modelSizeMB, snap = _state.snapshot) {

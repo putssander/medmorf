@@ -1,4 +1,4 @@
-import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-03-23-cachefix-7';
+import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-05-28-resource-1';
 import {
     DEFAULT_NER_MODEL_ID,
     getNERModelOption,
