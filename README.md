@@ -202,6 +202,11 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 - **Keep Medmorf visible**: Long anonymization, summarization, and transcription runs are safest with the tab in the foreground
 - **Background tabs can be throttled**: Browsers may suspend timers, drop GPU work, or evict loaded models, especially on Safari and mobile devices
 
+### Page Crashes While Loading Or Running A Model
+
+- **Likely a memory ceiling**: The chosen model or pipeline can exceed browser or device memory limits, especially with WebGPU models on constrained hardware
+- **Use a smaller configuration**: Switch to a smaller LLM, use NER-only mode, or close other memory-heavy tabs before retrying
+
 ### File Won't Upload
 
 - **Check File Size**: Very large files may cause issues. Try with smaller files first

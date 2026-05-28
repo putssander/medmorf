@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-28-foreground-warning-1';
+        window.MEDMORF_BUILD_ID = '2026-05-28-footer-notes-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -1744,8 +1744,20 @@
         <footer>
             <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a> &amp; <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">Whisper</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
-            <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB, speech ~500MB). All processing is local. Check the Storage tab to manage cached data.</p>
-            <p class="note">Keep this tab in the foreground during long anonymization, summarization, or transcription runs. Some browsers suspend background tabs or unload GPU models, which can interrupt processing.</p>
+            <div class="footer-notes" aria-label="Important processing notes">
+                <section class="footer-note footer-note-info">
+                    <p class="footer-note-label">Downloads</p>
+                    <p class="footer-note-text">First use downloads models (translation ~300MB, anonymization ~2GB, speech ~500MB). All processing stays local. Use the Storage tab to manage cached data.</p>
+                </section>
+                <section class="footer-note footer-note-warning">
+                    <p class="footer-note-label">Keep this tab visible</p>
+                    <p class="footer-note-text">Run long anonymization, summarization, or transcription jobs with this tab in the foreground. Some browsers throttle background tabs or unload GPU models, which can interrupt processing.</p>
+                </section>
+                <section class="footer-note footer-note-warning">
+                    <p class="footer-note-label">Crash or reload during model use</p>
+                    <p class="footer-note-text">If the page crashes or reloads while loading or running a model, the selected model or pipeline likely exceeded browser or device memory limits. Browsers enforce maximum memory usage, so switch to a smaller model or lighter mode.</p>
+                </section>
+            </div>
         </footer>
     </div>
 
