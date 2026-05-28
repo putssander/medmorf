@@ -197,6 +197,11 @@ For Excel files with many cells, you can adjust translation speed vs. memory usa
 - **Reduce Batch Size**: Translate smaller sections at a time
 - **Use Modern Browser**: Chrome and Edge typically offer best performance
 
+### Processing Stops After Switching Tabs
+
+- **Keep Medmorf visible**: Long anonymization, summarization, and transcription runs are safest with the tab in the foreground
+- **Background tabs can be throttled**: Browsers may suspend timers, drop GPU work, or evict loaded models, especially on Safari and mobile devices
+
 ### File Won't Upload
 
 - **Check File Size**: Very large files may cause issues. Try with smaller files first

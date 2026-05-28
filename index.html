@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-26-paste-1';
+        window.MEDMORF_BUILD_ID = '2026-05-28-foreground-warning-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -651,9 +651,9 @@
 
                 <div class="example-file-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <a href="test_anonymisation_file.txt" download>Example document</a>
+                    <a href="tests/test_anonymisation_file.txt" download>Example document</a>
                     ·
-                    <a href="test_mapping.xlsx" download>Example mapping (.xlsx)</a>
+                    <a href="tests/test_mapping.xlsx" download>Example mapping (.xlsx)</a>
                 </div>
 
                 <!-- Free-text input — paste text directly without uploading a file -->
@@ -876,7 +876,7 @@
                         </div>
                         <div class="example-file-link">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <a href="test_summary_psychological_interview.txt" download>Voorbeeld intakegesprek (NL)</a>
+                            <a href="tests/test_summary_psychological_interview.txt" download>Voorbeeld intakegesprek (NL)</a>
                         </div>
                     </div>
                     <div class="sum-input-box">
@@ -1745,6 +1745,7 @@
             <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a> &amp; <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">Whisper</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
             <p class="note">First use downloads models (translation ~300MB, anonymization ~2GB, speech ~500MB). All processing is local. Check the Storage tab to manage cached data.</p>
+            <p class="note">Keep this tab in the foreground during long anonymization, summarization, or transcription runs. Some browsers suspend background tabs or unload GPU models, which can interrupt processing.</p>
         </footer>
     </div>
 
