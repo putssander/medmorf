@@ -1,6 +1,6 @@
-// Medical Data Anonymization — Hybrid NER + LLM pipeline
-// NER: ai4privacy multilingual PII detector (ModernBERT, transformers.js v3)
-// LLM: Qwen3 (WebLLM/WebGPU) for additional PII verification
+// Medical Data Anonymization — composable detector + LLM pipeline
+// NER / detectors: GLiNER, token-classification PII, mBERT, privacy filter
+// LLM: Qwen3 (WebLLM/WebGPU) for PII detection and verification
 // Zero data leaves the browser — all processing is local
 //
 // Model libraries are loaded lazily via dynamic import() when
@@ -28,11 +28,12 @@ import {
     getCapabilities,
     getCapabilitiesSync,
     getRuntimeMemorySnapshot,
-    recommendDefault,
 } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
-const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
+const DEFAULT_MODEL = 'Qwen3-1.7B-q4f16_1-MLC';
+const DEFAULT_ANON_NER_MODEL_ID = 'openai_privacy_filter';
+const FALLBACK_ANON_NER_MODEL_ID = 'multilang_pii';
 const DEFAULT_MAX_CHUNK_CHARS = 1200;
 const LOW_MEMORY_MAX_CHUNK_CHARS = 700;
 
@@ -66,6 +67,8 @@ const LLM_MODEL_OPTIONS = {
         engine: 'webllm',
     },
 };
+
+const WEBLLM_CACHE_MATCHERS = ['webllm', 'mlc', 'tvmjs'];
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let engine = null;       // WebLLM engine
@@ -135,6 +138,11 @@ const anonModelSelect = document.getElementById('anonModelSelect');
 const anonPipelineSelect = document.getElementById('anonPipelineSelect');
 const anonNerModelSelect = document.getElementById('anonNerModelSelect');
 const anonNerModelHint = document.getElementById('anonNerModelHint');
+const anonPipelineSummary = document.getElementById('anonPipelineSummary');
+const anonModelGrid = document.getElementById('anonModelGrid');
+const anonNerModelCards = document.getElementById('anonNerModelCards');
+const anonLlmModelCards = document.getElementById('anonLlmModelCards');
+const anonModelSelectionError = document.getElementById('anonModelSelectionError');
 const glinerThresholdRow = document.getElementById('glinerThresholdRow');
 const glinerThresholdInput = document.getElementById('glinerThreshold');
 const glinerThresholdValue = document.getElementById('glinerThresholdValue');
@@ -193,7 +201,57 @@ let activeResourceStage = { label: 'Idle', modelMB: 0, detail: 'No model running
     initializeAnonymizeControls();
 })();
 
-// Pick the best pipeline for this device automatically
+function getDefaultCombinationFeasibility(snap = getCapabilitiesSync()) {
+    const nerOption = getNERModelOption(DEFAULT_ANON_NER_MODEL_ID);
+    const llmOption = LLM_MODEL_OPTIONS[DEFAULT_MODEL];
+    const peakMB = Math.max(nerOption?.sizeMB || 0, llmOption?.sizeMB || 0);
+    const webgpuSupported = snap ? !!snap.webgpu?.supported : hasWebGPU;
+    if (!webgpuSupported) {
+        return {
+            feasible: false,
+            reason: 'OpenAI Privacy Filter and Qwen require WebGPU.',
+            peakMB,
+            ceilingMB: 0,
+        };
+    }
+
+    const ceiling = describeMemoryCeiling(snap || getCapabilitiesSync());
+    const ceilingMB = ceiling.safeModelCeilingMB || 0;
+    const risk = classifyModelRisk(peakMB, snap || getCapabilitiesSync());
+    const feasible = ceilingMB > 0 && peakMB <= ceilingMB && risk !== 'critical';
+    return {
+        feasible,
+        reason: feasible
+            ? 'OpenAI Privacy Filter + Qwen3 1.7B fits the current browser/device estimate.'
+            : `OpenAI Privacy Filter + Qwen3 1.7B needs about ${fmtResourceSize(peakMB)}; safe ceiling is ${fmtResourceSize(ceilingMB)}.`,
+        peakMB,
+        ceilingMB,
+        risk,
+    };
+}
+
+function applyDefaultModelSelection({ snap = getCapabilitiesSync() } = {}) {
+    const combo = getDefaultCombinationFeasibility(snap);
+    if (combo.feasible) {
+        setSelectedPipeline('ner+llm');
+        if (anonNerModelSelect && anonNerModelSelect.dataset.userChanged !== '1') {
+            anonNerModelSelect.value = DEFAULT_ANON_NER_MODEL_ID;
+        }
+        if (anonModelSelect && anonModelSelect.dataset.userChosen !== '1') {
+            anonModelSelect.value = DEFAULT_MODEL;
+        }
+    } else {
+        setSelectedPipeline('ner');
+        if (anonNerModelSelect && anonNerModelSelect.dataset.userChanged !== '1') {
+            anonNerModelSelect.value = FALLBACK_ANON_NER_MODEL_ID;
+        }
+    }
+    if (anonPipelineSummary) {
+        anonPipelineSummary.title = combo.reason;
+    }
+}
+
+// Pick the default anonymization combination unless the user has saved an override.
 function applySmartDefaults() {
     if (!anonPipelineSelect) return;
     if (anonPipelineSelect.dataset.userChanged === '1') {
@@ -201,15 +259,7 @@ function applySmartDefaults() {
         if (typeof updateNerModelHint === 'function') updateNerModelHint();
         return; // respect user override
     }
-    if (hasWebGPU) {
-        anonPipelineSelect.value = 'llm';
-    } else {
-        anonPipelineSelect.value = 'ner';
-        if (anonNerModelSelect && anonNerModelSelect.dataset.userChanged !== '1') {
-            // Multilingual PII NER runs well on CPU
-            anonNerModelSelect.value = 'multilang_pii';
-        }
-    }
+    applyDefaultModelSelection();
     updatePipelineControls();
     if (typeof updateNerModelHint === 'function') updateNerModelHint();
 }
@@ -338,13 +388,9 @@ function stopResourceMonitor() {
 function populateLLMModelSelect() {
     if (!anonModelSelect) return;
     anonModelSelect.innerHTML = '';
-    // Auto-downshift: if device profile is known, recommend a smaller default
-    // to avoid OOM on first-load before the user opens the model picker.
-    const candidates = Object.entries(LLM_MODEL_OPTIONS).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
-    // Honour any persisted user choice first; otherwise fall back to recommended.
+    // Honour any persisted user choice first; otherwise use the repo default.
     const stored = loadStoredPref(LS_KEY_LLM_MODEL);
-    const recommended = recommendDefault(candidates) || DEFAULT_MODEL;
-    const desired = (stored && LLM_MODEL_OPTIONS[stored]) ? stored : recommended;
+    const desired = (stored && LLM_MODEL_OPTIONS[stored]) ? stored : DEFAULT_MODEL;
     for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
@@ -385,6 +431,7 @@ function restoreStoredAnonPreferences() {
 function initializeAnonymizeControls() {
     populateLLMModelSelect();
     populateNerModelSelect();
+    renderModelPicker();
     restoreStoredAnonPreferences();
     applySmartDefaults();
     updatePipelineControls();
@@ -401,7 +448,9 @@ getCapabilities().then(() => {
     // this session or persisted from a previous one).
     if (anonModelSelect && !_llmSelectAutoSet && !anonModelSelect.dataset.userChosen) {
         populateLLMModelSelect();
+        renderModelPicker();
         _llmSelectAutoSet = true;
+        applySmartDefaults();
         updateModeBanner();
     }
     updateResourceStatus();
@@ -419,6 +468,99 @@ function getSelectedModel() {
 
 function getSelectedLLMOption() {
     return LLM_MODEL_OPTIONS[getSelectedModel()] || LLM_MODEL_OPTIONS[DEFAULT_MODEL];
+}
+
+function isWebLLMCacheAddError(error) {
+    const message = error?.message || String(error);
+    return /Cache\.add\(\).*network error|Failed to execute 'add' on 'Cache'|Cache\.add\(\) encountered a network error/i.test(message);
+}
+
+async function requestPersistentModelStorage() {
+    try {
+        if (navigator.storage?.persist) {
+            await navigator.storage.persist();
+        }
+    } catch { /* non-fatal */ }
+}
+
+async function getStorageEstimateMB() {
+    try {
+        if (!navigator.storage?.estimate) return null;
+        const estimate = await navigator.storage.estimate();
+        const quotaMB = estimate.quota ? estimate.quota / (1024 * 1024) : 0;
+        const usageMB = estimate.usage ? estimate.usage / (1024 * 1024) : 0;
+        return { quotaMB, usageMB, freeMB: Math.max(0, quotaMB - usageMB) };
+    } catch {
+        return null;
+    }
+}
+
+async function warnIfStorageTight(modelOption) {
+    const estimate = await getStorageEstimateMB();
+    if (!estimate || !modelOption?.sizeMB) return;
+    const neededMB = modelOption.sizeMB * 1.15;
+    if (estimate.freeMB < neededMB) {
+        console.warn('[ANON] Low browser storage headroom before WebLLM load', {
+            freeMB: Math.round(estimate.freeMB),
+            neededMB: Math.round(neededMB),
+            model: modelOption.label,
+        });
+        anonModelStatusText.textContent =
+            `Chrome storage headroom is low (${fmtResourceSize(estimate.freeMB)} free). ` +
+            'Model caching may fail; clear old model caches in Storage if this stops.';
+    }
+}
+
+async function clearPartialWebLLMCache() {
+    const deleted = [];
+    try {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+            const lower = name.toLowerCase();
+            if (WEBLLM_CACHE_MATCHERS.some(matcher => lower.includes(matcher))) {
+                await caches.delete(name);
+                deleted.push(`cache:${name}`);
+            }
+        }
+    } catch (err) {
+        console.warn('[ANON] Could not clear WebLLM Cache API entries:', err);
+    }
+
+    try {
+        if (indexedDB.databases) {
+            const dbs = await indexedDB.databases();
+            await Promise.all(dbs
+                .filter(db => WEBLLM_CACHE_MATCHERS.some(matcher => (db.name || '').toLowerCase().includes(matcher)))
+                .map(db => new Promise(resolve => {
+                    const req = indexedDB.deleteDatabase(db.name);
+                    req.onsuccess = () => { deleted.push(`idb:${db.name}`); resolve(); };
+                    req.onerror = () => resolve();
+                    req.onblocked = () => resolve();
+                })));
+        }
+    } catch (err) {
+        console.warn('[ANON] Could not clear WebLLM IndexedDB entries:', err);
+    }
+
+    console.log('[ANON] Cleared partial WebLLM cache before retry:', deleted);
+    return deleted;
+}
+
+async function createWebLLMEngineWithRecovery(CreateMLCEngine, selectedModel, modelOption, progressCallback) {
+    await requestPersistentModelStorage();
+    await warnIfStorageTight(modelOption);
+
+    try {
+        return await CreateMLCEngine(selectedModel, { initProgressCallback: progressCallback });
+    } catch (error) {
+        if (!isWebLLMCacheAddError(error)) throw error;
+
+        anonModelStatusText.textContent = 'Chrome cache failed halfway — clearing partial WebLLM cache and retrying once...';
+        setResourceStage('Retrying LLM cache', modelOption.sizeMB || 0, 'Chrome failed while caching a model shard; partial WebLLM cache is being cleared before one retry.');
+        await clearPartialWebLLMCache();
+        await releaseMemoryBetweenStages(null);
+        return await CreateMLCEngine(selectedModel, { initProgressCallback: progressCallback });
+    }
 }
 
 async function initAnonModel() {
@@ -492,17 +634,16 @@ async function initAnonModel() {
                 }
 
                 const { CreateMLCEngine } = await import('https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js');
-                engine = await CreateMLCEngine(selectedModel, {
-                    initProgressCallback: (progress) => {
-                        const text = progress.text || '';
-                        const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
-                        if (pctMatch) {
-                            anonModelProgress.style.width = pctMatch[1] + '%';
-                        }
-                        anonModelStatusText.textContent = text || 'Loading...';
-                        updateStatus('loading', text || 'Loading anonymization model...');
-                    },
-                });
+                const progressCallback = (progress) => {
+                    const text = progress.text || '';
+                    const pctMatch = text.match(/(\d+(?:\.\d+)?)%/);
+                    if (pctMatch) {
+                        anonModelProgress.style.width = pctMatch[1] + '%';
+                    }
+                    anonModelStatusText.textContent = text || 'Loading...';
+                    updateStatus('loading', text || 'Loading anonymization model...');
+                };
+                engine = await createWebLLMEngineWithRecovery(CreateMLCEngine, selectedModel, modelOption, progressCallback);
             }
 
             anonModelStatusText.textContent = 'Anonymization model loaded ✓';
@@ -513,18 +654,29 @@ async function initAnonModel() {
             setTimeout(() => { anonModelStatus.style.display = 'none'; }, 2000);
         } catch (error) {
             console.error('Anonymization model loading error:', error);
-            let userMsg = error.message;
-            if (userMsg.includes('Cannot fetch')) {
-                userMsg = `Model download failed. Try: (1) clear LLM cache in Storage tab, (2) hard-refresh (⌘⇧R), (3) check that nothing blocks huggingface.co. If using Safari, try Chrome/Edge instead.`;
-            }
+            const userMsg = formatAnonModelLoadError(error, modelLabel);
             anonModelStatusText.textContent = 'Error: ' + userMsg;
             updateStatus('idle', 'Model loading failed');
             engine = null;
-            throw error;
+            throw new Error(userMsg);
         } finally {
             isAnonModelLoading = false;
         }
     });
+}
+
+function formatAnonModelLoadError(error, modelLabel) {
+    const message = error?.message || String(error);
+    if (isWebLLMCacheAddError(error)) {
+        return `${modelLabel} download/cache failed in Chrome while WebLLM was storing model files. Medmorf cleared partial WebLLM cache and retried once. If it still fails around the same point, one model shard is likely blocked/interrupted or Chrome storage is tight. Disable ad-block/VPN/firewall for huggingface.co and cdn.jsdelivr.net, clear LLM cache in Storage, and retry with the tab in foreground.`;
+    }
+    if (/quota|storage|persist/i.test(message)) {
+        return `${modelLabel} could not be cached because browser storage looks full or unavailable. Free disk space or clear old model caches in Storage, then retry.`;
+    }
+    if (message.includes('Cannot fetch') || /Failed to fetch|NetworkError|Load failed/i.test(message)) {
+        return `Model download failed. Check your internet connection and ensure nothing blocks huggingface.co or cdn.jsdelivr.net. Then clear LLM cache in Storage and retry.`;
+    }
+    return message;
 }
 
 async function disposeAnonModel() {
@@ -556,7 +708,7 @@ async function llmChat(messages, options = {}) {
 }
 
 function getSelectedNerModelId() {
-    return anonNerModelSelect ? anonNerModelSelect.value : DEFAULT_NER_MODEL_ID;
+    return anonNerModelSelect ? anonNerModelSelect.value : DEFAULT_ANON_NER_MODEL_ID;
 }
 
 function updateNerModelHint() {
@@ -579,7 +731,7 @@ function populateNerModelSelect() {
         const selectOption = document.createElement('option');
         selectOption.value = option.id;
         selectOption.textContent = option.label;
-        if (option.id === DEFAULT_NER_MODEL_ID) {
+        if (option.id === DEFAULT_ANON_NER_MODEL_ID) {
             selectOption.selected = true;
         }
         anonNerModelSelect.appendChild(selectOption);
@@ -912,20 +1064,53 @@ Important example:
 
 Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam","type":"LOCATION"},{"entity":"12 maart 1981","type":"DATE"}]`;
 
-const SYSTEM_PROMPT_VALIDATE = `You are a medical data anonymization expert. A NER model detected the entities listed below, but it produced some false positives. Your task is to identify which detected entities are FALSE POSITIVES (NOT real PII) and should be REMOVED.
+const SYSTEM_PROMPT_VALIDATE = `You are a conservative medical privacy reviewer. A NER / detector model detected the entities listed below. Your task is ONLY to identify obvious false positives that contain NO personally identifiable information and should be removed.
 
 An entity is a FALSE POSITIVE if:
 - PERSON: Not an actual person name. E.g. "mijn huisarts", "mijn vrouw", "contactpersoon" are roles/descriptions, not names. Real names: "Jan de Vries", "Dr. Jansen".
 - LOCATION: Not an actual place name. E.g. "noodgevallen", "vermoeidheid", "mij" are common words. Real places: "Utrecht", "Maastricht".
 - ID_NUMBER: Not an actual identifier value. E.g. "Goedemiddag", "Ja", "Wat", "Dank u" are conversational words. Real IDs: "731245689", "NL91 ABNA 0417 1643 00".
 - ORGANIZATION: Not an actual organization name. E.g. "het ziekenhuis" is generic. Real: "TechSolutions BV", "Amsterdam UMC".
-- WRONG TYPE: Entity exists but has wrong type. E.g. a person name classified as LOCATION, or an address classified as PERSON.
 
-Return ONLY a JSON array of the FALSE POSITIVES to REMOVE. Each item needs "entity" (exact text) and "reason" (brief why).
+Conservative keep rules:
+- If the entity contains ANY real PII, do NOT remove it, even when the type is imperfect or the span is too broad.
+- NEVER remove street addresses, house numbers, postal codes, or address-like combinations such as "Kastanjelaan 58, 6221 BN Maastricht".
+- NEVER remove clinician/provider names or titled names such as "Dr. Anne Jansen", including broader spans like "Dr. Anne Jansen van Huisartsenpraktijk".
+- NEVER remove hospitals, clinics, medical practices, insurers, schools, employers, or named organizations.
+- When unsure, KEEP the entity by returning nothing for it.
+
+Return ONLY a JSON array of the obvious FALSE POSITIVES to REMOVE. Each item needs "entity" (exact text) and "reason" (brief why).
 If ALL entities are valid PII, return: []
 No explanations outside the JSON. ONLY the JSON array.
 
 Example: [{"entity":"mijn huisarts","reason":"role description, not a name"},{"entity":"noodgevallen","reason":"common word, not a location"}]`;
+
+function hasStrongPiiSignal(entity, type = '') {
+    const text = String(entity || '').trim();
+    if (!text) return false;
+    const lower = text.toLowerCase();
+
+    if (type === 'EMAIL' || /[^\s@]+@[^\s@]+\.[^\s@]+/.test(text)) return true;
+    if (type === 'PHONE' || /(?:\+?\d[\d\s().-]{6,}\d)/.test(text)) return true;
+    if (type === 'ID_NUMBER' && /\d/.test(text)) return true;
+    if (type === 'DATE' && (/\d/.test(text) || /\b(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|okt|nov|dec)\b/i.test(text))) return true;
+    if (type === 'AGE' && /\d/.test(text)) return true;
+
+    const hasDutchPostcode = /\b\d{4}\s?[A-Z]{2}\b/i.test(text);
+    const hasHouseNumber = /\b\d+[a-z]?\b/i.test(text);
+    const hasStreetWord = /\b(straat|laan|weg|plein|gracht|dijk|kade|singel|hof|pad|boulevard|drive|road|street|avenue|lane)\b/i.test(text);
+    if (type === 'ADDRESS' || hasDutchPostcode || (hasStreetWord && hasHouseNumber)) return true;
+
+    const hasCareProviderTitle = /\b(dr\.?|dokter|huisarts|arts|psychiater|psycholoog|therapeut|verpleegkundige|specialist)\b/i.test(text);
+    const hasMedicalOrganization = /\b(huisartsenpraktijk|praktijk|ziekenhuis|umc|kliniek|ggz|apotheek|medical center|clinic|hospital)\b/i.test(text);
+    if (hasCareProviderTitle || hasMedicalOrganization) return true;
+
+    const nameLike = /(?:^|\s)(?:[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ.'-]+)(?:\s+(?:de|den|der|van|van de|van der|ter|ten|op|aan|von|da|del|la))*\s+[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ.'-]+/.test(text);
+    if (type === 'PERSON' && nameLike) return true;
+    if ((type === 'LOCATION' || type === 'ORGANIZATION') && /[A-ZÀ-ÖØ-Þ][a-zà-öø-ÿ.'-]{2,}/.test(text)) return true;
+
+    return false;
+}
 
 async function validateEntitiesWithLLM(entities, text) {
     if (!entities.length || !engine) return entities;
@@ -947,12 +1132,19 @@ async function validateEntitiesWithLLM(entities, text) {
             console.log('[LLM Validate] Entities to reject:', rejects);
 
             const normalize = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
+            const entityByKey = new Map(entities.map(e => [normalize(e.entity), e]));
             const rejectSet = new Set();
             for (const r of rejects) {
                 if (!r) continue;
                 const txt = r.entity || r.text || r.value || r.name || '';
                 if (typeof txt === 'string' && txt.trim()) {
-                    rejectSet.add(normalize(txt));
+                    const key = normalize(txt);
+                    const original = entityByKey.get(key);
+                    if (original && hasStrongPiiSignal(original.entity, original.type)) {
+                        console.warn('[LLM Validate] Keeping rejected entity because it still looks like PII:', original);
+                        continue;
+                    }
+                    rejectSet.add(key);
                 }
             }
 
@@ -1374,22 +1566,177 @@ function updateAnonBtnState() {
 }
 
 // ── Pipeline Selection ─────────────────────────────────────────────────────────
+function pipelineUsesNer(pipeline = getSelectedPipeline()) {
+    return pipeline === 'ner' || pipeline === 'ner+llm';
+}
+
+function pipelineUsesLlm(pipeline = getSelectedPipeline()) {
+    return pipeline === 'llm' || pipeline === 'ner+llm';
+}
+
+function getPipelineLabel(pipeline = getSelectedPipeline()) {
+    if (pipeline === 'ner+llm') return 'NER + LLM';
+    if (pipeline === 'ner') return 'NER only';
+    return 'LLM only';
+}
+
 function getSelectedPipeline() {
     return anonPipelineSelect ? anonPipelineSelect.value : 'llm';
 }
 
+function setSelectedPipeline(pipeline, { persist = false, userChanged = false } = {}) {
+    if (!anonPipelineSelect) return;
+    if (!['llm', 'ner', 'ner+llm'].includes(pipeline)) return;
+    anonPipelineSelect.value = pipeline;
+    if (userChanged) anonPipelineSelect.dataset.userChanged = '1';
+    if (persist) savePref(LS_KEY_PIPELINE, pipeline);
+}
+
+function showModelSelectionError(message = '') {
+    if (!anonModelSelectionError) return;
+    anonModelSelectionError.textContent = message;
+    anonModelSelectionError.style.display = message ? 'block' : 'none';
+}
+
+function createModelCard(family, option) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'anon-model-card';
+    button.dataset.modelFamily = family;
+    button.dataset.modelId = option.id;
+    button.setAttribute('aria-pressed', 'false');
+
+    const meta = family === 'ner'
+        ? fmtResourceSize(option.sizeMB || 0)
+        : option.size || fmtResourceSize(option.sizeMB || 0);
+    const detail = family === 'ner'
+        ? (option.qualityNote || option.description || '')
+        : (option.note || '');
+    const status = document.createElement('span');
+    status.className = 'anon-model-card-status';
+    status.textContent = 'Off';
+
+    button.innerHTML = `
+        <span class="anon-model-card-main">
+            <span class="anon-model-card-title">${escapeHTML(option.label)}</span>
+            <span class="anon-model-card-meta">${escapeHTML(meta)}</span>
+        </span>
+        <span class="anon-model-card-detail">${escapeHTML(detail)}</span>
+    `;
+    button.appendChild(status);
+    return button;
+}
+
+function renderModelPicker() {
+    if (anonNerModelCards) {
+        anonNerModelCards.innerHTML = '';
+        Object.values(NER_MODEL_OPTIONS).forEach((option) => {
+            anonNerModelCards.appendChild(createModelCard('ner', option));
+        });
+    }
+    if (anonLlmModelCards) {
+        anonLlmModelCards.innerHTML = '';
+        Object.entries(LLM_MODEL_OPTIONS).forEach(([id, option]) => {
+            anonLlmModelCards.appendChild(createModelCard('llm', { ...option, id }));
+        });
+    }
+    syncModelPickerState();
+}
+
+function syncModelPickerState() {
+    const pipeline = getSelectedPipeline();
+    const nerActive = pipelineUsesNer(pipeline);
+    const llmActive = pipelineUsesLlm(pipeline);
+    const selectedNer = getSelectedNerModelId();
+    const selectedLlm = getSelectedModel();
+
+    if (anonModelGrid) {
+        anonModelGrid.dataset.pipeline = pipeline;
+        anonModelGrid.dataset.nerActive = String(nerActive);
+        anonModelGrid.dataset.llmActive = String(llmActive);
+    }
+
+    document.querySelectorAll('.anon-model-family').forEach((panel) => {
+        const family = panel.querySelector('.anon-model-card')?.dataset.modelFamily;
+        panel.dataset.active = family === 'ner' ? String(nerActive) : String(llmActive);
+    });
+
+    document.querySelectorAll('.anon-model-card').forEach((card) => {
+        const family = card.dataset.modelFamily;
+        const selected = family === 'ner'
+            ? card.dataset.modelId === selectedNer
+            : card.dataset.modelId === selectedLlm;
+        const active = family === 'ner' ? nerActive : llmActive;
+        const isActiveSelection = selected && active;
+        card.classList.toggle('is-selected', selected);
+        card.classList.toggle('is-active', isActiveSelection);
+        card.classList.toggle('is-off', selected && !active);
+        card.setAttribute('aria-pressed', String(isActiveSelection));
+        const status = card.querySelector('.anon-model-card-status');
+        if (status) {
+            status.textContent = isActiveSelection ? 'On' : selected ? 'Off' : 'Choose';
+        }
+    });
+
+    if (anonPipelineSummary) {
+        const parts = [];
+        if (nerActive) parts.push(getNERModelOption(selectedNer).label);
+        if (llmActive) parts.push(getSelectedLLMOption().label);
+        anonPipelineSummary.textContent = `Active pipeline: ${getPipelineLabel(pipeline)} · ${parts.join(' + ')}`;
+    }
+}
+
+function handleModelCardClick(card) {
+    if (!card || isAnonymizing || isAnonModelLoading || isNerLoading) return;
+    const family = card.dataset.modelFamily;
+    const modelId = card.dataset.modelId;
+    const pipeline = getSelectedPipeline();
+    const nerActive = pipelineUsesNer(pipeline);
+    const llmActive = pipelineUsesLlm(pipeline);
+    const isNer = family === 'ner';
+    const isSelected = isNer ? modelId === getSelectedNerModelId() : modelId === getSelectedModel();
+    let nextNerActive = nerActive;
+    let nextLlmActive = llmActive;
+
+    showModelSelectionError('');
+
+    if (isNer) {
+        if (anonNerModelSelect) {
+            anonNerModelSelect.value = modelId;
+            anonNerModelSelect.dataset.userChanged = '1';
+            savePref(LS_KEY_NER_MODEL, modelId);
+        }
+        nextNerActive = isSelected && nerActive ? false : true;
+    } else {
+        if (anonModelSelect) {
+            anonModelSelect.value = modelId;
+            anonModelSelect.dataset.userChanged = '1';
+            anonModelSelect.dataset.userChosen = '1';
+            savePref(LS_KEY_LLM_MODEL, modelId);
+        }
+        nextLlmActive = isSelected && llmActive ? false : true;
+    }
+
+    if (!nextNerActive && !nextLlmActive) {
+        showModelSelectionError('Keep at least one model active.');
+        nextNerActive = nerActive;
+        nextLlmActive = llmActive;
+    }
+
+    const nextPipeline = nextNerActive && nextLlmActive
+        ? 'ner+llm'
+        : nextNerActive
+            ? 'ner'
+            : 'llm';
+    setSelectedPipeline(nextPipeline, { persist: true, userChanged: true });
+    updatePipelineControls();
+    updateNerModelHint();
+    updateModeBanner();
+}
+
 function updatePipelineControls() {
     const pipeline = getSelectedPipeline();
-    if (anonModelSelect) {
-        anonModelSelect.disabled = pipeline === 'ner';
-    }
-    // Hide LLM model picker when running NER-only.
-    const llmGroup = document.getElementById('anonLlmModelGroup');
-    if (llmGroup) llmGroup.style.display = pipeline === 'ner' ? 'none' : '';
-    // Hide NER model picker, GLiNER threshold and NER hint when running LLM-only.
-    const nerVisible = pipeline !== 'llm';
-    const nerGroup = document.getElementById('anonNerModelGroup');
-    if (nerGroup) nerGroup.style.display = nerVisible ? '' : 'none';
+    const nerVisible = pipelineUsesNer(pipeline);
     if (anonNerModelHint) anonNerModelHint.style.display = nerVisible ? '' : 'none';
     if (glinerThresholdRow) {
         if (!nerVisible) {
@@ -1400,6 +1747,13 @@ function updatePipelineControls() {
             glinerThresholdRow.style.display = 'none';
         }
     }
+    syncModelPickerState();
+}
+
+function setModelPickerDisabled(disabled) {
+    document.querySelectorAll('.anon-model-card').forEach((card) => {
+        card.disabled = disabled;
+    });
 }
 
 // ── Main Anonymization Flow ────────────────────────────────────────────────────
@@ -1410,6 +1764,7 @@ async function performAnonymization() {
     if (anonModelSelect) anonModelSelect.disabled = true;
     if (anonPipelineSelect) anonPipelineSelect.disabled = true;
     if (anonNerModelSelect) anonNerModelSelect.disabled = true;
+    setModelPickerDisabled(true);
     anonResults.style.display = 'none';
     anonProgress.style.display = 'block';
     anonProgressBar.style.width = '0%';
@@ -1468,6 +1823,8 @@ async function performAnonymization() {
         if (anonModelSelect) anonModelSelect.disabled = false;
         if (anonPipelineSelect) anonPipelineSelect.disabled = false;
         if (anonNerModelSelect) anonNerModelSelect.disabled = false;
+        setModelPickerDisabled(false);
+        updatePipelineControls();
         anonProgress.style.display = 'none';
         setResourceStage('Idle', 0, 'No model running');
         stopResourceMonitor();
@@ -1791,20 +2148,22 @@ function renderResults() {
     anonResults.style.display = 'block';
 
     if (anonDetectionSummary) {
-        const pipelineLabels = {
-            'ner+llm': 'NER + LLM',
-            ner: 'NER only',
-            llm: 'LLM only',
-        };
         const activeNerOption = getNERModelOption(getSelectedNerModelId());
         const activeLoadLabel = getActiveNERLoadLabel();
-        const modelLabel = activeLoadLabel
+        const nerModelLabel = activeLoadLabel
             ? `${activeNerOption.label} (${activeLoadLabel})`
             : activeNerOption.label;
+        const llmModelLabel = getSelectedLLMOption().label;
         const filteredNote = lastDetectionBreakdown.nerFiltered.length > 0
             ? ` LLM filtered ${lastDetectionBreakdown.nerFiltered.length} NER false positives.`
             : '';
-        anonDetectionSummary.textContent = `${pipelineLabels[lastDetectionBreakdown.pipeline] || lastDetectionBreakdown.pipeline} used. Active NER model: ${modelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities.${filteredNote} LLM found ${lastDetectionBreakdown.llm.length} unique entities. LLM added ${lastDetectionBreakdown.llmAdded.length} entities beyond NER.`;
+        if (lastDetectionBreakdown.pipeline === 'llm') {
+            anonDetectionSummary.textContent = `LLM only used. Active LLM model: ${llmModelLabel}. LLM found ${lastDetectionBreakdown.llm.length} unique entities.`;
+        } else if (lastDetectionBreakdown.pipeline === 'ner') {
+            anonDetectionSummary.textContent = `NER only used. Active NER / detector model: ${nerModelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities.`;
+        } else {
+            anonDetectionSummary.textContent = `NER + LLM used. Active models: ${nerModelLabel} + ${llmModelLabel}. NER found ${lastDetectionBreakdown.ner.length} unique entities.${filteredNote} LLM found ${lastDetectionBreakdown.llm.length} unique entities. LLM added ${lastDetectionBreakdown.llmAdded.length} entities beyond NER.`;
+        }
     }
     renderDetectionTable(nerDetectionTableBody, lastDetectionBreakdown.ner, 'No NER detections for this run.');
     renderDetectionTable(llmDetectionTableBody, lastDetectionBreakdown.llm, 'No LLM detections for this run.');
@@ -2480,6 +2839,7 @@ if (anonNerModelSelect) {
         anonNerModelSelect.dataset.userChanged = '1';
         savePref(LS_KEY_NER_MODEL, anonNerModelSelect.value);
         updateNerModelHint();
+        updatePipelineControls();
         updateModeBanner();
         if (getNERPipeline()) {
             await disposeNERPipeline();
@@ -2492,7 +2852,15 @@ if (anonModelSelect) {
         anonModelSelect.dataset.userChanged = '1';
         anonModelSelect.dataset.userChosen = '1';
         savePref(LS_KEY_LLM_MODEL, anonModelSelect.value);
+        updatePipelineControls();
         updateModeBanner();
+    });
+}
+
+if (anonModelGrid) {
+    anonModelGrid.addEventListener('click', (event) => {
+        const card = event.target.closest('.anon-model-card');
+        if (card) handleModelCardClick(card);
     });
 }
 
@@ -2517,6 +2885,7 @@ if (anonPipelineSelect) {
         anonPipelineSelect.dataset.userChanged = '1';
         savePref(LS_KEY_PIPELINE, anonPipelineSelect.value);
         updatePipelineControls();
+        updateNerModelHint();
         updateModeBanner();
     });
 }

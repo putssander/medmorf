@@ -13,7 +13,7 @@ import {
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] cache-manager.js build', BUILD_ID, 'module url', import.meta.url);
 
-const LLM_MODEL = 'Qwen3-4B-q4f16_1-MLC';
+const LLM_MODEL = 'Qwen3-1.7B-q4f16_1-MLC';
 
 function formatLoadError(error) {
     if (error instanceof Error && error.message) {

@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-05-28-browser-limits-1';
+        window.MEDMORF_BUILD_ID = '2026-06-02-conservative-pii-validation-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -79,7 +79,7 @@
     </script>
 
     <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-alias-1">
-    <link rel="stylesheet" href="styles/brand.css?v=2026-05-28-browser-limits-1">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-06-02-conservative-pii-validation-1">
     <script type="importmap">
     {
         "imports": {
@@ -548,31 +548,43 @@
                     </div>
 
                     <details class="anon-advanced">
-                        <summary>Advanced settings — pick a specific model</summary>
-                        <div class="anon-settings-row">
-                            <div class="setting-group compact">
-                                <label for="anonPipelineSelect">Pipeline</label>
-                                <select id="anonPipelineSelect">
-                                    <option value="llm" selected>LLM only (recommended)</option>
-                                    <option value="ner+llm">NER + LLM</option>
-                                    <option value="ner">NER only</option>
-                                </select>
+                        <summary>Advanced settings — model selection</summary>
+                        <div class="anon-model-picker">
+                            <div class="anon-picker-head">
+                                <strong id="anonPipelineSummary">Active pipeline: auto</strong>
+                                <span>Turn on one detector, one LLM, or both.</span>
                             </div>
-                            <div class="setting-group compact" id="anonNerModelGroup">
-                                <label for="anonNerModelSelect">NER Model</label>
-                                <select id="anonNerModelSelect">
-                                    <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
-                                    <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
-                                    <option value="multilingual_ner">Multilingual BERT NER</option>
-                                    <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
-                                </select>
+                            <select id="anonPipelineSelect" hidden aria-hidden="true">
+                                <option value="llm" selected>LLM only</option>
+                                <option value="ner+llm">NER + LLM</option>
+                                <option value="ner">NER only</option>
+                            </select>
+                            <select id="anonNerModelSelect" hidden aria-hidden="true">
+                                <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
+                                <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
+                                <option value="multilingual_ner">Multilingual BERT NER</option>
+                                <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
+                            </select>
+                            <select id="anonModelSelect" hidden aria-hidden="true">
+                                <!-- Populated dynamically by anonymize-handler.js -->
+                            </select>
+                            <div class="anon-model-grid" id="anonModelGrid">
+                                <section class="anon-model-family" aria-labelledby="anonNerFamilyTitle">
+                                    <div class="anon-family-heading">
+                                        <h4 id="anonNerFamilyTitle">NER / detector</h4>
+                                        <span>CPU-friendly span detectors</span>
+                                    </div>
+                                    <div class="anon-model-card-grid" id="anonNerModelCards"></div>
+                                </section>
+                                <section class="anon-model-family" aria-labelledby="anonLlmFamilyTitle">
+                                    <div class="anon-family-heading">
+                                        <h4 id="anonLlmFamilyTitle">LLM</h4>
+                                        <span>WebGPU Qwen verification</span>
+                                    </div>
+                                    <div class="anon-model-card-grid" id="anonLlmModelCards"></div>
+                                </section>
                             </div>
-                            <div class="setting-group compact" id="anonLlmModelGroup">
-                                <label for="anonModelSelect">LLM Model</label>
-                                <select id="anonModelSelect">
-                                    <!-- Populated dynamically by anonymize-handler.js -->
-                                </select>
-                            </div>
+                            <div id="anonModelSelectionError" class="anon-selection-error" role="status" aria-live="polite"></div>
                         </div>
                         <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
                             <div class="setting-group compact" style="flex:1">
@@ -592,8 +604,8 @@
                         <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.4 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
                         <ul>
                             <li><strong>Qwen3 0.6B</strong> — ~1.4 GB VRAM. Smallest &amp; fastest LLM. Good for quick scans.</li>
-                            <li><strong>Qwen3 1.7B</strong> — ~2 GB VRAM. Good balance of speed and quality.</li>
-                            <li><strong>Qwen3 4B</strong> (default) — ~3.4 GB VRAM. Best quality for most devices.</li>
+                            <li><strong>Qwen3 1.7B</strong> (preferred default when feasible) — ~2 GB VRAM. Good balance of speed and quality.</li>
+                            <li><strong>Qwen3 4B</strong> — ~3.4 GB VRAM. Higher quality, needs more headroom.</li>
                             <li><strong>Qwen3 8B</strong> — ~5.7 GB VRAM. Highest quality, needs a powerful GPU.</li>
                             <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
                             <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
@@ -1508,7 +1520,7 @@
                         <div class="offline-model-card" id="offlineLLM">
                             <div class="offline-model-info">
                                 <strong>Anonymization LLM</strong>
-                                <span class="offline-model-meta">Qwen3 4B · ~3.4 GB</span>
+                                <span class="offline-model-meta">Qwen3 1.7B · ~2 GB</span>
                                 <span class="offline-model-desc">Detects and anonymizes PII via WebGPU</span>
                             </div>
                             <div class="offline-model-status" id="offlineLLMStatus">
@@ -1786,10 +1798,10 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/app.js?v=2026-05-28-resource-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-05-28-browser-limits-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-06-02-conservative-pii-validation-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-05-28-resource-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-05-28-resource-1"></script>
-    <script type="module" src="src/cache-manager.js?v=2026-05-28-resource-1"></script>
+    <script type="module" src="src/cache-manager.js?v=2026-06-02-conservative-pii-validation-1"></script>
     <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>
