@@ -22,7 +22,7 @@ After the first visit and model download, the service worker and browser caches 
 | --- | --- |
 | Translate | Text translation plus `.xlsx` and `.docx` upload workflows using NLLB-200. Excel translation preserves sheets/columns and writes translated columns to a new workbook. |
 | Anonymize | PII detection and replacement for pasted text or `.pdf`, `.xlsx`, `.docx`, and `.txt` uploads. The Advanced settings use two model panels: NER / detector on the left and LLM on the right. When feasible, the default is OpenAI Privacy Filter + Qwen3 1.7B; constrained devices fall back to a CPU NER-only default. Hybrid validation is conservative: real PII is kept even when the detector type is imperfect. Detection chunks use overlap to preserve context across boundaries. PDF read failures are shown as plain user-facing messages with retry guidance. |
-| PDF redaction | Integrated into Anonymize. Exports anonymized text (`.txt`), PDF text rebuilds, or burn-in redaction PDFs that rasterize pages and remove original glyph/image text. Scanned pages can use OCR. |
+| PDF redaction | Integrated into Anonymize. Exports burn-in redaction PDFs by default, plus anonymized text (`.txt`) or PDF text rebuilds. Burn-in output rasterizes pages and removes original glyph/image text. Scanned pages can use OCR. |
 | Summarize | WebGPU clinical summarization from pasted text or `.xlsx`, `.docx`, and `.txt` files. Templates include Dutch psychological report, SOAP note, and free-form summary. |
 | Speech | Whisper transcription for microphone recordings or uploaded audio (`.mp3`, `.wav`, `.ogg`, `.webm`, `.m4a`, `.flac`, `.mp4`). Includes a dictaphone mode that can export `.xlsx` logs. |
 | DICOM | Browser-based folder scanning, DICOM metadata indexing, modality filters, JSON/XLSX export, proposed sort previews, and generated PowerShell/robocopy scripts. Requires the File System Access API for folder workflows. |
@@ -98,7 +98,7 @@ Medmorf is intentionally a static vanilla-JS app:
 - `index.html`, `manifest.webmanifest`, and `sw.js` stay at the repo root for PWA scope.
 - Client-side JavaScript lives in a flat `src/` directory and uses sibling-relative module imports.
 - CSS is split between `styles/styles.css` for older component styles and `styles/brand.css` for brand tokens/overrides.
-- `sw.js` uses `CACHE_NAME = 'medmorf-app-v28'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
+- `sw.js` uses `CACHE_NAME = 'medmorf-app-v29'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
 
 Main browser dependencies:
 
