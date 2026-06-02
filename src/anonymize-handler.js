@@ -34,8 +34,10 @@ import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lif
 const DEFAULT_MODEL = 'Qwen3-1.7B-q4f16_1-MLC';
 const DEFAULT_ANON_NER_MODEL_ID = 'openai_privacy_filter';
 const FALLBACK_ANON_NER_MODEL_ID = 'multilang_pii';
-const DEFAULT_MAX_CHUNK_CHARS = 1200;
-const LOW_MEMORY_MAX_CHUNK_CHARS = 700;
+const DEFAULT_MAX_CHUNK_CHARS = 2400;
+const LOW_MEMORY_MAX_CHUNK_CHARS = 1600;
+const DEFAULT_CHUNK_OVERLAP_CHARS = 240;
+const LOW_MEMORY_CHUNK_OVERLAP_CHARS = 160;
 
 const LLM_MODEL_OPTIONS = {
     'Qwen3-0.6B-q4f16_1-MLC': {
@@ -1342,7 +1344,23 @@ function updateMappingCount() {
 }
 
 // ── Text Chunking ──────────────────────────────────────────────────────────────
-function splitLongTextSegment(segment, maxChars) {
+function getOverlapTail(text, overlapChars) {
+    if (!overlapChars || text.length <= overlapChars) return '';
+    const tail = text.slice(-overlapChars);
+    const sentenceBreak = Math.max(
+        tail.lastIndexOf('. '),
+        tail.lastIndexOf('! '),
+        tail.lastIndexOf('? '),
+        tail.lastIndexOf('; ')
+    );
+    if (sentenceBreak > overlapChars * 0.35) return tail.slice(sentenceBreak + 1).trim();
+    const lineBreak = tail.lastIndexOf('\n');
+    if (lineBreak > overlapChars * 0.35) return tail.slice(lineBreak + 1).trim();
+    const spaceBreak = tail.indexOf(' ');
+    return (spaceBreak > 0 ? tail.slice(spaceBreak + 1) : tail).trim();
+}
+
+function splitLongTextSegment(segment, maxChars, overlapChars = 0) {
     const chunks = [];
     let remaining = segment.trim();
     while (remaining.length > maxChars) {
@@ -1358,13 +1376,14 @@ function splitLongTextSegment(segment, maxChars) {
         let splitAt = Math.max(sentenceBreak > maxChars * 0.45 ? sentenceBreak + 1 : -1, lineBreak, spaceBreak);
         if (splitAt < maxChars * 0.35) splitAt = maxChars;
         chunks.push(remaining.slice(0, splitAt).trim());
-        remaining = remaining.slice(splitAt).trim();
+        const effectiveOverlap = Math.min(overlapChars, Math.floor(maxChars * 0.2), Math.max(0, splitAt - 1));
+        remaining = remaining.slice(Math.max(0, splitAt - effectiveOverlap)).trim();
     }
     if (remaining) chunks.push(remaining);
     return chunks;
 }
 
-function chunkText(text, maxChars = DEFAULT_MAX_CHUNK_CHARS) {
+function chunkText(text, maxChars = DEFAULT_MAX_CHUNK_CHARS, overlapChars = DEFAULT_CHUNK_OVERLAP_CHARS) {
     const paragraphs = text.split(/\n+/);
     const chunks = [];
     let current = '';
@@ -1375,12 +1394,14 @@ function chunkText(text, maxChars = DEFAULT_MAX_CHUNK_CHARS) {
                 chunks.push(current.trim());
                 current = '';
             }
-            chunks.push(...splitLongTextSegment(para, maxChars));
+            chunks.push(...splitLongTextSegment(para, maxChars, overlapChars));
             continue;
         }
         if ((current + '\n' + para).length > maxChars && current.length > 0) {
-            chunks.push(current.trim());
-            current = para;
+            const flushed = current.trim();
+            chunks.push(flushed);
+            const overlap = getOverlapTail(flushed, overlapChars);
+            current = overlap ? `${overlap}\n${para}` : para;
         } else {
             current += (current ? '\n' : '') + para;
         }
@@ -1391,6 +1412,10 @@ function chunkText(text, maxChars = DEFAULT_MAX_CHUNK_CHARS) {
 
 function getChunkSizeForPipeline(pipeline) {
     return isOpenAIPrivacyHybrid(pipeline) ? LOW_MEMORY_MAX_CHUNK_CHARS : DEFAULT_MAX_CHUNK_CHARS;
+}
+
+function getChunkOverlapForPipeline(pipeline) {
+    return isOpenAIPrivacyHybrid(pipeline) ? LOW_MEMORY_CHUNK_OVERLAP_CHARS : DEFAULT_CHUNK_OVERLAP_CHARS;
 }
 
 async function yieldBetweenChunks() {
@@ -1835,7 +1860,7 @@ async function performAnonymization() {
 async function anonymizeTextDocument(pipeline) {
     const text = await extractTextFromDocument(anonDocument);
     anonSourceText = text;
-    const chunks = chunkText(text, getChunkSizeForPipeline(pipeline));
+    const chunks = chunkText(text, getChunkSizeForPipeline(pipeline), getChunkOverlapForPipeline(pipeline));
     const totalChunks = chunks.length;
 
     updateStatus('translating', 'Extracting PII entities...');
@@ -2001,7 +2026,7 @@ async function anonymizeExcel(pipeline) {
     }
 
     const allText = textCells.join('\n---\n');
-    const chunks = chunkText(allText, getChunkSizeForPipeline(pipeline));
+    const chunks = chunkText(allText, getChunkSizeForPipeline(pipeline), getChunkOverlapForPipeline(pipeline));
     const totalChunks = chunks.length;
 
     updateStatus('translating', 'Extracting PII entities...');
