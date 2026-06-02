@@ -1438,7 +1438,12 @@ async function loadPdfJs() {
 async function extractTextFromPdf(file) {
     const pdfjs = await loadPdfJs();
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    let pdf;
+    try {
+        pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
+    } catch (error) {
+        throw createPdfReadError(error);
+    }
     const pageTexts = [];
     try {
         for (let i = 1; i <= pdf.numPages; i++) {
@@ -1469,6 +1474,32 @@ async function extractTextFromPdf(file) {
     } finally {
         await pdf.destroy?.();
     }
+}
+
+function isPdfReadError(error) {
+    return error?.code === 'MEDMORF_PDF_READ_ERROR' ||
+        /InvalidPDFException|PasswordException|MissingPDFException|UnexpectedResponseException/i.test(error?.name || '') ||
+        /Invalid PDF structure|password|encrypted|PDF/i.test(error?.message || '');
+}
+
+function createPdfReadError(error) {
+    const originalMessage = error?.message || String(error);
+    let message = 'This PDF could not be read. The file appears to have an invalid or unsupported PDF structure.';
+    if (/password|encrypted|PasswordException/i.test(`${error?.name || ''} ${originalMessage}`)) {
+        message = 'This PDF is password-protected or encrypted, so Medmorf cannot read it in the browser.';
+    }
+    const wrapped = new Error(`${message} Try opening the file and exporting it again as a new PDF, or use Print > Save as PDF, then upload the new copy.`);
+    wrapped.name = 'PDFReadError';
+    wrapped.code = 'MEDMORF_PDF_READ_ERROR';
+    wrapped.cause = error;
+    return wrapped;
+}
+
+function formatAnonymizationError(error) {
+    if (isPdfReadError(error)) {
+        return error.message || 'This PDF could not be read. Try exporting it again as a new PDF and upload the new copy.';
+    }
+    return error?.message || String(error);
 }
 
 // Build a new PDF containing the anonymized plain text using pdf-lib.
@@ -1797,6 +1828,7 @@ async function performAnonymization() {
 
     const pipeline = getSelectedPipeline();
     let effectivePipeline = pipeline;
+    let failureMessage = '';
     resetDetectionBreakdown(pipeline);
 
     try {
@@ -1836,8 +1868,13 @@ async function performAnonymization() {
         renderResults();
     } catch (error) {
         console.error('Anonymization error:', error);
-        anonProgressText.textContent = 'Error: ' + error.message;
+        failureMessage = formatAnonymizationError(error);
+        anonProgressBar.style.width = '100%';
+        anonProgressText.textContent = 'Error: ' + failureMessage;
         updateStatus('idle', 'Anonymization failed');
+        if (isPdfReadError(error)) {
+            alert(failureMessage);
+        }
     } finally {
         await releaseMemoryBetweenStages(async () => {
             await disposeNERPipeline();
@@ -1850,7 +1887,7 @@ async function performAnonymization() {
         if (anonNerModelSelect) anonNerModelSelect.disabled = false;
         setModelPickerDisabled(false);
         updatePipelineControls();
-        anonProgress.style.display = 'none';
+        anonProgress.style.display = failureMessage ? 'block' : 'none';
         setResourceStage('Idle', 0, 'No model running');
         stopResourceMonitor();
         updateStatus('idle', 'System Ready');
@@ -2695,11 +2732,16 @@ downloadAnonDocBtn.addEventListener('click', async () => {
                 console.log('[ANON] burn-in summary', summary);
             } catch (err) {
                 console.error('Burn-in redaction failed:', err);
-                alert('Burn-in redaction failed: ' + (err && err.message ? err.message : err));
+                alert('Burn-in redaction failed: ' + formatAnonymizationError(err));
             } finally {
                 downloadAnonDocBtn.disabled = false;
                 downloadAnonDocBtn.innerHTML = origLabel;
             }
+            return;
+        }
+        if (fmt === 'txt') {
+            const blob = new Blob([anonymizedResult], { type: 'text/plain;charset=utf-8' });
+            saveAs(blob, `${baseName}_anonymized.txt`);
             return;
         }
         // Default: text-rebuild PDF
