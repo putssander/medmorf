@@ -51,6 +51,7 @@ const STT_FORCE_WASM = !/[?&]stt-gpu=1\b/.test(typeof location !== 'undefined' ?
 const STT_NO_PROXY = /[?&]stt-no-proxy=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_NO_CACHE = /[?&]stt-no-cache=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_NO_WARM = /[?&]stt-no-warm=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+const STT_KEEP_ARENA = /[?&]stt-arena=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 // Crash breadcrumbs: persist the current load stage so that when iOS kills the
 // page mid-load we can show WHERE it died on the next visit.
 const LS_KEY_STT_STAGE = 'medmorf:stt-last-stage';
@@ -423,7 +424,15 @@ async function initSTTModel(externalProgressCb) {
             const loggedFiles = new Set();
 
             stage('create-pipeline (download + ONNX session init)');
+            // iOS: ORT's CPU memory arena pre-allocates a large contiguous block
+            // at the first inference — the device-only spike that killed the page
+            // during warm-up (crash-stage telemetry, iPhone 17 Pro). Disable the
+            // arena and memory-pattern planning there; slightly slower, no spike.
+            const sessionOptions = (isIos && !STT_KEEP_ARENA)
+                ? { enableCpuMemArena: false, enableMemPattern: false }
+                : undefined;
             pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
+                ...(sessionOptions ? { session_options: sessionOptions } : {}),
                 dtype: modelDtype,
                 device: modelDevice,
                 progress_callback: (progress) => {
