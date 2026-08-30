@@ -183,6 +183,20 @@ let hasWebGPU = false;
         sumWebGPUStatus.innerHTML = '⚠ ' + IOS_LLM_BLOCK_MSG;
         sumWebGPUStatus.className = 'webgpu-status fallback';
         if (summarizeBtn) { summarizeBtn.disabled = true; summarizeBtn.title = IOS_LLM_BLOCK_MSG; }
+        // Make the block impossible to miss: banner at the top of the tab and
+        // grey out the input area, so the disabled button never reads as "broken".
+        const tab = document.getElementById('tab-summarize');
+        if (tab && !document.getElementById('sumIosBlock')) {
+            const div = document.createElement('div');
+            div.id = 'sumIosBlock';
+            div.className = 'stt-recovery-banner';
+            div.innerHTML = '<strong>Not available on iPhone/iPad.</strong> ' + IOS_LLM_BLOCK_MSG + ' Speech, Translate, DICOM, Merge PDF and NER-only anonymization do work on this device.';
+            tab.insertBefore(div, tab.firstElementChild);
+        }
+        ['sumDocUpload', 'sumModelSelect', 'sumTemplateSelect'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; if ('disabled' in el) el.disabled = true; }
+        });
         return;
     }
     if (navigator.gpu) {
