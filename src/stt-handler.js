@@ -52,6 +52,7 @@ const STT_NO_PROXY = /[?&]stt-no-proxy=1\b/.test(typeof location !== 'undefined'
 const STT_NO_CACHE = /[?&]stt-no-cache=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_NO_WARM = /[?&]stt-no-warm=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_KEEP_ARENA = /[?&]stt-arena=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+const STT_NO_SIMD = /[?&]stt-no-simd=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 // Crash breadcrumbs: persist the current load stage so that when iOS kills the
 // page mid-load we can show WHERE it died on the next visit.
 const LS_KEY_STT_STAGE = 'medmorf:stt-last-stage';
@@ -410,6 +411,7 @@ async function initSTTModel(externalProgressCb) {
             const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
             if (env.backends?.onnx?.wasm) {
                 env.backends.onnx.wasm.wasmPaths = ORT_DIST;
+                if (STT_NO_SIMD) { env.backends.onnx.wasm.simd = false; console.warn('[STT] SIMD disabled via ?stt-no-simd=1'); }
                 // Run the WASM backend in a worker ("proxy") so a long inference
                 // never blocks the main thread. Without this, browsers that lack
                 // cross-origin isolation (no SharedArrayBuffer → single-threaded
