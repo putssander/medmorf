@@ -211,6 +211,7 @@ let dictaphoneMediaRec = null;
 let dictaphoneChunks = [];
 let dictaphonePcmChunks = [];
 let dictaphonePcmCount = 0;
+let dictaphoneSampleRate = 16000;
 let dictaphoneAudioCtx = null;
 let dictaphoneSourceNode = null;
 let dictaphoneProcessorNode = null;
@@ -511,9 +512,11 @@ checkRecovery();
 
 // ── Recording PCM Capture ─────────────────────────────────────────────────────
 async function setupPCMCapture(stream) {
-    let ctx;
-    try { ctx = new AudioContext({ sampleRate: 16000 }); }
-    catch { ctx = new (window.AudioContext || window.webkitAudioContext)(); } // some browsers reject a forced rate
+    // NEVER force sampleRate: on iOS the mic runs at 48 kHz and an AudioContext
+    // pinned to 16 kHz feeding a MediaStreamSource is a known WebKit crasher
+    // ("a problem repeatedly occurred"). Capture at the hardware rate and
+    // resample to 16 kHz in software when the buffer is collected.
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
     recAudioCtx = ctx;
     if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (_) {} } // iOS: must resume inside the gesture
     recSampleRate = ctx.sampleRate;
@@ -793,7 +796,9 @@ async function stopRecording() {
 // ── Audio Processing ───────────────────────────────────────────────────────────
 async function decodeAudioToFloat32(blob) {
     const arrayBuffer = await blob.arrayBuffer();
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    // Default-rate context; decodeAudioData resamples to it and the explicit
+    // resampleTo16k below normalises — forcing 16 kHz here crashed iOS WebKit.
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     try {
         const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
         let data = audioBuffer.getChannelData(0); // mono
@@ -1136,7 +1141,10 @@ function formatClock(date) {
 }
 
 async function setupDictaphonePCM(stream) {
-    dictaphoneAudioCtx = new AudioContext({ sampleRate: 16000 });
+    // Hardware-rate context, software resample — see setupPCMCapture.
+    dictaphoneAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (dictaphoneAudioCtx.state === 'suspended') { try { await dictaphoneAudioCtx.resume(); } catch (_) {} }
+    dictaphoneSampleRate = dictaphoneAudioCtx.sampleRate;
     dictaphoneSourceNode = dictaphoneAudioCtx.createMediaStreamSource(stream);
 
     try {
@@ -1225,12 +1233,18 @@ async function dictStartEntry() {
         // Waveform
         startWaveform(dictaphoneStream, dictWaveformCanvas, 'dict');
 
-        // MediaRecorder backup
-        dictaphoneMediaRec = new MediaRecorder(dictaphoneStream, { mimeType: 'audio/webm;codecs=opus' });
-        dictaphoneMediaRec.ondataavailable = (e) => {
-            if (e.data.size > 0) dictaphoneChunks.push(e.data);
-        };
-        dictaphoneMediaRec.start(500);
+        // MediaRecorder backup (optional — never let an unsupported container kill the entry)
+        const dictMime = pickRecorderMime();
+        try {
+            dictaphoneMediaRec = dictMime ? new MediaRecorder(dictaphoneStream, { mimeType: dictMime }) : new MediaRecorder(dictaphoneStream);
+            dictaphoneMediaRec.ondataavailable = (e) => {
+                if (e.data.size > 0) dictaphoneChunks.push(e.data);
+            };
+            dictaphoneMediaRec.start(500);
+        } catch (err) {
+            console.warn('[dict] MediaRecorder unavailable:', err.message);
+            dictaphoneMediaRec = null;
+        }
 
         dictaphoneRecording = true;
         if (dictRecordBtn) dictRecordBtn.style.display = 'none';
@@ -1301,8 +1315,7 @@ async function dictStopEntry() {
     try {
         await initSTTModel();
         let audioData = pcmData;
-        const rate = 16000; // dictaphone audioCtx was created at 16kHz
-        if (rate !== 16000) audioData = resampleTo16k(audioData, rate);
+        if (dictaphoneSampleRate !== 16000) audioData = resampleTo16k(audioData, dictaphoneSampleRate);
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
         // Skip silent audio
         if (isAudioSilent(audioData)) {
