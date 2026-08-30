@@ -73,7 +73,7 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 
 ## Browser Notes
 
-- LLM features (Summarize, Anonymize's LLM pipeline) are blocked on iPhone/iPad with an explanatory message: the smallest WebLLM model needs ~1.6 GB while WebKit kills a tab around 1.5 GB, so loading is a guaranteed crash. Anonymize falls back to NER-only there; Speech and Translate work on iOS.
+- On iPhone/iPad, Summarize offers only the smallest model (Qwen3.5 0.8B); the 2B/4B models are disabled there — the 2B crashed an iPhone 17 Pro, while ~1.4–1.6 GB models are known to run on modern iPhones. Anonymize's LLM pipeline (2B minimum) stays blocked on iOS and falls back to NER-only; Speech and Translate work on iOS.
 
 - Chrome and Edge are the best-supported browsers for WebGPU model workflows.
 - Safari 18+ can support WebGPU on compatible devices, but browser memory reporting is more limited.

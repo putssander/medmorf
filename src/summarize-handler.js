@@ -173,7 +173,8 @@ function isIosDevice() {
     const ua = navigator.userAgent || '';
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
-const IOS_LLM_BLOCK_MSG = 'Language-model features are not available on iPhone/iPad: the smallest model needs ~1.6 GB of memory while iOS limits a browser tab to about 1.5 GB, so loading would crash the page. Use a desktop browser (Chrome/Edge recommended) for this feature.';
+const IOS_MAX_LLM_MB = 1700;   // Qwen3-0.6B (~1.4 GB) ran fine on modern iPhones; the 2B (~2.2 GB) crashed an iPhone 17 Pro. Allow only the smallest model.
+const IOS_LLM_BLOCK_MSG = 'On iPhone/iPad only the smallest model (Qwen3.5 0.8B) is offered — larger models exceed what iOS gives a browser tab and would crash the page. Works best on recent iPhones; use a desktop browser for the larger, more accurate models.';
 
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
 let hasWebGPU = false;
@@ -182,21 +183,29 @@ let hasWebGPU = false;
     if (isIosDevice()) {
         sumWebGPUStatus.innerHTML = '⚠ ' + IOS_LLM_BLOCK_MSG;
         sumWebGPUStatus.className = 'webgpu-status fallback';
-        if (summarizeBtn) { summarizeBtn.disabled = true; summarizeBtn.title = IOS_LLM_BLOCK_MSG; }
-        // Make the block impossible to miss: banner at the top of the tab and
-        // grey out the input area, so the disabled button never reads as "broken".
         const tab = document.getElementById('tab-summarize');
         if (tab && !document.getElementById('sumIosBlock')) {
             const div = document.createElement('div');
             div.id = 'sumIosBlock';
-            div.className = 'stt-recovery-banner';
-            div.innerHTML = '<strong>Not available on iPhone/iPad.</strong> ' + IOS_LLM_BLOCK_MSG + ' Speech, Translate, DICOM, Merge PDF and NER-only anonymization do work on this device.';
+            div.className = 'hw-requirements-notice';
+            div.innerHTML = '<strong>iPhone/iPad:</strong> ' + IOS_LLM_BLOCK_MSG + ' If the page reloads during use, the device ran out of memory — nothing is uploaded anywhere.';
             tab.insertBefore(div, tab.firstElementChild);
         }
-        ['sumDocUpload', 'sumModelSelect', 'sumTemplateSelect'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; if ('disabled' in el) el.disabled = true; }
-        });
+        // WebGPU is still required — probe it like everywhere else.
+        if (navigator.gpu) hasWebGPU = true;
+        populateModelSelect();
+        // Restrict the selector to models that fit an iOS tab.
+        if (sumModelSelect) {
+            let fallback = null;
+            for (const opt of Array.from(sumModelSelect.options)) {
+                const fits = (LLM_MODEL_OPTIONS[opt.value]?.sizeMB || 0) <= IOS_MAX_LLM_MB;
+                opt.disabled = !fits;
+                if (fits && !fallback) fallback = opt.value;
+            }
+            if (fallback && (LLM_MODEL_OPTIONS[sumModelSelect.value]?.sizeMB || 0) > IOS_MAX_LLM_MB) {
+                sumModelSelect.value = fallback;
+            }
+        }
         return;
     }
     if (navigator.gpu) {
@@ -282,7 +291,7 @@ function formatLoadError(error) {
 
 
 async function initSumModel() {
-    if (isIosDevice()) {
+    if (isIosDevice() && (LLM_MODEL_OPTIONS[getSelectedModel()]?.sizeMB || 0) > IOS_MAX_LLM_MB) {
         if (sumModelStatusText) sumModelStatusText.textContent = IOS_LLM_BLOCK_MSG;
         throw new Error(IOS_LLM_BLOCK_MSG);
     }
