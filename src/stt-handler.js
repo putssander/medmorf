@@ -11,6 +11,11 @@ console.log('[BUILD] stt-handler.js build', BUILD_ID, 'module url', import.meta.
 
 // ── Model Options ──────────────────────────────────────────────────────────────
 const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Empirical iOS ceiling: whisper-small (q8+q4, ~310 MB weights) reboots the
+// page on a real iPhone 17 Pro during load; base (~105 MB) is the largest
+// safe tier there. Mirrors the LLM tiering in summarize-handler.
+const IOS_MAX_STT_MB = 200;
 let hasWebGPU = false;
 
 // Detect WebGPU at startup (M-series Macs, modern GPUs)
@@ -102,7 +107,7 @@ const STT_MODEL_OPTIONS = {
 
 // Small everywhere: tiny/base are not accurate enough for Dutch (see Benchmark tab).
 // On iPhone/iPad the q4 build (~170 MB) fits the per-tab memory cap (verified in the iOS Simulator).
-const DEFAULT_STT_MODEL = 'onnx-community/whisper-small';
+const DEFAULT_STT_MODEL = isIos ? 'onnx-community/whisper-base' : 'onnx-community/whisper-small';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let pipeline = null;
@@ -279,7 +284,9 @@ function populateSTTModelSelect() {
         el.value = id;
         const size = isMobile ? opt.sizeMobile : (hasWebGPU ? opt.sizeGpu : opt.sizeWasm);
         const badge = cfg.suffix ? ` [${cfg.suffix}]` : '';
-        el.textContent = `${opt.label} (${size})${badge}`;
+        const tooBig = isIos && (opt.sizeMB || 0) > IOS_MAX_STT_MB;
+        el.textContent = `${opt.label} (${size})${badge}${tooBig ? ' — desktop only' : ''}`;
+        el.disabled = tooBig;
         if (id === DEFAULT_STT_MODEL) el.selected = true;
         sttModelSelect.appendChild(el);
     }
@@ -297,6 +304,9 @@ function formatLoadError(error) {
 
 async function initSTTModel(externalProgressCb) {
     const selectedModel = getSelectedModel();
+    if (isIos && (STT_MODEL_OPTIONS[selectedModel]?.sizeMB || 0) > IOS_MAX_STT_MB) {
+        throw new Error('This Whisper model is too large for iPhone/iPad (the page would reload). Whisper Base is the largest model that runs here; use a desktop browser for Whisper Small.');
+    }
     if (pipeline && loadedModelId === selectedModel) return;
     if (isModelLoading) return;
 
