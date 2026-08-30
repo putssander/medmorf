@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-08-30-ios-ui-1';
+        window.MEDMORF_BUILD_ID = '2026-08-30-flow-ui-2';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -79,7 +79,7 @@
     </script>
 
     <link rel="stylesheet" href="styles/styles.css?v=2026-08-30-wer-docs-1">
-    <link rel="stylesheet" href="styles/brand.css?v=2026-08-30-ios-ui-1">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-08-30-flow-ui-2">
     <script type="importmap">
     {
         "imports": {
@@ -228,8 +228,12 @@
                 </details>
 
                 <!-- Text Translation Section -->
-                <div class="translate-section-header">
-                    <h3 class="section-label">Text</h3>
+                <div class="workflow-step-heading">
+                    <span class="workflow-step-number">1</span>
+                    <div>
+                        <h3>Choose languages</h3>
+                        <p>Select the source and result language.</p>
+                    </div>
                 </div>
                 <div class="translate-lang-bar">
                     <div class="lang-pair">
@@ -316,6 +320,13 @@
                 </div>
 
                 <!-- Text Translate (inline with its language bar) -->
+                <div class="workflow-step-heading workflow-step-heading-compact">
+                    <span class="workflow-step-number">2</span>
+                    <div>
+                        <h3>Enter text and translate</h3>
+                        <p>The result appears beside your text.</p>
+                    </div>
+                </div>
                 <section class="quick-translate-section">
                     <div class="translate-container">
                         <div class="translate-box">
@@ -331,7 +342,7 @@
                         <div class="translate-box">
                             <textarea id="quickOutputText" placeholder="Translation will appear here..." rows="5" readonly></textarea>
                             <div class="translate-footer">
-                                <button id="copyOutputBtn" class="copy-btn" title="Copy to clipboard">
+                                <button id="copyOutputBtn" class="copy-btn" title="Copy to clipboard" style="display:none;">
                                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -345,7 +356,11 @@
                 </section>
 
                 <!-- ── File Translation Section ── -->
-                <div class="section-divider"><span>Document</span></div>
+                <details class="workflow-disclosure">
+                    <summary>
+                        <span><strong>Translate a document</strong><small>Excel or Word</small></span>
+                    </summary>
+                    <div class="workflow-disclosure-body">
 
                 <!-- File Upload (compact) -->
                 <section class="file-translate-section">
@@ -366,8 +381,7 @@
                             </div>
                         </div>
                         <div class="example-file-link">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <a href="tests/test_translation_file.xlsx" download>Download example file</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_translation_file.xlsx" data-try-target="#fileInput">▶ Try example</button>
+                            <button type="button" class="btn btn-small btn-ghost" data-try-example="tests/test_translation_file.xlsx" data-try-target="#fileInput">Use example document</button>
                         </div>
                     </div>
                 </section>
@@ -513,8 +527,13 @@
                     </div>
                 </section>
 
+                    </div>
+                </details>
+
                 <!-- Model Management -->
-                <section class="model-management">
+                <details class="utility-disclosure">
+                    <summary>Translation model and cache</summary>
+                    <section class="model-management">
                     <div class="model-management-statuses">
                         <div id="modelCacheStatus" class="cache-status">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
@@ -535,7 +554,8 @@
                             Clear Cache
                         </button>
                     </div>
-                </section>
+                    </section>
+                </details>
             </div>
 
             <!-- ═══════════════════════════════════════════ -->
@@ -564,6 +584,11 @@
 <p class="stt-accuracy-foot">Reference points: i2b2 2014 de-identification benchmark and published GPT‑4 evaluations (Scientific Reports 2025; iScience 2025). <strong>Use Medmorf as a first pass, then review the highlighted mapping and search the output for anything the models missed — never treat the output as fully de-identified without a human check.</strong></p></div>
                 </details>
 
+                    <details class="workflow-disclosure method-disclosure">
+                        <summary>
+                            <span><strong>Detection method</strong><small>Selected automatically for this device</small></span>
+                        </summary>
+                        <div class="workflow-disclosure-body">
                     <!-- Smart mode banner: auto-picks the best method for this device -->
                     <div class="anon-mode-banner" id="anonModeBanner">
                         <div class="anon-mode-summary">
@@ -648,6 +673,8 @@
                         </ul>
                         <p>Always manually review the output. First load downloads the selected model; subsequent runs use the browser cache.</p>
                     </details>
+                        </div>
+                    </details>
 
                     <div class="anon-disclaimer">
                         <p><strong>Review required.</strong> Anonymization can miss identifiers. Check every result before sharing.</p>
@@ -655,9 +682,16 @@
                 </div>
 
                 <!-- Upload Grid -->
+                <div class="workflow-step-heading">
+                    <span class="workflow-step-number">1</span>
+                    <div>
+                        <h3>Add content</h3>
+                        <p>Upload a document or paste text below.</p>
+                    </div>
+                </div>
                 <div class="anon-upload-grid">
                     <div class="anon-upload-box">
-                        <h3>Medical Document</h3>
+                        <h3>Upload document</h3>
                         <div class="upload-area anon-upload" id="anonDocUpload">
                             <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -677,8 +711,10 @@
                         </div>
                     </div>
 
+                    <details class="inline-option">
+                        <summary>Use a mapping file <span>Optional</span></summary>
+                        <div class="inline-option-body">
                     <div class="anon-upload-box">
-                        <h3>Mapping File <span class="optional-tag">Optional</span></h3>
                         <div class="upload-area anon-upload" id="anonMappingUpload">
                             <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -700,18 +736,17 @@
                             <button id="clearAnonMappingBtn" class="btn-link" type="button">Clear</button>
                         </div>
                     </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div class="example-file-link">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <a href="tests/test_anonymisation_file.txt" download>Example document</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_anonymisation_file.txt" data-try-target="#anonDocInput">▶ Try example</button>
-                    ·
-                    <a href="tests/test_mapping.xlsx" download>Example mapping (.xlsx)</a>
+                    <button type="button" class="btn btn-small btn-ghost" data-try-example="tests/test_anonymisation_file.txt" data-try-target="#anonDocInput">Use example document</button>
                 </div>
 
                 <!-- Free-text input — paste text directly without uploading a file -->
                 <details class="anon-paste-details">
-                    <summary>Or paste text directly</summary>
+                    <summary>Paste text instead</summary>
                     <div class="anon-paste-body">
                         <textarea id="anonPasteText" class="anon-paste-textarea" rows="8" placeholder="Paste or type the text you want to anonymize here…"></textarea>
                         <div class="anon-paste-actions">
@@ -749,7 +784,11 @@
                 </section>
 
                 <!-- Anonymize Button -->
-                <section class="actions">
+                <section class="actions workflow-submit">
+                    <div class="workflow-submit-copy">
+                        <span class="workflow-step-number">2</span>
+                        <div><strong>Run anonymization</strong><small>Review every identifier before sharing.</small></div>
+                    </div>
                     <button id="anonymizeBtn" class="btn btn-anon" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                         Anonymize
@@ -898,28 +937,19 @@
 <p>Medmorf scores summaries by <strong>fact coverage</strong> — the share of clinically relevant facts from the source that appear in the summary — and by <strong>hallucination probes</strong>, statements that appear although they are not in the source. On the synthetic notes in the Benchmark tab the in-browser models cover ≈ 85% of the facts with no hallucinations, but they do drop items (in one test: the trigger event and a passive death wish), and they write less fluent Dutch than large models.</p>
 <p><strong>Larger models are better here.</strong> In a Nature Medicine study (2024), an adapted GPT‑4 produced clinical summaries judged equal or better than physicians' in 81% of cases; 2–4B in-browser models are well below that. Medmorf's trade-off is that the note never leaves your device. <strong>Treat the summary as a draft: check it against the source for missing risk information, medication, and numbers.</strong> Prefer the 4B model when your device allows it (see the memory bar), and use the structured templates — they force the model to cover each section.</p></div>
                 </details>
-                    <div class="anon-settings-row">
-                        <div class="setting-group compact">
-                            <label for="sumTemplateSelect">Template</label>
-                            <select id="sumTemplateSelect">
-                                <!-- Populated by summarize-handler.js -->
-                            </select>
-                        </div>
-                        <div class="setting-group compact">
-                            <label for="sumModelSelect">LLM Model</label>
-                            <select id="sumModelSelect">
-                                <!-- Populated by summarize-handler.js -->
-                            </select>
-                        </div>
-                        <div id="sumWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
-                    </div>
-                    <p id="sumTemplateDesc" class="section-description" style="margin-top: 0.75rem;"></p>
                 </div>
 
                 <!-- Input: Upload or Paste -->
+                <div class="workflow-step-heading">
+                    <span class="workflow-step-number">1</span>
+                    <div>
+                        <h3>Add source notes</h3>
+                        <p>Upload a document or paste the text to summarize.</p>
+                    </div>
+                </div>
                 <div class="sum-input-grid">
                     <div class="sum-input-box">
-                        <h3>Upload Document</h3>
+                        <h3>Upload document</h3>
                         <div class="upload-area sum-upload" id="sumDocUpload">
                             <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -938,14 +968,39 @@
                             </div>
                         </div>
                         <div class="example-file-link">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <a href="tests/test_summary_psychological_interview.txt" download>Voorbeeld intakegesprek (NL)</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_summary_psychological_interview.txt" data-try-target="#sumDocInput">▶ Try example</button>
+                            <button type="button" class="btn btn-small btn-ghost" data-try-example="tests/test_summary_psychological_interview.txt" data-try-target="#sumDocInput">Use example notes</button>
                         </div>
                     </div>
                     <div class="sum-input-box">
-                        <h3>Or Paste Text</h3>
+                        <h3>Paste text</h3>
                         <textarea id="sumInputText" class="sum-textarea" placeholder="Paste clinical notes, session transcripts, or any medical text here..." rows="6"></textarea>
                     </div>
+                </div>
+
+                <div class="workflow-options">
+                    <div class="workflow-step-heading workflow-step-heading-compact">
+                        <span class="workflow-step-number">2</span>
+                        <div>
+                            <h3>Choose the output</h3>
+                            <p>Select a template. The recommended model is chosen automatically.</p>
+                        </div>
+                    </div>
+                    <div class="anon-settings-row">
+                        <div class="setting-group compact">
+                            <label for="sumTemplateSelect">Template</label>
+                            <select id="sumTemplateSelect">
+                                <!-- Populated by summarize-handler.js -->
+                            </select>
+                        </div>
+                        <div class="setting-group compact">
+                            <label for="sumModelSelect">Model</label>
+                            <select id="sumModelSelect">
+                                <!-- Populated by summarize-handler.js -->
+                            </select>
+                        </div>
+                        <div id="sumWebGPUStatus" class="webgpu-status">Checking WebGPU...</div>
+                    </div>
+                    <p id="sumTemplateDesc" class="section-description"></p>
                 </div>
 
                 <!-- Model Loading -->
@@ -963,7 +1018,11 @@
                 </section>
 
                 <!-- Summarize Button -->
-                <section class="actions">
+                <section class="actions workflow-submit">
+                    <div class="workflow-submit-copy">
+                        <span class="workflow-step-number">3</span>
+                        <div><strong>Create summary</strong><small>Review the draft against the source.</small></div>
+                    </div>
                     <button id="summarizeBtn" class="btn btn-summarize" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -971,7 +1030,7 @@
                             <line x1="16" y1="13" x2="8" y2="13"></line>
                             <line x1="16" y1="17" x2="8" y2="17"></line>
                         </svg>
-                        Summarize
+                        Create summary
                     </button>
                 </section>
 
@@ -1035,6 +1094,13 @@
                             <p class="stt-accuracy-foot">Whisper figures: OpenAI Whisper paper, FLEURS read-speech benchmark (clean audio, native speakers). Real dictation — accents, background noise, phone microphones, jargon — scores worse for every model; Medmorf’s own <em>Benchmark</em> tab measures the in-browser models on synthetic clinical clips on your device. Frontier figures from public 2026 vendor benchmarks (Microsoft MAI-Transcribe-1, AssemblyAI Universal-3, NVIDIA Parakeet). <strong>Tips:</strong> use the small model, speak clearly in short sentences, keep the microphone close, choose the correct language, and always proofread numbers, dosages and names.</p>
                         </div>
                     </details>
+                    <div class="workflow-step-heading workflow-step-heading-compact">
+                        <span class="workflow-step-number">1</span>
+                        <div>
+                            <h3>Choose mode and language</h3>
+                            <p>Whisper Small is the recommended default.</p>
+                        </div>
+                    </div>
                     <div class="anon-settings-row">
                         <div class="setting-group compact">
                             <label for="sttModeSelect">Mode</label>
@@ -1098,9 +1164,16 @@
                 <div id="sttTranscribeSection">
 
                 <!-- Recording / Upload -->
+                <div class="workflow-step-heading">
+                    <span class="workflow-step-number">2</span>
+                    <div>
+                        <h3>Add audio</h3>
+                        <p>Record here, or choose an existing audio file.</p>
+                    </div>
+                </div>
                 <div class="stt-input-grid">
                     <div class="stt-input-box">
-                        <h3>Record Audio</h3>
+                        <h3>Record audio</h3>
                         <div class="stt-record-controls">
                             <button id="sttRecordBtn" class="btn btn-record">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1125,7 +1198,7 @@
                         </div>
                     </div>
                     <div class="stt-input-box">
-                        <h3>Or Upload Audio</h3>
+                        <h3>Upload audio</h3>
                         <div class="upload-area stt-upload" id="sttUploadArea">
                             <svg class="upload-icon" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M9 18V5l12-2v13"></path>
@@ -1136,7 +1209,7 @@
                             <p class="file-types">.mp3, .wav, .ogg, .webm, .m4a, .flac</p>
                             <input type="file" id="sttFileInput" accept=".mp3,.wav,.ogg,.webm,.m4a,.flac,.mp4" hidden>
                         </div>
-                        <p class="example-file-link" style="margin-top:0.5rem;"><button type="button" class="btn btn-small btn-primary" data-try-example="tests/fixtures/speech/nl_intake.wav" data-try-target="#sttFileInput" data-try-click="#transcribeBtn">▶ Try example</button> <span class="storage-hint">12 s Dutch clinical dictation (synthetic)</span></p>
+                        <p class="example-file-link" style="margin-top:0.5rem;"><button type="button" class="btn btn-small btn-ghost" data-try-example="tests/fixtures/speech/nl_intake.wav" data-try-target="#sttFileInput" data-try-click="#transcribeBtn">Use example audio</button> <span class="storage-hint">12-second synthetic Dutch dictation</span></p>
                         <div class="file-info" id="sttFileInfo" style="display: none;">
                             <div class="file-details">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
@@ -1172,7 +1245,11 @@
                 </section>
 
                 <!-- Transcribe Button -->
-                <section class="actions">
+                <section class="actions workflow-submit">
+                    <div class="workflow-submit-copy">
+                        <span class="workflow-step-number">3</span>
+                        <div><strong>Transcribe audio</strong><small>A recording transcribes automatically when stopped.</small></div>
+                    </div>
                     <button id="transcribeBtn" class="btn btn-speech" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -1180,7 +1257,7 @@
                             <line x1="12" y1="19" x2="12" y2="23"></line>
                             <line x1="8" y1="23" x2="16" y2="23"></line>
                         </svg>
-                        Transcribe
+                        Transcribe audio
                     </button>
                 </section>
 
@@ -1300,8 +1377,8 @@
                 <!-- Source Directory -->
                 <section class="dicom-section">
                     <h3 class="dicom-section-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                        Source Directory
+                        <span class="workflow-step-number">1</span>
+                        Choose a source folder
                     </h3>
                     <button id="dicomSelectDir" class="btn btn-dicom">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
@@ -1318,11 +1395,11 @@
                     <div class="dicom-settings-header">
                         <h3 class="dicom-section-title">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                            Scan Settings
+                            Scan settings <span class="optional-tag">Optional</span>
                         </h3>
-                        <button id="dicomSettingsToggle" class="btn btn-small btn-ghost">▼</button>
+                        <button id="dicomSettingsToggle" class="btn btn-small btn-ghost" aria-expanded="false" aria-controls="dicomSettingsBody">Show</button>
                     </div>
-                    <div id="dicomSettingsBody" class="dicom-settings-body">
+                    <div id="dicomSettingsBody" class="dicom-settings-body" style="display:none;">
                         <label class="dicom-setting">
                             <input type="checkbox" id="dicomSmartScan" checked>
                             <span><strong>Smart Scan</strong> — sample groups of similarly-sized files instead of parsing each one</span>
@@ -1352,7 +1429,11 @@
                 </section>
 
                 <!-- Scan Action -->
-                <section class="dicom-actions">
+                <section class="dicom-actions workflow-submit">
+                    <div class="workflow-submit-copy">
+                        <span class="workflow-step-number">2</span>
+                        <div><strong>Scan and index</strong><small>Nothing is changed or copied yet.</small></div>
+                    </div>
                     <button id="dicomScanBtn" class="btn btn-dicom btn-large" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                         Scan &amp; Index
@@ -1423,8 +1504,8 @@
                 <!-- Sort Section (Phase 2) -->
                 <section id="dicomSortSection" class="dicom-sort" style="display:none;">
                     <h3 class="dicom-section-title">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
-                        Sort to Organized Structure
+                        <span class="workflow-step-number">3</span>
+                        Organize the files
                     </h3>
                     <p class="dicom-hint">Copies files into a clean hierarchy. Choose how RT objects relate to imaging series.</p>
                     <div class="dicom-hierarchy-select">
@@ -1898,12 +1979,12 @@
         benchBtn?.addEventListener('click', mountBench, { once: true });
         if (benchBtn?.classList.contains('active')) mountBench();
     </script>
-    <script type="module" src="src/app.js?v=2026-05-28-resource-1"></script>
+    <script type="module" src="src/app.js?v=2026-08-30-flow-ui-2"></script>
     <script type="module" src="src/anonymize-handler.js?v=2026-08-30-ios-gate-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-08-30-rep-pen-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-08-30-crash-safe-2"></script>
     <script type="module" src="src/cache-manager.js?v=2026-08-30-qwen35-1"></script>
-    <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script src="src/dicom-handler.js?v=2026-08-30-flow-ui-2"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/pdf-anonymize-handler.js?v=2026-05-21-integrated-1"></script>

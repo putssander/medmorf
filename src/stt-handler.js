@@ -1161,7 +1161,7 @@ async function setupDictaphonePCM(stream) {
         };
         dictaphoneSourceNode.connect(dictaphoneProcessorNode);
     } catch (err) {
-        const proc = dictaphoneAudioCtx.createScriptProcessorNode(4096, 1, 1);
+        const proc = dictaphoneAudioCtx.createScriptProcessor(4096, 1, 1);
         proc.onaudioprocess = (e) => {
             const data = new Float32Array(e.inputBuffer.getChannelData(0));
             dictaphonePcmChunks.push(data);

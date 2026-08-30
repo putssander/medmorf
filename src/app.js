@@ -93,6 +93,7 @@ quickInputText.addEventListener('input', () => {
     // Clear output if input is empty
     if (!quickInputText.value.trim()) {
         quickOutputText.value = '';
+        copyOutputBtn.style.display = 'none';
         quickTranslateStatus.innerHTML = '';
         quickTranslateStatus.className = 'quick-status';
         return;
@@ -164,6 +165,7 @@ async function performQuickTranslate() {
         `;
         const result = await translateText(text, srcLang, tgtLang);
         quickOutputText.value = result;
+        copyOutputBtn.style.display = result ? 'inline-flex' : 'none';
         quickTranslateStatus.innerHTML = '';
         quickTranslateStatus.className = 'quick-status';
     } catch (error) {
@@ -722,6 +724,7 @@ function clearUserData() {
     if (fileInput) fileInput.value = '';
     if (quickInputText) quickInputText.value = '';
     if (quickOutputText) quickOutputText.value = '';
+    if (copyOutputBtn) copyOutputBtn.style.display = 'none';
 }
 
 window.addEventListener('beforeunload', () => { clearUserData(); });
@@ -743,6 +746,7 @@ window.medmorfTranslationData = {
         if (fileInput) fileInput.value = '';
         if (quickInputText) quickInputText.value = '';
         if (quickOutputText) quickOutputText.value = '';
+        if (copyOutputBtn) copyOutputBtn.style.display = 'none';
         if (fileInfo) fileInfo.style.display = 'none';
         if (results) results.style.display = 'none';
         if (downloadBtn) downloadBtn.style.display = 'none';

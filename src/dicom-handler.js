@@ -2309,7 +2309,8 @@
             const body = el.dicomSettingsBody;
             const open = body.style.display !== 'none';
             body.style.display = open ? 'none' : 'block';
-            el.dicomSettingsToggle.textContent = open ? '▶' : '▼';
+            el.dicomSettingsToggle.textContent = open ? 'Show' : 'Hide';
+            el.dicomSettingsToggle.setAttribute('aria-expanded', String(!open));
         });
 
         // Test mode toggle

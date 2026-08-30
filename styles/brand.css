@@ -1629,3 +1629,249 @@ footer > p + p { margin-top: 4px; }
     .offline-model-card { grid-template-columns: 1fr; }
     .offline-model-status { text-align: left; }
 }
+
+/* =============================================================================
+   Task flows
+   Each tool exposes one numbered primary path. Optional workflows and technical
+   controls use quieter disclosures so they do not compete with the main action.
+   ============================================================================= */
+
+.workflow-step-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin: 20px 0 10px;
+}
+
+.workflow-step-heading-compact { margin-top: 14px; }
+
+.workflow-step-heading h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: .9rem;
+    font-weight: 680;
+    line-height: 1.25;
+}
+
+.workflow-step-heading p {
+    margin: 2px 0 0;
+    color: var(--mm-label);
+    font-size: .76rem;
+    line-height: 1.35;
+}
+
+.workflow-step-number,
+.mergepdf-step .step-num {
+    display: inline-flex;
+    flex: 0 0 24px;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, .1);
+    color: var(--mm-blue);
+    font-size: .72rem;
+    font-weight: 750;
+    line-height: 1;
+}
+
+.workflow-disclosure,
+.utility-disclosure,
+.inline-option {
+    overflow: hidden;
+    margin: 14px 0;
+    border: 1px solid var(--mm-hairline);
+    border-radius: 14px;
+    background: var(--mm-surface);
+}
+
+.workflow-disclosure > summary,
+.utility-disclosure > summary,
+.inline-option > summary {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    padding: 10px 40px 10px 14px;
+    list-style: none;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: .82rem;
+    font-weight: 620;
+}
+
+.workflow-disclosure > summary::-webkit-details-marker,
+.utility-disclosure > summary::-webkit-details-marker,
+.inline-option > summary::-webkit-details-marker { display: none; }
+
+.workflow-disclosure > summary::after,
+.utility-disclosure > summary::after,
+.inline-option > summary::after {
+    content: "›";
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    color: #AEAEB2;
+    font-size: 1.25rem;
+    font-weight: 400;
+    line-height: 1;
+    transform: translateY(-50%);
+    transition: transform .18s ease;
+}
+
+.workflow-disclosure[open] > summary::after,
+.utility-disclosure[open] > summary::after,
+.inline-option[open] > summary::after {
+    transform: translateY(-50%) rotate(90deg);
+}
+
+.workflow-disclosure[open] > summary,
+.utility-disclosure[open] > summary,
+.inline-option[open] > summary { border-bottom: 1px solid var(--mm-hairline); }
+
+.workflow-disclosure > summary strong,
+.workflow-disclosure > summary small {
+    display: block;
+}
+
+.workflow-disclosure > summary small {
+    margin-top: 2px;
+    color: var(--mm-label);
+    font-size: .7rem;
+    font-weight: 500;
+}
+
+.workflow-disclosure-body,
+.inline-option-body { padding: 14px; }
+
+.workflow-disclosure-body > :last-child,
+.inline-option-body > :last-child { margin-bottom: 0; }
+
+.method-disclosure .anon-mode-banner { margin-top: 0; }
+
+.utility-disclosure { margin-top: 10px; }
+.utility-disclosure > summary { min-height: 42px; color: var(--mm-label); font-size: .76rem; }
+.utility-disclosure .model-management { margin: 0; padding: 14px; border: 0; }
+
+.inline-option { margin: 0; background: var(--mm-surface-muted); }
+.inline-option > summary { min-height: 44px; font-size: .78rem; }
+.inline-option > summary span { margin-left: 6px; color: var(--mm-label); font-size: .68rem; font-weight: 550; }
+
+.anon-upload-grid { grid-template-columns: 1fr; }
+
+.workflow-options {
+    margin: 14px 0;
+    padding: 14px;
+    border: 1px solid var(--mm-hairline);
+    border-radius: var(--mm-radius-md);
+    background: var(--mm-surface);
+}
+
+.workflow-options .workflow-step-heading { margin-top: 0; }
+.workflow-options .anon-settings-row { align-items: flex-end; }
+.workflow-options .setting-group { flex: 1 1 210px; align-items: stretch; flex-direction: column; }
+.workflow-options .section-description { margin: 10px 0 0 !important; font-size: .76rem; }
+
+#tab-speech .stt-header > .anon-settings-row {
+    align-items: flex-end;
+    padding: 12px;
+    border: 1px solid var(--mm-hairline);
+    border-radius: var(--mm-radius-md);
+    background: var(--mm-surface);
+}
+
+#tab-speech .stt-header > .anon-settings-row .setting-group {
+    flex: 1 1 150px;
+    align-items: stretch;
+    flex-direction: column;
+}
+
+.workflow-submit {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 16px 0 20px;
+    padding: 12px 14px;
+    border: 1px solid var(--mm-hairline);
+    border-radius: var(--mm-radius-md);
+    background: var(--mm-surface);
+}
+
+.workflow-submit-copy {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.workflow-submit-copy div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.workflow-submit-copy strong {
+    color: var(--text-primary);
+    font-size: .84rem;
+    line-height: 1.2;
+}
+
+.workflow-submit-copy small {
+    color: var(--mm-label);
+    font-size: .7rem;
+    line-height: 1.3;
+}
+
+.workflow-submit > .btn {
+    flex: 0 0 auto;
+    min-width: 170px;
+    margin: 0;
+}
+
+.example-file-link .btn {
+    min-height: 0;
+    padding: 4px 0;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--mm-blue) !important;
+    font-size: .74rem;
+    font-weight: 600;
+}
+
+.example-file-link .btn:hover:not(:disabled) {
+    background: transparent !important;
+    color: #1D4ED8 !important;
+    text-decoration: underline;
+}
+
+.btn-anon {
+    border-color: transparent !important;
+    background: var(--mm-blue) !important;
+    color: #FFFFFF !important;
+}
+
+.btn-anon:hover:not(:disabled) { background: #1D4ED8 !important; }
+
+#tab-translate > .workflow-disclosure { margin-top: 22px; }
+#tab-translate .quick-translate-section { margin-bottom: 0; }
+#tab-translate .workflow-disclosure .file-translate-section { margin-top: 0; }
+
+#tab-dicom .dicom-settings { padding: 12px 14px !important; }
+#tab-dicom .dicom-settings-header .dicom-section-title { margin: 0; }
+#tab-dicom .dicom-actions.workflow-submit { padding: 12px 14px; }
+#tab-dicom .dicom-section-title .workflow-step-number { margin-right: 2px; }
+
+@media (max-width: 768px) {
+    .workflow-submit {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px;
+    }
+
+    .workflow-submit > .btn { width: 100%; min-width: 0; }
+    .workflow-disclosure-body,
+    .inline-option-body { padding: 12px; }
+}
