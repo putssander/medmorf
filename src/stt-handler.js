@@ -97,10 +97,12 @@ function getModelConfig() {
         // transient copies during session init pushed an iPhone 17 Pro over
         // WebKit's per-tab memory limit — the page refreshed during model
         // download. q8 encoder (88 MB) + q4 decoder halves the peak.
+        // For whisper-small on iOS, go further: q4 encoder (63 MB vs 88 MB).
+        const small = getSelectedModel?.() === 'onnx-community/whisper-small';
         return {
-            dtype: { encoder_model: 'q8', decoder_model_merged: 'q4' },
+            dtype: { encoder_model: isIos && small ? 'q4' : 'q8', decoder_model_merged: 'q4' },
             device: 'wasm',
-            suffix: 'q8/q4',
+            suffix: isIos && small ? 'q4/q4' : 'q8/q4',
         };
     }
     return {
@@ -434,7 +436,10 @@ async function initSTTModel(externalProgressCb) {
             // during warm-up (crash-stage telemetry, iPhone 17 Pro). Disable the
             // arena and memory-pattern planning there; slightly slower, no spike.
             const sessionOptions = (isIos && !STT_KEEP_ARENA)
-                ? { enableCpuMemArena: false, enableMemPattern: false }
+                // graphOptimizationLevel 'basic': ORT's full optimization pass is
+                // itself memory-hungry at session init — the stage where
+                // whisper-small still died on a real iPhone.
+                ? { enableCpuMemArena: false, enableMemPattern: false, graphOptimizationLevel: 'basic' }
                 : undefined;
             pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
                 ...(sessionOptions ? { session_options: sessionOptions } : {}),
