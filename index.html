@@ -365,7 +365,7 @@
                         </div>
                         <div class="example-file-link">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <a href="test_translation_file.xlsx" download>Download example file</a>
+                            <a href="tests/test_translation_file.xlsx" download>Download example file</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_translation_file.xlsx" data-try-target="#fileInput">▶ Try example</button>
                         </div>
                     </div>
                 </section>
@@ -699,7 +699,7 @@
 
                 <div class="example-file-link">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                    <a href="tests/test_anonymisation_file.txt" download>Example document</a>
+                    <a href="tests/test_anonymisation_file.txt" download>Example document</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_anonymisation_file.txt" data-try-target="#anonDocInput">▶ Try example</button>
                     ·
                     <a href="tests/test_mapping.xlsx" download>Example mapping (.xlsx)</a>
                 </div>
@@ -931,7 +931,7 @@
                         </div>
                         <div class="example-file-link">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <a href="tests/test_summary_psychological_interview.txt" download>Voorbeeld intakegesprek (NL)</a>
+                            <a href="tests/test_summary_psychological_interview.txt" download>Voorbeeld intakegesprek (NL)</a> <button type="button" class="btn btn-small btn-primary" data-try-example="tests/test_summary_psychological_interview.txt" data-try-target="#sumDocInput">▶ Try example</button>
                         </div>
                     </div>
                     <div class="sum-input-box">
@@ -1123,6 +1123,7 @@
                             <p class="file-types">.mp3, .wav, .ogg, .webm, .m4a, .flac</p>
                             <input type="file" id="sttFileInput" accept=".mp3,.wav,.ogg,.webm,.m4a,.flac,.mp4" hidden>
                         </div>
+                        <p class="example-file-link" style="margin-top:0.5rem;"><button type="button" class="btn btn-small btn-primary" data-try-example="tests/fixtures/speech/nl_intake.wav" data-try-target="#sttFileInput" data-try-click="#transcribeBtn">▶ Try example</button> <span class="storage-hint">12 s Dutch clinical dictation (synthetic)</span></p>
                         <div class="file-info" id="sttFileInfo" style="display: none;">
                             <div class="file-details">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>
@@ -1863,6 +1864,7 @@
 
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="src/try-example.js?v=2026-08-30-try-example-1"></script>
     <script type="module" src="src/memory-monitor.js?v=2026-08-30-memory-bar-3"></script>
     <script type="module">
         // Benchmark tab: load the harness only when the tab is first opened.

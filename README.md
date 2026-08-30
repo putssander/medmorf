@@ -82,6 +82,8 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 - Large models need significant memory. The app shows pre-flight warnings and runtime resource estimates before heavy model loads.
 - A live memory bar sits at the top of every page (`src/memory-monitor.js`). It combines the live JS heap (Chromium only) with the weights of currently loaded models and compares them to a conservative per-tab guardrail. Click it for your detected environment (browser, RAM bucket, heap limit, WebGPU) and per-browser guidance. Safari and Firefox do not expose live memory, so the bar is an estimate there (shown with ≈).
 
+Each model tab has a **▶ Try example** button (`src/try-example.js`) that feeds the bundled synthetic sample straight into the normal upload pipeline — no download-and-reupload needed.
+
 ## Supported Inputs and Outputs
 
 | Workflow | Inputs | Outputs |
@@ -205,6 +207,7 @@ medmorf/
 |   |-- stt-store.js
 |   |-- summarize-handler.js
 |   |-- translation-runtime.js
+|   |-- try-example.js
 |   |-- word-handler.js
 |   `-- stubs/
 |       |-- empty-module.js
