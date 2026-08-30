@@ -194,18 +194,6 @@ let hasWebGPU = false;
         // WebGPU is still required — probe it like everywhere else.
         if (navigator.gpu) hasWebGPU = true;
         populateModelSelect();
-        // Restrict the selector to models that fit an iOS tab.
-        if (sumModelSelect) {
-            let fallback = null;
-            for (const opt of Array.from(sumModelSelect.options)) {
-                const fits = (LLM_MODEL_OPTIONS[opt.value]?.sizeMB || 0) <= IOS_MAX_LLM_MB;
-                opt.disabled = !fits;
-                if (fits && !fallback) fallback = opt.value;
-            }
-            if (fallback && (LLM_MODEL_OPTIONS[sumModelSelect.value]?.sizeMB || 0) > IOS_MAX_LLM_MB) {
-                sumModelSelect.value = fallback;
-            }
-        }
         return;
     }
     if (navigator.gpu) {
@@ -256,12 +244,15 @@ function updateTemplateDescription() {
 function populateModelSelect() {
     if (!sumModelSelect) return;
     sumModelSelect.innerHTML = '';
-    const candidates = Object.entries(LLM_MODEL_OPTIONS).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
-    const recommended = recommendDefault(candidates) || DEFAULT_MODEL;
+    const ios = isIosDevice();
+    const fits = (o) => !ios || (o.sizeMB || 0) <= IOS_MAX_LLM_MB;
+    const candidates = Object.entries(LLM_MODEL_OPTIONS).filter(([, o]) => fits(o)).map(([id, o]) => ({ id, sizeMB: o.sizeMB }));
+    const recommended = recommendDefault(candidates) || (candidates[0]?.id ?? DEFAULT_MODEL);
     for (const [id, opt] of Object.entries(LLM_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
-        el.textContent = `${opt.label} (${opt.size})`;
+        el.textContent = `${opt.label} (${opt.size})${fits(opt) ? '' : ' — desktop only'}`;
+        el.disabled = !fits(opt);
         if (id === recommended) el.selected = true;
         sumModelSelect.appendChild(el);
     }
