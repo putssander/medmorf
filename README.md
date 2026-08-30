@@ -73,7 +73,7 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 
 ## Browser Notes
 
-- On iPhone/iPad, Summarize offers only the smallest model (Qwen3.5 0.8B); the 2B/4B models are disabled there — the 2B crashed an iPhone 17 Pro, while ~1.4–1.6 GB models are known to run on modern iPhones. Anonymize's LLM pipeline (2B minimum) stays blocked on iOS and falls back to NER-only; Speech and Translate work on iOS.
+- On iPhone/iPad, Summarize offers only Qwen3 0.6B (~1.4 GB) — the largest model empirically known to run on a real iPhone; Qwen3.5 0.8B (~1.63 GB) and up crashed an iPhone 17 Pro during load and are disabled there. Anonymize's LLM pipeline (2B minimum) stays blocked on iOS and falls back to NER-only; Speech and Translate work on iOS.
 
 - Chrome and Edge are the best-supported browsers for WebGPU model workflows.
 - Safari 18+ can support WebGPU on compatible devices, but browser memory reporting is more limited.
@@ -130,7 +130,7 @@ Main browser dependencies:
 | Translation | `Xenova/nllb-200-distilled-600M`, quantized, loaded through Transformers.js v2 |
 | Anonymize LLM | `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC`. Qwen3 was dropped after benchmarking (same memory class, far lower PII recall); 0.8B is excluded here because it returns an empty list with the extraction prompt. All ≤4B by design — larger models exceed browser per-tab memory. |
 | NER | `openai/privacy-filter` preferred default when feasible, `onnx-community/multilang-pii-ner-ONNX` CPU fallback, `knowledgator/gliner-pii-edge-v1.0`, `Xenova/bert-base-multilingual-cased-ner-hrl` |
-| Summarize | `Qwen3.5-0.8B-q4f16_1-MLC`, `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC` |
+| Summarize | `Qwen3-0.6B-q4f16_1-MLC` (iPhone-only tier), `Qwen3.5-0.8B-q4f16_1-MLC`, `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC` |
 | Speech | `onnx-community/whisper-tiny`, `onnx-community/whisper-base`, `onnx-community/whisper-small`. Whisper small is the default on every device — benchmark (iOS Simulator, WASM): tiny Dutch WER 64%, base 42%, small 23%. The browser's built-in dictation (Web Speech API) is deliberately not used: it gives no on-device guarantee. |
 
 Recordings are **crash-safe**: PCM is persisted to IndexedDB every ~5 s while recording, transcription runs in 2-minute checkpointed segments, and after a browser kill (e.g. iOS memory pressure) the Speech tab offers the saved audio for download, resume-from-last-segment, or discard (`src/stt-store.js`; wiped on success, on discard, and by Storage → Delete all). Speech-to-text is strictly two-phase: record (raw 16 kHz PCM captured from the microphone graph; MediaRecorder only produces the downloadable file) → transcribe (one Whisper inference, starts automatically on Stop, with per-chunk progress/ETA and a timeout scaled to clip length). Live as-you-speak transcription was removed because in-browser Whisper is slower than real time on phones. Long recordings are supported; `tests/fixtures/speech-long/nl_conversation_15min.mp3` (15.3 min synthetic Dutch conversation) is the regression fixture — see "Long recordings" below.

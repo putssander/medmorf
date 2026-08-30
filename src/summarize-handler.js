@@ -108,6 +108,12 @@ const SUMMARIZE_TEMPLATES = {
 const DEFAULT_MODEL = 'Qwen3.5-2B-q4f16_1-MLC';
 
 const LLM_MODEL_OPTIONS = {
+    'Qwen3-0.6B-q4f16_1-MLC': {
+        label: 'Qwen3 0.6B',
+        size: '~1.4 GB',
+        sizeMB: 1400,
+        note: 'Smallest available; the only model that runs on iPhone/iPad. Basic quality. Requires WebGPU.',
+    },
     'Qwen3.5-0.8B-q4f16_1-MLC': {
         label: 'Qwen3.5 0.8B',
         size: '~1.6 GB',
@@ -173,8 +179,8 @@ function isIosDevice() {
     const ua = navigator.userAgent || '';
     return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
-const IOS_MAX_LLM_MB = 1700;   // Qwen3-0.6B (~1.4 GB) ran fine on modern iPhones; the 2B (~2.2 GB) crashed an iPhone 17 Pro. Allow only the smallest model.
-const IOS_LLM_BLOCK_MSG = 'On iPhone/iPad only the smallest model (Qwen3.5 0.8B) is offered — larger models exceed what iOS gives a browser tab and would crash the page. Works best on recent iPhones; use a desktop browser for the larger, more accurate models.';
+const IOS_MAX_LLM_MB = 1450;   // Qwen3-0.6B (~1.4 GB) is the largest model known to run on a real iPhone; Qwen3.5-0.8B (~1.63 GB) crashed an iPhone 17 Pro during load.
+const IOS_LLM_BLOCK_MSG = 'On iPhone/iPad only Qwen3 0.6B (~1.4 GB) is offered — every larger model has crashed the page on a real iPhone. Summaries from the 0.6B model are basic; use a desktop browser for the better models.';
 
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
 let hasWebGPU = false;
