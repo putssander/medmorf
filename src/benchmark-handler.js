@@ -274,14 +274,15 @@ function summarizeSpecs() {
         load: llmLoad(m.id),
         infer: async (engine, doc) => {
             const lang = doc.language;
+            const pen = { frequency_penalty: 0.7, presence_penalty: 0.3 }; // mirrors summarize-handler llmChat
             const facts = await chat(engine, [
                 { role: 'system', content: `You are a clinical document analyst. Extract all clinically relevant facts from this document fragment. You MUST write in ${lang}.\n\nOutput a concise bullet-point list of key facts, observations, and details. Include: symptoms, diagnoses, timeline, medications, history, relationships, risk factors, coping strategies — anything clinically relevant.\n\nDo NOT output reasoning or thinking. Go straight to the bullet points.` },
                 { role: 'user', content: `Extract key clinical facts from this text (part 1 of 1):\n\n${doc.text}` },
-            ], { max_tokens: 1500, temperature: 0.1 });
+            ], { max_tokens: 1500, temperature: 0.1, ...pen });
             const summary = await chat(engine, [
                 { role: 'system', content: `You are a clinical document summarization expert. Synthesize the extracted facts into a clear, comprehensive summary. You MUST write the entire report in ${lang}. All text, headings, and bullet points must be in ${lang}. Do NOT output reasoning or thinking.` },
                 { role: 'user', content: `Synthesize these extracted facts into a coherent summary:\n\n${facts}` },
-            ], { max_tokens: 1500, temperature: 0.1 });
+            ], { max_tokens: 1500, temperature: 0.1, ...pen });
             const score = scoreFacts(summary, doc.facts, doc.forbidden);
             return { output: `--- FACTS ---\n${facts}\n\n--- SUMMARY ---\n${summary}`, score };
         },

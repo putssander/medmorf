@@ -406,6 +406,11 @@ async function llmChat(messages, options = {}) {
         // Qwen3 / Qwen3.5 hybrid-thinking: skip the <think> block. Prompts already
         // forbid reasoning; without this, Qwen3.5 spends the whole token budget thinking.
         extra_body: { enable_thinking: false },
+        // Small quantized models (0.6B/0.8B) degenerate into repetition loops at
+        // near-greedy decoding ("midden in de nacht leeg of geïrriteerd, …" ad
+        // infinitum, seen on iPhone). Penalise repeats; harmless for larger models.
+        frequency_penalty: options.frequency_penalty ?? 0.7,
+        presence_penalty: options.presence_penalty ?? 0.3,
         temperature: options.temperature ?? 0.3,
     });
     return reply.choices[0].message.content || '';

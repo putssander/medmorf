@@ -103,7 +103,7 @@ Medmorf is intentionally a static vanilla-JS app:
 - `index.html`, `manifest.webmanifest`, and `sw.js` stay at the repo root for PWA scope.
 - Client-side JavaScript lives in a flat `src/` directory and uses sibling-relative module imports.
 - CSS is split between `styles/styles.css` for older component styles and `styles/brand.css` for brand tokens/overrides.
-- `sw.js` uses `CACHE_NAME = 'medmorf-app-v29'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
+- `sw.js` uses `CACHE_NAME = 'medmorf-app-v54'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
 
 Main browser dependencies:
 
@@ -234,6 +234,8 @@ medmorf/
 ## Brand
 
 The brand guide lives at [docs/brand/medmorf-brand-guide.md](docs/brand/medmorf-brand-guide.md), with an HTML preview at [docs/brand/medmorf-brand-guide.html](docs/brand/medmorf-brand-guide.html). App icons and logos live in `assets/brand/` and are referenced by `index.html`, `manifest.webmanifest`, and the service worker app shell.
+
+The app interface uses a narrow, iOS-inspired grouped layout with restrained surfaces, touch-sized controls, and horizontally scrollable tool navigation on small screens. Accuracy, hardware, and operational guidance remains available in expandable disclosures so the primary workflow stays concise without weakening privacy or healthcare-safety information.
 
 ## Accuracy and WER
 
