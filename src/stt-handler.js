@@ -4,6 +4,7 @@
 
 import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
+import { startSession, updateSession, appendChunk, findRecoverable, loadPCM, getSession, deleteSession, deleteAllSessions, pcmToWavBlob } from './stt-store.js?v=2026-08-30-crash-safe-1';
 
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] stt-handler.js build', BUILD_ID, 'module url', import.meta.url);
@@ -49,10 +50,14 @@ function getModelConfig() {
         return { dtype: 'fp16', device: 'webgpu', suffix: 'GPU' };
     }
     if (isMobile) {
+        // q8 encoder, NOT fp32: whisper-small's fp32 encoder is 337 MB and the
+        // transient copies during session init pushed an iPhone 17 Pro over
+        // WebKit's per-tab memory limit — the page refreshed during model
+        // download. q8 encoder (88 MB) + q4 decoder halves the peak.
         return {
-            dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' },
+            dtype: { encoder_model: 'q8', decoder_model_merged: 'q4' },
             device: 'wasm',
-            suffix: 'q4',
+            suffix: 'q8/q4',
         };
     }
     return {
@@ -67,7 +72,7 @@ const STT_MODEL_OPTIONS = {
         id: 'onnx-community/whisper-tiny',
         label: 'Whisper Tiny',
         sizeWasm: '~150 MB',
-        sizeMobile: '~40 MB',
+        sizeMobile: '~45 MB',
         sizeGpu: '~150 MB',
         sizeMB: 150,
         description: 'Fastest, lowest resource usage. WER (FLEURS): Dutch 49%, English 12% — not usable for Dutch.',
@@ -77,7 +82,7 @@ const STT_MODEL_OPTIONS = {
         id: 'onnx-community/whisper-base',
         label: 'Whisper Base',
         sizeWasm: '~300 MB',
-        sizeMobile: '~80 MB',
+        sizeMobile: '~105 MB',
         sizeGpu: '~290 MB',
         sizeMB: 300,
         description: 'Middle ground. WER (FLEURS): Dutch 33%, English 9%.',
@@ -87,7 +92,7 @@ const STT_MODEL_OPTIONS = {
         id: 'onnx-community/whisper-small',
         label: 'Whisper Small',
         sizeWasm: '~500 MB',
-        sizeMobile: '~170 MB',
+        sizeMobile: '~310 MB',
         sizeGpu: '~460 MB',
         sizeMB: 500,
         description: 'Best accuracy that fits a browser tab. WER (FLEURS): Dutch 16%, English 6%. Runs on iPhone (q4, ~170 MB) but slower than real time there. See “Accuracy: what to expect” above.',
@@ -123,6 +128,17 @@ let pcmChunks = [];
 let pcmSampleCount = 0;
 let recordedPCM = null;       // Float32Array @ 16 kHz from the last recording
 let whisperStreamerCtor = null; // WhisperTextStreamer class, for per-chunk progress
+// Crash-safety (see stt-store.js): every recording is persisted to IndexedDB
+// while it happens, and transcription progress is checkpointed per segment,
+// so a browser kill (iOS memory pressure) never loses audio or finished text.
+let recSessionId = null;        // active recovery-session id
+let recFlushBuf = [];           // PCM chunks waiting to be flushed to IndexedDB
+let recFlushLen = 0;
+let recFlushSeq = 0;
+let recFlushTimer = null;
+const REC_FLUSH_SECONDS = 5;    // persist at least every ~5 s of audio
+const SEGMENT_SECONDS = 120;    // outer transcription segments (checkpointed)
+const SEGMENT_OVERLAP_SECONDS = 2;
 let loadedModelSizeMB = 0;
 let recAudioCtx = null;
 let recSourceNode = null;
@@ -425,6 +441,74 @@ async function disposeSTTModel() {
     unregisterLoadedModel('stt');
 }
 
+// ── Crash-safe recording persistence ──────────────────────────────────────────
+function queueRecoveryFlush(chunk) {
+    if (!recSessionId) return;
+    recFlushBuf.push(chunk);
+    recFlushLen += chunk.length;
+    if (recFlushLen >= recSampleRate * REC_FLUSH_SECONDS && !recFlushTimer) {
+        recFlushTimer = setTimeout(flushRecovery, 0);
+    }
+}
+async function flushRecovery() {
+    recFlushTimer = null;
+    if (!recSessionId || recFlushBuf.length === 0) return;
+    const parts = recFlushBuf; recFlushBuf = []; recFlushLen = 0;
+    let merged = new Float32Array(parts.reduce((a, c) => a + c.length, 0));
+    let pos = 0; for (const c of parts) { merged.set(c, pos); pos += c.length; }
+    if (recSampleRate !== 16000) merged = resampleTo16k(merged, recSampleRate);
+    try { await appendChunk(recSessionId, recFlushSeq++, merged); }
+    catch (err) { console.warn('[STT] recovery flush failed:', err.message); }
+}
+
+const sttRecoveryBanner = document.getElementById('sttRecoveryBanner');
+async function checkRecovery() {
+    if (!sttRecoveryBanner) return;
+    let sess = null;
+    try { sess = await findRecoverable(); } catch { return; }
+    if (!sess) return;
+    const secs = Math.round((sess.samples || 0) / 16000);
+    const when = new Date(sess.startedAt).toLocaleString();
+    const partial = sess.transcript ? ` ${Math.round((sess.doneSamples || 0) / (sess.samples || 1) * 100)}% was already transcribed and is kept.` : '';
+    sttRecoveryBanner.style.display = 'block';
+    sttRecoveryBanner.innerHTML = `
+        <strong>Recovered recording</strong> — ${formatSeconds(secs)} from ${when}. The browser closed before transcription finished; the audio was saved safely on this device.${partial}
+        <span class="stt-recovery-actions">
+            <button class="btn btn-small btn-primary" data-rec="resume">Transcribe</button>
+            <button class="btn btn-small btn-ghost" data-rec="download">Download WAV</button>
+            <button class="btn btn-small btn-ghost" data-rec="discard">Discard</button>
+        </span>`;
+    sttRecoveryBanner.onclick = async (ev) => {
+        const act = ev.target.closest('[data-rec]')?.dataset.rec;
+        if (!act) return;
+        try {
+            if (act === 'download') {
+                const pcm = await loadPCM(sess.id);
+                saveAs(pcmToWavBlob(pcm), `medmorf-recovered-${sess.id}.wav`);
+                return; // keep the banner; user may still transcribe or discard
+            }
+            if (act === 'discard') {
+                await deleteSession(sess.id);
+                sttRecoveryBanner.style.display = 'none';
+                return;
+            }
+            if (act === 'resume') {
+                sttRecoveryBanner.style.display = 'none';
+                recordedPCM = await loadPCM(sess.id);
+                recordedBlob = null;
+                recSessionId = sess.id; // reuse the session for checkpointing
+                if (sttFileInfo) { sttFileInfo.style.display = 'block'; if (sttFileName) sttFileName.textContent = `Recovered audio (${formatSeconds(recordedPCM.length / 16000)})`; }
+                if (transcribeBtn) transcribeBtn.disabled = false;
+                await performTranscription();
+            }
+        } catch (err) {
+            console.error('[STT] recovery action failed:', err);
+            alert('Recovery failed: ' + err.message);
+        }
+    };
+}
+checkRecovery();
+
 // ── Recording PCM Capture ─────────────────────────────────────────────────────
 async function setupPCMCapture(stream) {
     let ctx;
@@ -454,6 +538,7 @@ async function setupPCMCapture(stream) {
         recProcessorNode.port.onmessage = (e) => {
             pcmChunks.push(e.data);
             pcmSampleCount += e.data.length;
+            queueRecoveryFlush(e.data);
         };
         recSourceNode.connect(recProcessorNode);
         console.log('[STT] PCM capture via AudioWorklet at', recSampleRate, 'Hz');
@@ -464,6 +549,7 @@ async function setupPCMCapture(stream) {
             const data = new Float32Array(e.inputBuffer.getChannelData(0));
             pcmChunks.push(data);
             pcmSampleCount += data.length;
+            queueRecoveryFlush(data);
         };
         recSourceNode.connect(proc);
         const silentGain = recAudioCtx.createGain();
@@ -605,6 +691,9 @@ async function startRecording() {
         transcriptionResult = null;
         pcmChunks = [];
         pcmSampleCount = 0;
+        recSessionId = 'rec-' + Date.now();
+        recFlushBuf = []; recFlushLen = 0; recFlushSeq = 0;
+        try { await startSession(recSessionId); } catch (err) { console.warn('[STT] recovery store unavailable:', err.message); recSessionId = null; }
 
         // Raw PCM capture — this is what gets transcribed.
         await setupPCMCapture(stream);
@@ -666,6 +755,8 @@ async function stopRecording() {
     let pcm = collectAllPCM();
     if (recSampleRate !== 16000) pcm = resampleTo16k(pcm, recSampleRate);
     recordedPCM = pcm;
+    await flushRecovery();
+    if (recSessionId) { try { await updateSession(recSessionId, { state: 'recorded' }); } catch (_) {} }
     pcmChunks = [];
     pcmSampleCount = 0;
     await cleanupPCMCapture();
@@ -772,47 +863,85 @@ async function performTranscription() {
 
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
 
-        // Hard timeout so a hung inference can't freeze the UI forever, scaled
-        // to the clip: phones run whisper-small at roughly real time on WASM,
-        // so allow 4× the clip length with a 10-minute floor.
-        const FILE_INFER_TIMEOUT_MS = Math.max(10 * 60 * 1000, clipSeconds * 4 * 1000);
+        // Segmented, checkpointed inference: the clip is processed in
+        // SEGMENT_SECONDS pieces, each finished segment's text is persisted to
+        // IndexedDB, and only one segment's working memory is alive at a time.
+        // If the browser is killed mid-way (iOS memory pressure), the next
+        // visit offers the saved audio + the already-finished text.
         const chunkLen = isMobile ? 15 : 30;
         const stride = isMobile ? 3 : 5;
-        const tStart = performance.now();
-        const streamer = makeProgressStreamer(clipSeconds, chunkLen, stride, (k, n, text) => {
-            const pct = 50 + Math.round((Math.min(k, n) / n) * 50);
-            const elapsed = (performance.now() - tStart) / 1000;
-            const eta = k > 1 ? Math.max(0, Math.round((elapsed / (k - 1)) * (n - k + 1))) : null;
-            if (sttProgressBar) sttProgressBar.style.width = pct + '%';
-            if (sttProgressText) sttProgressText.textContent = `Transcribing… part ${Math.min(k, n)} of ${n}${eta != null ? ` · about ${formatSeconds(eta)} left` : ''}`;
-            if (text && sttOutputText) { sttOutputText.textContent = text; if (sttResults) sttResults.style.display = 'block'; }
-        });
+        const segLen = SEGMENT_SECONDS * 16000;
+        const overlap = SEGMENT_OVERLAP_SECONDS * 16000;
+        const totalSegs = Math.max(1, Math.ceil(audioData.length / segLen));
+
+        // Resume support: skip segments already done in a recovered session.
+        let doneSamples = 0;
+        let pieces = [];
+        if (recSessionId) {
+            try {
+                const sess = await getSession(recSessionId);
+                if (sess?.transcript && sess.doneSamples > 0 && sess.doneSamples < audioData.length) {
+                    doneSamples = sess.doneSamples;
+                    pieces = [sess.transcript];
+                }
+                await updateSession(recSessionId, { state: 'transcribing' });
+            } catch (_) { /* recovery store unavailable */ }
+        }
+
         setEvictionGuard(true);
-        const inferPromise = pipeline(audioData, {
-            language,
-            task: 'transcribe',
-            chunk_length_s: chunkLen,
-            stride_length_s: stride,
-            return_timestamps: true,
-            ...(streamer ? { streamer } : {}),
-        });
-        let timeoutId;
-        const timeoutPromise = new Promise((_, rej) => {
-            timeoutId = setTimeout(() => rej(new Error(`inference timeout after ${formatSeconds(FILE_INFER_TIMEOUT_MS / 1000)} — try a shorter clip or a smaller model`)), FILE_INFER_TIMEOUT_MS);
-        });
-        let result;
+        const tStart = performance.now();
         try {
-            result = await Promise.race([inferPromise, timeoutPromise]);
+            for (let seg = Math.floor(doneSamples / segLen); seg < totalSegs; seg++) {
+                const from = seg * segLen === 0 ? 0 : seg * segLen - overlap;
+                const to = Math.min(audioData.length, (seg + 1) * segLen);
+                const segAudio = audioData.subarray(from, to);
+                const segSeconds = segAudio.length / 16000;
+                const segTimeout = Math.max(5 * 60 * 1000, segSeconds * 6 * 1000);
+                const streamer = makeProgressStreamer(segSeconds, chunkLen, stride, (k, n, text) => {
+                    const fracSeg = Math.min(k, n) / n;
+                    const frac = (seg + fracSeg) / totalSegs;
+                    const elapsed = (performance.now() - tStart) / 1000;
+                    const doneFrac = (seg - Math.floor(doneSamples / segLen)) + fracSeg;
+                    const eta = doneFrac > 0.2 ? Math.max(0, Math.round(elapsed / doneFrac * (totalSegs - Math.floor(doneSamples / segLen) - doneFrac))) : null;
+                    if (sttProgressBar) sttProgressBar.style.width = (50 + frac * 50).toFixed(0) + '%';
+                    if (sttProgressText) sttProgressText.textContent = `Transcribing… ${Math.round(frac * 100)}%${totalSegs > 1 ? ` (segment ${seg + 1}/${totalSegs})` : ''}${eta != null ? ` · about ${formatSeconds(eta)} left` : ''}`;
+                    if (text && sttOutputText) { sttOutputText.textContent = [...pieces, text].join('\n'); if (sttResults) sttResults.style.display = 'block'; }
+                });
+                let timeoutId;
+                const timeoutPromise = new Promise((_, rej) => {
+                    timeoutId = setTimeout(() => rej(new Error(`inference timeout after ${formatSeconds(segTimeout / 1000)} in segment ${seg + 1}/${totalSegs} — the finished part is saved; reload to resume`)), segTimeout);
+                });
+                let result;
+                try {
+                    result = await Promise.race([pipeline(segAudio, {
+                        language,
+                        task: 'transcribe',
+                        chunk_length_s: chunkLen,
+                        stride_length_s: stride,
+                        return_timestamps: true,
+                        ...(streamer ? { streamer } : {}),
+                    }), timeoutPromise]);
+                } finally {
+                    if (timeoutId) clearTimeout(timeoutId);
+                }
+                pieces.push(formatTimestampedResult(result, from / 16000));
+                if (recSessionId) {
+                    try { await updateSession(recSessionId, { transcript: pieces.join('\n'), doneSamples: to }); } catch (_) {}
+                }
+                if (sttOutputText) { sttOutputText.textContent = pieces.join('\n'); if (sttResults) sttResults.style.display = 'block'; }
+                await new Promise(r => setTimeout(r, 50)); // let GC/UI breathe between segments
+            }
         } finally {
-            if (timeoutId) clearTimeout(timeoutId);
             setEvictionGuard(false);
         }
 
         if (sttProgressBar) sttProgressBar.style.width = '100%';
         if (sttProgressText) sttProgressText.textContent = 'Transcription complete ✓';
 
-        transcriptionResult = formatTimestampedResult(result);
+        transcriptionResult = pieces.join('\n');
         renderSTTResults(transcriptionResult);
+        // Success: the recording no longer needs crash protection.
+        if (recSessionId) { try { await deleteSession(recSessionId); } catch (_) {} recSessionId = null; }
     } catch (error) {
         console.error('Transcription error:', error);
         if (sttProgressText) sttProgressText.textContent = 'Error: ' + error.message;

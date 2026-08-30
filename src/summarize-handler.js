@@ -166,10 +166,25 @@ function updateStatus(state, message) {
     if (systemStatusText) systemStatusText.textContent = message;
 }
 
+// iPhone/iPad: WebKit kills a tab around ~1.5 GB while the smallest WebLLM
+// model needs ~1.6 GB VRAM — loading is a guaranteed crash (confirmed on an
+// iPhone 17 Pro). Block with an explanation instead of crashing.
+function isIosDevice() {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+const IOS_LLM_BLOCK_MSG = 'Language-model features are not available on iPhone/iPad: the smallest model needs ~1.6 GB of memory while iOS limits a browser tab to about 1.5 GB, so loading would crash the page. Use a desktop browser (Chrome/Edge recommended) for this feature.';
+
 // ── WebGPU Detection ───────────────────────────────────────────────────────────
 let hasWebGPU = false;
 (async function checkWebGPU() {
     if (!sumWebGPUStatus) return;
+    if (isIosDevice()) {
+        sumWebGPUStatus.innerHTML = '⚠ ' + IOS_LLM_BLOCK_MSG;
+        sumWebGPUStatus.className = 'webgpu-status fallback';
+        if (summarizeBtn) { summarizeBtn.disabled = true; summarizeBtn.title = IOS_LLM_BLOCK_MSG; }
+        return;
+    }
     if (navigator.gpu) {
         try {
             const adapter = await navigator.gpu.requestAdapter();
@@ -251,7 +266,12 @@ function formatLoadError(error) {
     return String(error);
 }
 
+
 async function initSumModel() {
+    if (isIosDevice()) {
+        if (sumModelStatusText) sumModelStatusText.textContent = IOS_LLM_BLOCK_MSG;
+        throw new Error(IOS_LLM_BLOCK_MSG);
+    }
     const selectedModel = getSelectedModel();
     if (engine && loadedModelId === selectedModel) return;
     if (isModelLoading) return;

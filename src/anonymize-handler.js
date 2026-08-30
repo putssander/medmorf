@@ -555,7 +555,20 @@ async function createWebLLMEngineWithRecovery(CreateMLCEngine, selectedModel, mo
     }
 }
 
+
+// iPhone/iPad: WebKit kills a tab around ~1.5 GB while the smallest WebLLM
+// model needs ~1.6 GB VRAM — loading is a guaranteed crash (confirmed on an
+// iPhone 17 Pro). Block with an explanation instead of crashing.
+function isIosDevice() {
+    const ua = navigator.userAgent || '';
+    return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+const IOS_LLM_BLOCK_MSG = 'Language-model features are not available on iPhone/iPad: the smallest model needs ~1.6 GB of memory while iOS limits a browser tab to about 1.5 GB, so loading would crash the page. On this device use the NER-only pipeline (works on CPU); for LLM-grade anonymization use a desktop browser.';
+
 async function initAnonModel() {
+    if (isIosDevice()) {
+        throw new Error(IOS_LLM_BLOCK_MSG);
+    }
     const selectedModel = getSelectedModel();
     if (engine && loadedModelId === selectedModel) return;
     if (isAnonModelLoading) return;

@@ -73,6 +73,8 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 
 ## Browser Notes
 
+- LLM features (Summarize, Anonymize's LLM pipeline) are blocked on iPhone/iPad with an explanatory message: the smallest WebLLM model needs ~1.6 GB while WebKit kills a tab around 1.5 GB, so loading is a guaranteed crash. Anonymize falls back to NER-only there; Speech and Translate work on iOS.
+
 - Chrome and Edge are the best-supported browsers for WebGPU model workflows.
 - Safari 18+ can support WebGPU on compatible devices, but browser memory reporting is more limited.
 - Firefox can run many WASM paths, but WebGPU-dependent LLM features may not be available.
@@ -129,7 +131,7 @@ Main browser dependencies:
 | Summarize | `Qwen3.5-0.8B-q4f16_1-MLC`, `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC` |
 | Speech | `onnx-community/whisper-tiny`, `onnx-community/whisper-base`, `onnx-community/whisper-small`. Whisper small is the default on every device — benchmark (iOS Simulator, WASM): tiny Dutch WER 64%, base 42%, small 23%. The browser's built-in dictation (Web Speech API) is deliberately not used: it gives no on-device guarantee. |
 
-Speech-to-text is strictly two-phase: record (raw 16 kHz PCM captured from the microphone graph; MediaRecorder only produces the downloadable file) → transcribe (one Whisper inference, starts automatically on Stop, with per-chunk progress/ETA and a timeout scaled to clip length). Live as-you-speak transcription was removed because in-browser Whisper is slower than real time on phones. Long recordings are supported; `tests/fixtures/speech-long/nl_conversation_15min.wav` (15.3 min synthetic Dutch conversation) is the regression fixture — see "Long recordings" below.
+Recordings are **crash-safe**: PCM is persisted to IndexedDB every ~5 s while recording, transcription runs in 2-minute checkpointed segments, and after a browser kill (e.g. iOS memory pressure) the Speech tab offers the saved audio for download, resume-from-last-segment, or discard (`src/stt-store.js`; wiped on success, on discard, and by Storage → Delete all). Speech-to-text is strictly two-phase: record (raw 16 kHz PCM captured from the microphone graph; MediaRecorder only produces the downloadable file) → transcribe (one Whisper inference, starts automatically on Stop, with per-chunk progress/ETA and a timeout scaled to clip length). Live as-you-speak transcription was removed because in-browser Whisper is slower than real time on phones. Long recordings are supported; `tests/fixtures/speech-long/nl_conversation_15min.wav` (15.3 min synthetic Dutch conversation) is the regression fixture — see "Long recordings" below.
 
 The translation runtime deliberately uses Transformers.js v2 because the NLLB 600M model is more memory efficient there. NER/STT use the newer Hugging Face Transformers.js runtime through the import map. GLiNER imports are patched through the import map so `gliner@0.0.19` uses the compatible tokenizer/runtime path for the ModernBERT PII model.
 
@@ -198,6 +200,7 @@ medmorf/
 |   |-- privacy-runtime.js
 |   |-- security.js
 |   |-- stt-handler.js
+|   |-- stt-store.js
 |   |-- summarize-handler.js
 |   |-- translation-runtime.js
 |   |-- word-handler.js
@@ -265,6 +268,8 @@ Measured 2026-08-30 with `tests/fixtures/speech-long/nl_conversation_15min.wav` 
 Guidance built into the Speech tab: for long sessions on a phone use **Dictaphone** mode (each entry is transcribed while you talk the next one, so nothing waits at the end); for a single long recording keep the tab in the foreground until it finishes. Before the ORT proxy worker was enabled, the same transcription froze the page on iOS — that was the "hang".
 
 ## Cross-origin isolation (multithreaded WASM)
+
+**medmorf.com note:** the site is hosted on GitHub Pages, which cannot send custom headers. Options: (a) add the [`coi-serviceworker`](https://github.com/gzuidhof/coi-serviceworker) shim, which injects COOP/COEP from a service worker (needs one extra reload on first visit and must be reconciled with `sw.js`), or (b) move hosting to Cloudflare Pages / Netlify where a `_headers` file works. Until then the hosted version runs single-threaded WASM.
 
 Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a page gets no `SharedArrayBuffer`, so ONNX Runtime WASM runs **single-threaded** — the main reason Whisper small ran slower than real time. Measured on the same machine, same 100 s Dutch clip, Whisper small on WASM:
 

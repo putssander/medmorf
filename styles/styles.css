@@ -4109,6 +4109,10 @@ details summary:hover {
 .bm-legend ul { margin: 0 0 0.5rem 1.1rem; padding: 0; }
 .bm-legend li { margin: 0.2rem 0; }
 
+/* STT crash-recovery banner */
+.stt-recovery-banner { background: #fffbeb; border: 1px solid #f59e0b; color: #92400e; border-radius: 10px; padding: 0.7rem 0.9rem; margin: 0 0 1rem; font-size: 0.85rem; line-height: 1.5; }
+.stt-recovery-actions { display: inline-flex; gap: 0.4rem; margin-left: 0.6rem; vertical-align: middle; }
+
 /* Benchmark tab (src/benchmark-handler.js) */
 .tab-btn[data-tab="benchmark"].active { color: #0f766e; }
 .tab-btn[data-tab="benchmark"].active::after { background: #0f766e; }
