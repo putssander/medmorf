@@ -15,7 +15,7 @@ const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platfor
 // Empirical iOS ceiling: whisper-small (q8+q4, ~310 MB weights) reboots the
 // page on a real iPhone 17 Pro during load; base (~105 MB) is the largest
 // safe tier there. Mirrors the LLM tiering in summarize-handler.
-const IOS_MAX_STT_MB = 200;
+const IOS_MAX_STT_MB = 150; // compares against sizeMobileMB (q8/q4 build)
 let hasWebGPU = false;
 
 // Detect WebGPU at startup (M-series Macs, modern GPUs)
@@ -39,6 +39,11 @@ let hasWebGPU = false;
 // we default to WASM on every device. Power users can opt back into WebGPU
 // by appending `?stt-gpu=1` to the URL.
 const STT_FORCE_WASM = !/[?&]stt-gpu=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+// On-device bisection flags for the iOS load-reboot bug:
+//   ?stt-no-proxy=1  run ORT on the main thread (no proxy worker)
+//   ?stt-no-cache=1  skip the browser Cache API for model weights
+const STT_NO_PROXY = /[?&]stt-no-proxy=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+const STT_NO_CACHE = /[?&]stt-no-cache=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 
 function getModelConfig() {
     // Whisper on transformers.js works best with a PER-MODULE dtype:
@@ -78,6 +83,7 @@ const STT_MODEL_OPTIONS = {
         label: 'Whisper Tiny',
         sizeWasm: '~150 MB',
         sizeMobile: '~45 MB',
+        sizeMobileMB: 45,
         sizeGpu: '~150 MB',
         sizeMB: 150,
         description: 'Fastest, lowest resource usage. WER (FLEURS): Dutch 49%, English 12% — not usable for Dutch.',
@@ -88,6 +94,7 @@ const STT_MODEL_OPTIONS = {
         label: 'Whisper Base',
         sizeWasm: '~300 MB',
         sizeMobile: '~105 MB',
+        sizeMobileMB: 105,
         sizeGpu: '~290 MB',
         sizeMB: 300,
         description: 'Middle ground. WER (FLEURS): Dutch 33%, English 9%.',
@@ -98,6 +105,7 @@ const STT_MODEL_OPTIONS = {
         label: 'Whisper Small',
         sizeWasm: '~500 MB',
         sizeMobile: '~310 MB',
+        sizeMobileMB: 310,
         sizeGpu: '~460 MB',
         sizeMB: 500,
         description: 'Best accuracy that fits a browser tab. WER (FLEURS): Dutch 16%, English 6%. Runs on iPhone (q4, ~170 MB) but slower than real time there. See “Accuracy: what to expect” above.',
@@ -284,7 +292,7 @@ function populateSTTModelSelect() {
         el.value = id;
         const size = isMobile ? opt.sizeMobile : (hasWebGPU ? opt.sizeGpu : opt.sizeWasm);
         const badge = cfg.suffix ? ` [${cfg.suffix}]` : '';
-        const tooBig = isIos && (opt.sizeMB || 0) > IOS_MAX_STT_MB;
+        const tooBig = isIos && (opt.sizeMobileMB || opt.sizeMB || 0) > IOS_MAX_STT_MB;
         el.textContent = `${opt.label} (${size})${badge}${tooBig ? ' — desktop only' : ''}`;
         el.disabled = tooBig;
         if (id === DEFAULT_STT_MODEL) el.selected = true;
@@ -304,7 +312,8 @@ function formatLoadError(error) {
 
 async function initSTTModel(externalProgressCb) {
     const selectedModel = getSelectedModel();
-    if (isIos && (STT_MODEL_OPTIONS[selectedModel]?.sizeMB || 0) > IOS_MAX_STT_MB) {
+    const selOpt = STT_MODEL_OPTIONS[selectedModel];
+    if (isIos && (selOpt?.sizeMobileMB || selOpt?.sizeMB || 0) > IOS_MAX_STT_MB) {
         throw new Error('This Whisper model is too large for iPhone/iPad (the page would reload). Whisper Base is the largest model that runs here; use a desktop browser for Whisper Small.');
     }
     if (pipeline && loadedModelId === selectedModel) return;
@@ -342,7 +351,8 @@ async function initSTTModel(externalProgressCb) {
             const { pipeline: createPipeline, env, WhisperTextStreamer } = await import('@huggingface/transformers');
             whisperStreamerCtor = WhisperTextStreamer || null;
             env.allowLocalModels = false;
-            env.useBrowserCache = true;
+            env.useBrowserCache = !STT_NO_CACHE;
+            if (STT_NO_CACHE) console.warn('[STT] browser cache disabled via ?stt-no-cache=1');
 
             // Pin onnxruntime-web's WASM/JSEP glue to the exact nightly we use
             // in the import map. Without this, transformers.js builds the path
@@ -361,7 +371,8 @@ async function initSTTModel(externalProgressCb) {
                 // WASM on the main thread, e.g. iOS Safari) freeze the whole page
                 // for the duration of a transcription — the classic "it hangs".
                 // The proxy is WASM-only; the opt-in WebGPU path must not use it.
-                env.backends.onnx.wasm.proxy = modelDevice === 'wasm';
+                env.backends.onnx.wasm.proxy = modelDevice === 'wasm' && !STT_NO_PROXY;
+                if (STT_NO_PROXY) console.warn('[STT] proxy worker disabled via ?stt-no-proxy=1');
             }
 
             const fileProgress = {};
