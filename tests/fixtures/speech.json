@@ -1,0 +1,33 @@
+{
+  "_comment": "Synthetic clinical dictation generated with macOS TTS (nl_NL Xander, en_GB Daniel), 16 kHz mono WAV. Scored with WER after normalisation (lowercase, punctuation stripped, digits spelled out in reference).",
+  "clips": [
+    {
+      "id": "nl_intake",
+      "file": "speech/nl_intake.wav",
+      "language": "nl",
+      "reference": "De patiënt meldt sinds drie weken pijn op de borst bij inspanning. Er is geen sprake van kortademigheid in rust. Bloeddruk honderdvijfenveertig over vijfennegentig. Wij starten met metoprolol vijftig milligram eenmaal daags.",
+      "aliases": { "honderdvijfenveertig": ["145"], "vijfennegentig": ["95"], "vijftig": ["50"], "drie": ["3"] }
+    },
+    {
+      "id": "nl_medicatie",
+      "file": "speech/nl_medicatie.wav",
+      "language": "nl",
+      "reference": "Huidige medicatie: metformine vijfhonderd milligram tweemaal daags, en simvastatine twintig milligram voor de nacht. Controle over zes weken op de polikliniek interne geneeskunde.",
+      "aliases": { "vijfhonderd": ["500"], "twintig": ["20"], "zes": ["6"] }
+    },
+    {
+      "id": "en_discharge",
+      "file": "speech/en_discharge.wav",
+      "language": "en",
+      "reference": "The patient was admitted with community acquired pneumonia and treated with intravenous amoxicillin. Oxygen saturation improved to ninety seven percent on room air. Discharged home with a five day course of oral antibiotics.",
+      "aliases": { "ninety seven": ["97"], "five": ["5"], "percent": ["%"] }
+    },
+    {
+      "id": "en_followup",
+      "file": "speech/en_followup.wav",
+      "language": "en",
+      "reference": "Follow up in the cardiology outpatient clinic in four weeks. Please repeat the ECG and check potassium and creatinine before the visit.",
+      "aliases": { "four": ["4"], "ecg": ["e c g", "ekg"], "follow up": ["follow-up", "followup"] }
+    }
+  ]
+}

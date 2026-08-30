@@ -1,9 +1,9 @@
-import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-05-28-resource-1';
+import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-08-30-memory-bar-2';
 import {
     DEFAULT_NER_MODEL_ID,
     getNERModelOption,
     preloadNERModel,
-} from './privacy-runtime.js?v=2026-05-21-tfjs4';
+} from './privacy-runtime.js?v=2026-08-30-memory-bar-2';
 
 // Cache & Storage Manager — inspect and manage browser-stored AI model data.
 // Shows Cache API entries (translation/NER models) and IndexedDB databases (WebLLM).
@@ -13,7 +13,7 @@ import {
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] cache-manager.js build', BUILD_ID, 'module url', import.meta.url);
 
-const LLM_MODEL = 'Qwen3-1.7B-q4f16_1-MLC';
+const LLM_MODEL = 'Qwen3.5-2B-q4f16_1-MLC';
 
 function formatLoadError(error) {
     if (error instanceof Error && error.message) {

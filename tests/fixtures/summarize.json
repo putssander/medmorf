@@ -1,0 +1,61 @@
+{
+  "_comment": "Synthetic clinical notes (fictional) with a fact checklist. Scoring: fact COVERAGE = share of `facts` for which the summary contains at least one of the listed keywords (case-insensitive). HALLUCINATION probes = share of `forbidden` items that appear in the summary although they are absent from the source. Both are cheap proxies; read a few outputs by hand before trusting a ranking.",
+  "documents": [
+    {
+      "id": "nl_intake_depressie",
+      "language": "Dutch",
+      "template": "psychology",
+      "text": "Intakegesprek, 21 maart 2026.\nB: Kunt u vertellen waarom u hier bent?\nC: Sinds mijn vader in november is overleden voel ik me leeg. Ik slaap hooguit vier uur per nacht, word om drie uur wakker en pieker dan over alles. Ik heb weinig eetlust en ben vijf kilo afgevallen.\nB: Hoe gaat het op het werk?\nC: Ik werk als verpleegkundige op de IC. Ik ben sinds januari ziek gemeld. Ik kon me niet meer concentreren en heb een keer een medicatiefout bijna gemaakt. Dat was het moment dat ik dacht: dit gaat niet meer.\nB: Zijn er gedachten aan de dood?\nC: Ik denk soms dat het beter zou zijn als ik er niet meer was, maar ik zou het nooit doen vanwege mijn kinderen. Geen plannen.\nB: Gebruikt u alcohol of middelen?\nC: Ik drink sinds kort elke avond twee of drie glazen wijn om in slaap te komen. Vroeger dronk ik bijna nooit.\nB: Eerdere hulp?\nC: Op mijn twintigste heb ik een depressieve periode gehad na een verbroken relatie, toen heb ik een jaar gesprekken gehad bij de huisarts-POH. Geen medicatie.\nB: Steun?\nC: Mijn zus Laila is er altijd voor me. Mijn man is veel weg voor zijn werk. Mijn moeder heeft zelf een depressie gehad, dus die vindt het moeilijk.\nB: Wat hoopt u hier te bereiken?\nC: Weer slapen. En weer plezier hebben met de kinderen, ze zijn vier en zeven.\nB: Ik stel voor te starten met cognitieve gedragstherapie, wekelijks, en de huisarts te vragen naar slaapmedicatie. We maken ook een signaleringsplan vanwege de doodsgedachten.",
+      "facts": [
+        { "label": "trigger: death of father in November", "any": ["vader", "overlijden", "overleden", "father"] },
+        { "label": "sleep: ~4 h, early waking 03:00", "any": ["vier uur", "4 uur", "drie uur wakker", "vroeg wakker", "slaap"] },
+        { "label": "appetite loss / 5 kg weight loss", "any": ["vijf kilo", "5 kilo", "5 kg", "eetlust", "afgevallen"] },
+        { "label": "occupation: IC nurse, on sick leave since January", "any": ["verpleegkundige", "IC", "ziek gemeld", "ziekmelding", "januari"] },
+        { "label": "concentration problems / near medication error", "any": ["concentr", "medicatiefout", "fout"] },
+        { "label": "passive death wish, no plan, protective factor children", "any": ["doodsgedachten", "suïcid", "suicid", "beter als ik er niet", "geen plannen", "niet meer was"] },
+        { "label": "alcohol: 2–3 glasses wine nightly, new", "any": ["wijn", "alcohol", "glazen"] },
+        { "label": "history: depressive episode at age 20, POH talks, no meds", "any": ["twintig", "20", "eerdere depressie", "depressieve periode", "POH"] },
+        { "label": "family history: mother had depression", "any": ["moeder"] },
+        { "label": "support: sister Laila; husband often away", "any": ["zus", "Laila", "man is veel weg", "echtgenoot"] },
+        { "label": "children aged 4 and 7", "any": ["kinderen", "vier en zeven", "4 en 7"] },
+        { "label": "plan: weekly CBT", "any": ["cognitieve gedragstherapie", "CGT", "CBT", "gedragstherapie"] },
+        { "label": "plan: ask GP about sleep medication", "any": ["slaapmedicatie", "huisarts"] },
+        { "label": "plan: safety plan", "any": ["signaleringsplan", "veiligheidsplan", "crisisplan"] }
+      ],
+      "forbidden": [
+        { "label": "invented antidepressant", "any": ["sertraline", "citalopram", "fluoxetine", "SSRI", "antidepressiv"] },
+        { "label": "invented suicide attempt", "any": ["poging", "suïcidepoging", "overdosis"] },
+        { "label": "invented psychosis", "any": ["psychose", "hallucinat", "wanen"] }
+      ]
+    },
+    {
+      "id": "en_soap_copd",
+      "language": "English",
+      "template": "soap",
+      "text": "Clinic visit 12 Feb 2026. 68-year-old man with COPD (GOLD 3), ex-smoker 40 pack-years, quit 2019. Reports two weeks of increased breathlessness, now short of breath walking one flight of stairs (previously three), increased sputum volume, sputum turned green four days ago. No fever, no chest pain, no ankle swelling. Using salbutamol up to eight times a day, was twice a day. Adherent to tiotropium and budesonide/formoterol. Exam: RR 22, SpO2 91% on air (baseline 94%), temp 37.4, scattered wheeze, no crackles, no peripheral oedema. Peak flow 210 (best 320). Assessment: moderate infective exacerbation of COPD, no signs of pneumonia or heart failure. Plan: prednisolone 30 mg daily for five days, amoxicillin 500 mg three times daily for five days, continue inhalers, sputum sample sent, safety-net advice given: return or call 999 if SpO2 below 88%, chest pain, drowsiness or no improvement in 48 hours. Review in one week; consider pulmonary rehab referral once stable. Flu and pneumococcal vaccines are up to date.",
+      "facts": [
+        { "label": "68-year-old man, COPD GOLD 3", "any": ["68", "COPD"] },
+        { "label": "ex-smoker 40 pack-years, quit 2019", "any": ["pack-year", "pack year", "ex-smoker", "quit", "2019"] },
+        { "label": "two weeks increased breathlessness / reduced exercise tolerance", "any": ["breathless", "dyspn", "short of breath", "stairs", "two weeks"] },
+        { "label": "increased green sputum", "any": ["sputum", "green"] },
+        { "label": "no fever / chest pain / oedema", "any": ["no fever", "afebrile", "no chest pain", "no ankle", "no oedema", "no edema"] },
+        { "label": "salbutamol use up to 8x/day", "any": ["salbutamol", "eight", "8 times", "8x"] },
+        { "label": "adherent to tiotropium and budesonide/formoterol", "any": ["tiotropium", "budesonide", "formoterol"] },
+        { "label": "SpO2 91% (baseline 94%)", "any": ["91"] },
+        { "label": "wheeze, no crackles", "any": ["wheez", "crackle"] },
+        { "label": "peak flow 210 (best 320)", "any": ["210", "peak flow"] },
+        { "label": "assessment: moderate infective exacerbation, no pneumonia/HF", "any": ["exacerbation"] },
+        { "label": "prednisolone 30 mg 5 days", "any": ["prednisolone", "30 mg"] },
+        { "label": "amoxicillin 500 mg TDS 5 days", "any": ["amoxicillin", "500 mg"] },
+        { "label": "safety-net thresholds (SpO2 < 88%, 48 h)", "any": ["88", "48 hours", "48h", "safety", "999"] },
+        { "label": "review in one week; pulmonary rehab", "any": ["one week", "1 week", "rehab"] },
+        { "label": "vaccines up to date", "any": ["vaccin"] }
+      ],
+      "forbidden": [
+        { "label": "invented hospital admission", "any": ["admitted", "admission", "hospitalised", "hospitalized"] },
+        { "label": "invented oxygen therapy", "any": ["home oxygen", "oxygen therapy", "nebuliser", "nebulizer"] },
+        { "label": "invented chest X-ray result", "any": ["x-ray", "radiograph", "consolidation"] }
+      ]
+    }
+  ]
+}

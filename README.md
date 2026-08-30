@@ -78,6 +78,7 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 - Firefox can run many WASM paths, but WebGPU-dependent LLM features may not be available.
 - DICOM folder scanning/sorting depends on the File System Access API, which is strongest in Chromium browsers.
 - Large models need significant memory. The app shows pre-flight warnings and runtime resource estimates before heavy model loads.
+- A live memory bar sits at the top of every page (`src/memory-monitor.js`). It combines the live JS heap (Chromium only) with the weights of currently loaded models and compares them to a conservative per-tab guardrail. Click it for your detected environment (browser, RAM bucket, heap limit, WebGPU) and per-browser guidance. Safari and Firefox do not expose live memory, so the bar is an estimate there (shown with ≈).
 
 ## Supported Inputs and Outputs
 
@@ -123,10 +124,12 @@ Main browser dependencies:
 | Workflow | Model(s) |
 | --- | --- |
 | Translation | `Xenova/nllb-200-distilled-600M`, quantized, loaded through Transformers.js v2 |
-| Anonymize LLM | `Qwen3-0.6B-q4f16_1-MLC`, `Qwen3-1.7B-q4f16_1-MLC` preferred default when feasible, `Qwen3-4B-q4f16_1-MLC`, `Qwen3-8B-q4f16_1-MLC` |
+| Anonymize LLM | `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC`. Qwen3 was dropped after benchmarking (same memory class, far lower PII recall); 0.8B is excluded here because it returns an empty list with the extraction prompt. All ≤4B by design — larger models exceed browser per-tab memory. |
 | NER | `openai/privacy-filter` preferred default when feasible, `onnx-community/multilang-pii-ner-ONNX` CPU fallback, `knowledgator/gliner-pii-edge-v1.0`, `Xenova/bert-base-multilingual-cased-ner-hrl` |
-| Summarize | Same Qwen3 WebLLM model set as Anonymize |
-| Speech | `onnx-community/whisper-tiny`, `onnx-community/whisper-base`, `onnx-community/whisper-small` |
+| Summarize | `Qwen3.5-0.8B-q4f16_1-MLC`, `Qwen3.5-2B-q4f16_1-MLC` (default), `Qwen3.5-4B-q4f16_1-MLC` |
+| Speech | `onnx-community/whisper-tiny`, `onnx-community/whisper-base`, `onnx-community/whisper-small`. Whisper small is the default on every device — benchmark (iOS Simulator, WASM): tiny Dutch WER 64%, base 42%, small 23%. The browser's built-in dictation (Web Speech API) is deliberately not used: it gives no on-device guarantee. |
+
+Speech-to-text is strictly two-phase: record (raw 16 kHz PCM captured from the microphone graph; MediaRecorder only produces the downloadable file) → transcribe (one Whisper inference, starts automatically on Stop, with per-chunk progress/ETA and a timeout scaled to clip length). Live as-you-speak transcription was removed because in-browser Whisper is slower than real time on phones. Long recordings are supported; `tests/fixtures/speech-long/nl_conversation_15min.wav` (15.3 min synthetic Dutch conversation) is the regression fixture — see "Long recordings" below.
 
 The translation runtime deliberately uses Transformers.js v2 because the NLLB 600M model is more memory efficient there. NER/STT use the newer Hugging Face Transformers.js runtime through the import map. GLiNER imports are patched through the import map so `gliner@0.0.19` uses the compatible tokenizer/runtime path for the ModernBERT PII model.
 
@@ -149,6 +152,8 @@ medmorf/
 |-- index.html
 |-- manifest.webmanifest
 |-- sw.js
+|-- tools/
+|   `-- dev-server-isolated.mjs
 |-- README.md
 |-- AGENTS.md
 |-- .gitignore
@@ -178,12 +183,15 @@ medmorf/
 |       `-- medmorf-brand-guide.md
 |-- src/
 |   |-- anonymize-handler.js
+|   |-- anonymize-prompts.js
+|   |-- benchmark-handler.js
 |   |-- app.js
 |   |-- cache-manager.js
 |   |-- device-capabilities.js
 |   |-- dicom-handler.js
 |   |-- excel-handler.js
 |   |-- lifecycle-manager.js
+|   |-- memory-monitor.js
 |   |-- pdf-anonymize-handler.js
 |   |-- pdf-handler.js
 |   |-- pre-flight-warn.js
@@ -200,6 +208,14 @@ medmorf/
 |   |-- brand.css
 |   `-- styles.css
 `-- tests/
+    |-- test-models.html
+    |-- metrics.js
+    |-- fixtures/
+    |   |-- anonymize.json
+    |   |-- summarize.json
+    |   |-- translate.json
+    |   |-- speech.json
+    |   `-- speech/ (4 synthetic 16 kHz WAV clips, NL + EN)
     |-- test-upgrade.html
     |-- test_anonymisation_file.txt
     |-- test_mapping.xlsx
@@ -210,6 +226,73 @@ medmorf/
 ## Brand
 
 The brand guide lives at [docs/brand/medmorf-brand-guide.md](docs/brand/medmorf-brand-guide.md), with an HTML preview at [docs/brand/medmorf-brand-guide.html](docs/brand/medmorf-brand-guide.html). App icons and logos live in `assets/brand/` and are referenced by `index.html`, `manifest.webmanifest`, and the service worker app shell.
+
+## Accuracy and WER
+
+Speech-to-text accuracy is reported as **WER (word error rate)**: words wrong ÷ words spoken, lower is better; 10% means about one word in ten needs correcting. Because Medmorf runs entirely in the browser, the largest usable Whisper is *small*. The Speech tab has an expandable "Accuracy: what to expect" panel with this table; the same numbers guide the model descriptions:
+
+| Model | Runs | Dutch WER | English WER |
+| --- | --- | --- | --- |
+| Whisper tiny | in browser | 49% | 12% |
+| Whisper base | in browser | 33% | 9% |
+| **Whisper small (default)** | in browser | **16%** | **6%** |
+| Whisper medium | server GPU only | 10% | 4% |
+| Whisper large-v2/v3 | server GPU only | 7% | 4% |
+| Frontier cloud dictation (2026) | vendor cloud | ≈4–6% avg. | |
+
+Whisper rows: OpenAI Whisper paper, FLEURS (clean read speech); real dictation scores worse for every model. Frontier row: public 2026 vendor benchmarks (Microsoft MAI-Transcribe-1 3.8% avg on FLEURS, AssemblyAI Universal-3 5.6%, NVIDIA Parakeet-TDT 6.3%). Users must proofread numbers, dosages and names regardless of model.
+
+The same "in-browser vs larger/frontier" explainer exists on every model tab (expandable "Accuracy: what to expect" panel):
+
+| Task | Metric | In-browser (Medmorf) | Larger / frontier (not in-browser) |
+| --- | --- | --- | --- |
+| Anonymize | recall (share of identifiers found; a miss is a leak) | NER ≈ 75–85%, Qwen3.5 2B ≈ 83%, NER + LLM highest | GPT-4-class ≈ 90–95%; specialised clinical de-id 96–99% on i2b2 |
+| Summarize | fact coverage / hallucination probes | ≈ 85% coverage, 0 hallucinations on synthetic notes | adapted GPT-4 judged ≥ physician quality in 81% of cases (Nature Medicine 2024) |
+| Translate | chrF (character overlap with reference) | NLLB-200 600M ≈ 72% on short clinical sentences | NLLB 1.3B/3.3B/54B, DeepL, GPT-4-class: higher fluency and terminology |
+| Speech | WER | Whisper small: Dutch 16%, English 6% (FLEURS) | Whisper large-v2 7% / 4%; frontier cloud ≈ 4–6% |
+
+Every panel ends with the same instruction: the output is a first pass that must be checked by a human, in exchange for data never leaving the device.
+
+## Long recordings
+
+Measured 2026-08-30 with `tests/fixtures/speech-long/nl_conversation_15min.wav` (15.3 min, Whisper small, WASM):
+
+| Environment | Result |
+| --- | --- |
+| iOS Simulator (iPhone 17, iOS 26.5), ORT proxy worker | Completed all 103 chunks; page stayed responsive throughout (progress/ETA updating, memory bar ≈ 500 MB of the 1.5 GB cap). Wall time ≈ 28 min while a desktop run competed for CPU — expect **slower than real time on phones**, and more so on older devices. |
+| Chrome 151 desktop (M-series, WASM + proxy worker, **single-threaded** because the site is not cross-origin isolated) | No reload or crash; peak JS heap 705 MB; after 20 min still finishing the last of 47 chunks (~0.75× real time). Enabling cross-origin isolation (COOP/COEP headers → multithreaded WASM) is the identified lever for real-time speed; see "Cross-origin isolation" below. |
+
+Guidance built into the Speech tab: for long sessions on a phone use **Dictaphone** mode (each entry is transcribed while you talk the next one, so nothing waits at the end); for a single long recording keep the tab in the foreground until it finishes. Before the ORT proxy worker was enabled, the same transcription froze the page on iOS — that was the "hang".
+
+## Cross-origin isolation (multithreaded WASM)
+
+Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a page gets no `SharedArrayBuffer`, so ONNX Runtime WASM runs **single-threaded** — the main reason Whisper small ran slower than real time. Measured on the same machine, same 100 s Dutch clip, Whisper small on WASM:
+
+| Serving | Threads | Time |
+| --- | --- | --- |
+| Plain static server | 1 | 15-min clip: > 20 min (~0.75× real time) |
+| With COOP + `COEP: credentialless` | multi | 100 s clip: **89 s (~1.1× real time)** |
+
+`COEP: credentialless` is the header to use — `require-corp` blocks the Tailwind CDN and the Inter font (no CORP headers), `credentialless` keeps everything loading and still isolates. For local testing: `node tools/dev-server-isolated.mjs` (port 8001). For production hosting add both headers (e.g. Cloudflare Pages `_headers`):
+
+```
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+```
+
+Note: Safari's support for `credentialless` should be verified on target iOS versions before shipping the headers; with `require-corp` the Tailwind/Inter tags would need `crossorigin` attributes and CORS-enabled hosts instead.
+
+## Model Benchmark
+
+The **Benchmark** tab in the app (also standalone at `http://localhost:8000/tests/test-models.html`; logic in `src/benchmark-handler.js`) loads every model option per tab — NLLB translation, the four NER detectors, Whisper tiny/base/small, and the WebLLM LLMs for Anonymize and Summarize (the app's Qwen3.5 0.8B/2B/4B plus Qwen3 0.6B/1.7B/4B as reference baselines, all from the pinned WebLLM 0.2.83; anything larger — Qwen3 8B, Qwen3.5 9B, Qwen3.6/3.8 at 27B+ — is excluded as not browser-viable) — and runs each on synthetic fixtures in `tests/fixtures/` (fictional patients, no real data). For every model it records load time, inference time per document, peak JS heap delta (Chromium only) and a task quality score computed by `tests/metrics.js`:
+
+- Anonymize (NER and LLM): PII **recall** per type (a miss is a leak), precision against annotated spans; the LLM uses the exact prompt from `src/anonymize-prompts.js`.
+- Translate: **chrF** against reference English.
+- Summarize: **fact coverage** from a checklist plus hallucination probes.
+- Speech: **WER** for Dutch and English clips (macOS TTS audio; real dictation scores worse).
+
+Models are run sequentially and disposed between runs; models above the device's safe ceiling are skipped unless overridden. Results can be exported as JSON or copied as a Markdown table. Run it in Chrome/Edge for heap numbers and WebGPU; Safari/Firefox show `n/a` for heap.
 
 ## Troubleshooting
 

@@ -78,7 +78,7 @@
         };
     </script>
 
-    <link rel="stylesheet" href="styles/styles.css?v=2026-05-21-alias-1">
+    <link rel="stylesheet" href="styles/styles.css?v=2026-08-30-wer-docs-1">
     <link rel="stylesheet" href="styles/brand.css?v=2026-06-02-pdf-burnin-default-1">
     <script type="importmap">
     {
@@ -133,6 +133,9 @@
                 </div>
             </div>
         </header>
+
+        <!-- Live memory bar + browser advice (src/memory-monitor.js) -->
+        <div id="memoryMonitor" class="memory-monitor" data-level="ok" aria-live="polite"></div>
 
         <!-- System Status Bar -->
         <div id="systemStatus" class="system-status">
@@ -201,6 +204,12 @@
                 </svg>
                 Storage
             </button>
+            <button class="tab-btn" data-tab="benchmark">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Benchmark
+            </button>
         </nav>
 
         <main>
@@ -208,6 +217,13 @@
             <!-- TRANSLATE TAB                              -->
             <!-- ═══════════════════════════════════════════ -->
             <div class="tab-panel active" id="tab-translate">
+                <details class="stt-accuracy quality-note" id="transAccuracyPanel">
+                    <summary>Accuracy: what to expect from in-browser translation (chrF explained)</summary>
+                    <div class="stt-accuracy-body">
+<p><strong>chrF</strong> measures how much of a translation's character sequences match a reference translation (0–100%, higher is better). Roughly: above 60% the meaning is reliably preserved and sentences read naturally; 45–60% is understandable but needs editing; below 45% is unreliable. Medmorf's NLLB‑200 600M model scores ≈ 72% chrF on short Dutch→English clinical sentences in the Benchmark tab.</p>
+<p><strong>Larger models translate better.</strong> NLLB‑200 also ships 1.3B and 3.3B versions and a 54B research model; each step up improves quality, especially for long or rare-word sentences and languages other than English. Frontier services (DeepL, GPT‑4-class models) are better still on fluency and medical terminology — but they run in a vendor's cloud. Medmorf uses the 600M model because it is the largest that fits a browser tab (~600 MB) and runs on CPU without a GPU.</p>
+<p class="stt-accuracy-foot"><strong>Tips:</strong> translate short sentences, keep drug names and dosages in the source language if unsure, and verify numbers and negations ("no signs of…") — small models sometimes drop them.</p></div>
+                </details>
 
                 <!-- Text Translation Section -->
                 <div class="translate-section-header">
@@ -527,6 +543,21 @@
 
                 <div class="anon-header">
                     <p class="section-description">Detect and replace personal data (PII) in medical documents — entirely in your browser. Nothing is uploaded.</p>
+                <details class="stt-accuracy quality-note" id="anonAccuracyPanel">
+                    <summary>Accuracy: what to expect from in-browser de-identification (recall explained)</summary>
+                    <div class="stt-accuracy-body">
+<p><strong>Recall</strong> is the share of real identifiers (names, dates, addresses, IDs…) that were found. <strong>Every missed identifier is a leak</strong>, so recall is the number that matters; <em>precision</em> only says how many flagged items were false alarms (harmless, just over-redaction). 90% recall on a letter with 20 identifiers means 2 are still in the output.</p>
+<p><strong>Why Medmorf's numbers are lower than cloud tools.</strong> Everything runs in your browser, so the models are small: a 46–800 MB NER detector and a 2–4B-parameter LLM. On Medmorf's synthetic clinical letters (Dutch + English, Benchmark tab): GLiNER PII ≈ 79% recall (weak on dates), Qwen3.5 2B ≈ 83%, and NER + LLM combined higher because each catches what the other misses. Purpose-built de-identification systems trained on clinical corpora reach 96–99% recall on the i2b2 benchmark, and frontier LLMs (GPT‑4-class) ≈ 92% — but those need a server or send your text to a vendor.</p>
+<div class="stt-accuracy-table-wrap"><table class="stt-accuracy-table">
+<thead><tr><th>Approach</th><th>Where it runs</th><th>Typical recall</th><th>Notes</th></tr></thead><tbody>
+<tr><td>NER only (GLiNER / XLM‑R)</td><td>In browser, CPU</td><td>≈ 75–85%</td><td>Fast; misses dates, IDs, organisations</td></tr>
+<tr><td>LLM only (Qwen3.5 2B)</td><td>In browser, WebGPU</td><td>≈ 80–85%</td><td>Better on dates/organisations; slower</td></tr>
+<tr><td><strong>NER + LLM (recommended)</strong></td><td>In browser</td><td>highest available here</td><td>Two passes; still proofread</td></tr>
+<tr><td>Frontier LLM (GPT‑4-class)</td><td>Vendor cloud</td><td>≈ 90–95%</td><td>Text leaves your device</td></tr>
+<tr><td>Specialised clinical de-id (RoBERTa-large, Philter…)</td><td>Server</td><td>≈ 96–99% (i2b2)</td><td>English-centric; not in-browser</td></tr>
+</tbody></table></div>
+<p class="stt-accuracy-foot">Reference points: i2b2 2014 de-identification benchmark and published GPT‑4 evaluations (Scientific Reports 2025; iScience 2025). <strong>Use Medmorf as a first pass, then review the highlighted mapping and search the output for anything the models missed — never treat the output as fully de-identified without a human check.</strong></p></div>
+                </details>
 
                     <!-- Smart mode banner: auto-picks the best method for this device -->
                     <div class="anon-mode-banner" id="anonModeBanner">
@@ -598,15 +629,13 @@
 
                     <details class="hw-details">
                         <summary>How it works · models &amp; hardware</summary>
-                        <p><strong>LLM only</strong> (recommended on WebGPU devices): Qwen3 handles all PII detection in a single pass. Best accuracy, especially with the 4B or 8B model.</p>
+                        <p><strong>LLM only</strong> (recommended on WebGPU devices): Qwen3.5 handles all PII detection in a single pass.</p>
                         <p><strong>NER + LLM</strong>: Run a NER model first, then let the LLM verify and catch remaining PII. Useful for additional coverage or comparison.</p>
                         <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
-                        <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.4 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
+                        <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.9 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
                         <ul>
-                            <li><strong>Qwen3 0.6B</strong> — ~1.4 GB VRAM. Smallest &amp; fastest LLM. Good for quick scans.</li>
-                            <li><strong>Qwen3 1.7B</strong> (preferred default when feasible) — ~2 GB VRAM. Good balance of speed and quality.</li>
-                            <li><strong>Qwen3 4B</strong> — ~3.4 GB VRAM. Higher quality, needs more headroom.</li>
-                            <li><strong>Qwen3 8B</strong> — ~5.7 GB VRAM. Highest quality, needs a powerful GPU.</li>
+                            <li><strong>Qwen3.5 2B</strong> (default) — ~2.2 GB VRAM. Best PII recall under 3 GB in the Benchmark tab (83%).</li>
+                            <li><strong>Qwen3.5 4B</strong> — ~3.9 GB VRAM. Largest browser-feasible option; needs ~4 GB GPU memory. All models are kept ≤4B by design.</li>
                             <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
                             <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
                             <li><strong>Multilingual BERT NER</strong> — ~100 MB. Lighter general-purpose NER (people, places, organizations).</li>
@@ -852,9 +881,15 @@
                 <div class="sum-header">
                     <div class="hw-requirements-notice">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
-                        <span><strong>Hardware:</strong> Requires WebGPU (Chrome/Edge 113+, Safari 18+). Uses the same Qwen3 models as anonymization.</span>
+                        <span><strong>Hardware:</strong> Requires WebGPU (Chrome/Edge 113+, Safari 18+). Uses the same Qwen3.5 models as anonymization.</span>
                     </div>
                     <p class="section-description">Generate structured reports from medical documents using <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> + WebGPU — entirely in your browser.</p>
+                <details class="stt-accuracy quality-note" id="sumAccuracyPanel">
+                    <summary>Accuracy: what to expect from in-browser summaries</summary>
+                    <div class="stt-accuracy-body">
+<p>Medmorf scores summaries by <strong>fact coverage</strong> — the share of clinically relevant facts from the source that appear in the summary — and by <strong>hallucination probes</strong>, statements that appear although they are not in the source. On the synthetic notes in the Benchmark tab the in-browser models cover ≈ 85% of the facts with no hallucinations, but they do drop items (in one test: the trigger event and a passive death wish), and they write less fluent Dutch than large models.</p>
+<p><strong>Larger models are better here.</strong> In a Nature Medicine study (2024), an adapted GPT‑4 produced clinical summaries judged equal or better than physicians' in 81% of cases; 2–4B in-browser models are well below that. Medmorf's trade-off is that the note never leaves your device. <strong>Treat the summary as a draft: check it against the source for missing risk information, medication, and numbers.</strong> Prefer the 4B model when your device allows it (see the memory bar), and use the structured templates — they force the model to cover each section.</p></div>
+                </details>
                     <div class="anon-settings-row">
                         <div class="setting-group compact">
                             <label for="sumTemplateSelect">Template</label>
@@ -967,7 +1002,28 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
                         <span><strong>Offline STT:</strong> Whisper speech recognition runs entirely in your browser via WebAssembly. No audio data is sent anywhere.</span>
                     </div>
-                    <p class="section-description">Transcribe audio recordings or live microphone input using <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">OpenAI Whisper</a> via <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> — entirely offline.</p>
+                    <p class="section-description">Record or upload audio, then transcribe it with <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">OpenAI Whisper</a> via <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> — entirely offline. Transcription runs in two phases: <strong>1. Record</strong> (nothing is processed yet) → <strong>2. Transcribe</strong>, which starts automatically when you press Stop. As-you-speak transcription is not offered: in-browser Whisper is slower than real time on phones. <strong>Long recordings (15+ min) are supported</strong> — on a phone, transcribing takes roughly as long as the recording; keep the app in the foreground and the screen on until it finishes, or use <em>Dictaphone</em> mode to transcribe in short entries as you go.</p>
+                    <details class="stt-accuracy" id="sttAccuracyPanel">
+                        <summary>Accuracy: what to expect from in-browser speech recognition (WER explained)</summary>
+                        <div class="stt-accuracy-body">
+                            <p><strong>WER (word error rate)</strong> is the share of words a transcript gets wrong — substitutions, missed words and inserted words, divided by the number of words actually spoken. <strong>10% WER means roughly one word in ten needs correcting</strong>; 0% is perfect. Below ~10% a transcript is usually usable after a quick read-through; above ~25% it is often faster to dictate again. WER treats every word the same, so a wrong drug name or dose counts exactly like a wrong “the” — always verify medication, numbers and names.</p>
+                            <p><strong>Why Medmorf uses small models.</strong> Everything here runs inside your browser on your own device, so nothing leaves it. That limits model size: the largest Whisper that fits a phone or laptop tab is <em>small</em> (~500 MB). Larger Whisper models (medium ~1.5 GB, large-v2/v3 ~3 GB) and the commercial “frontier” dictation services are noticeably more accurate, but need a GPU server or send your audio to a cloud provider.</p>
+                            <div class="stt-accuracy-table-wrap">
+                                <table class="stt-accuracy-table">
+                                    <thead><tr><th>Model</th><th>Where it runs</th><th>Dutch WER</th><th>English WER</th><th>Notes</th></tr></thead>
+                                    <tbody>
+                                        <tr><td>Whisper tiny</td><td>In browser</td><td>49%</td><td>12%</td><td>Not usable for Dutch; English only for rough notes</td></tr>
+                                        <tr><td>Whisper base</td><td>In browser</td><td>33%</td><td>9%</td><td>Fair for English, poor for Dutch</td></tr>
+                                        <tr><td><strong>Whisper small (default)</strong></td><td>In browser</td><td><strong>16%</strong></td><td><strong>6%</strong></td><td>Best that fits a browser tab; review before use</td></tr>
+                                        <tr><td>Whisper medium</td><td>Server GPU</td><td>10%</td><td>4%</td><td>Too large for a browser tab</td></tr>
+                                        <tr><td>Whisper large-v2/v3</td><td>Server GPU</td><td>7%</td><td>4%</td><td>Too large for a browser tab</td></tr>
+                                        <tr><td>Frontier cloud dictation (2026)</td><td>Vendor cloud</td><td colspan="2">≈4–6% average across languages; medical-tuned services report ~3% missed medical terms</td><td>Audio leaves your device</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="stt-accuracy-foot">Whisper figures: OpenAI Whisper paper, FLEURS read-speech benchmark (clean audio, native speakers). Real dictation — accents, background noise, phone microphones, jargon — scores worse for every model; Medmorf’s own <em>Benchmark</em> tab measures the in-browser models on synthetic clinical clips on your device. Frontier figures from public 2026 vendor benchmarks (Microsoft MAI-Transcribe-1, AssemblyAI Universal-3, NVIDIA Parakeet). <strong>Tips:</strong> use the small model, speak clearly in short sentences, keep the microphone close, choose the correct language, and always proofread numbers, dosages and names.</p>
+                        </div>
+                    </details>
                     <div class="anon-settings-row">
                         <div class="setting-group compact">
                             <label for="sttModeSelect">Mode</label>
@@ -1049,7 +1105,7 @@
                         <canvas id="sttWaveformCanvas" class="stt-waveform" style="display: none;"></canvas>
                         <div id="sttRecordingIndicator" class="stt-recording-indicator" style="display: none;">
                             <span class="recording-dot"></span>
-                            <span>Recording...</span>
+                            <span>Recording… press Stop to transcribe</span>
                         </div>
                     </div>
                     <div class="stt-input-box">
@@ -1073,7 +1129,7 @@
                     </div>
                 </div>
 
-                <!-- Live Transcript (visible during recording) -->
+                <!-- Recording status box (microphone errors etc.) -->
                 <section id="sttLiveTranscript" class="stt-live-transcript" style="display: none;">
                     <div class="stt-live-header">
                         <span class="recording-dot"></span>
@@ -1521,7 +1577,7 @@
                         <div class="offline-model-card" id="offlineLLM">
                             <div class="offline-model-info">
                                 <strong>Anonymization LLM</strong>
-                                <span class="offline-model-meta">Qwen3 1.7B · ~2 GB</span>
+                                <span class="offline-model-meta">Qwen3.5 2B · ~2.2 GB</span>
                                 <span class="offline-model-desc">Detects and anonymizes PII via WebGPU</span>
                             </div>
                             <div class="offline-model-status" id="offlineLLMStatus">
@@ -1761,8 +1817,14 @@
             </div>
         </main>
 
+            <div class="tab-panel" id="tab-benchmark">
+                <div class="storage-header">
+                    <p class="section-description">Measure every model on this device: memory, speed and task quality on synthetic example data. Use it to pick the right model sizes for this browser and machine.</p>
+                </div>
+                <div id="benchmarkRoot" class="benchmark-root"><p class="storage-hint">Open this tab to load the benchmark.</p></div>
+            </div>
         <footer>
-            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3</a> &amp; <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">Whisper</a></p>
+            <p>Powered by <a href="https://huggingface.co/docs/transformers.js" target="_blank" rel="noopener noreferrer">Transformers.js</a> / <a href="https://huggingface.co/facebook/nllb-200-distilled-600M" target="_blank" rel="noopener noreferrer">NLLB-200</a> &amp; <a href="https://webllm.mlc.ai" target="_blank" rel="noopener noreferrer">WebLLM</a> / <a href="https://huggingface.co/Qwen" target="_blank" rel="noopener noreferrer">Qwen3.5</a> &amp; <a href="https://huggingface.co/openai/whisper-small" target="_blank" rel="noopener noreferrer">Whisper</a></p>
             <p><a href="PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
             <div class="footer-notes" aria-label="Important processing notes">
                 <section class="footer-note footer-note-info">
@@ -1798,11 +1860,21 @@
 
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
+    <script type="module" src="src/memory-monitor.js?v=2026-08-30-memory-bar-3"></script>
+    <script type="module">
+        // Benchmark tab: load the harness only when the tab is first opened.
+        const mountBench = () => import('./src/benchmark-handler.js?v=2026-08-30-wer-docs-1')
+            .then(m => m.mountBenchmark(document.getElementById('benchmarkRoot')))
+            .catch(err => { console.error(err); document.getElementById('benchmarkRoot').textContent = 'Benchmark failed to load: ' + err.message; });
+        const benchBtn = document.querySelector('.tab-btn[data-tab="benchmark"]');
+        benchBtn?.addEventListener('click', mountBench, { once: true });
+        if (benchBtn?.classList.contains('active')) mountBench();
+    </script>
     <script type="module" src="src/app.js?v=2026-05-28-resource-1"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-06-02-pdf-burnin-default-1"></script>
-    <script type="module" src="src/summarize-handler.js?v=2026-05-28-resource-1"></script>
-    <script type="module" src="src/stt-handler.js?v=2026-05-28-resource-1"></script>
-    <script type="module" src="src/cache-manager.js?v=2026-06-02-pdf-burnin-default-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-08-30-qwen35-1"></script>
+    <script type="module" src="src/summarize-handler.js?v=2026-08-30-qwen35-1"></script>
+    <script type="module" src="src/stt-handler.js?v=2026-08-30-two-phase-3"></script>
+    <script type="module" src="src/cache-manager.js?v=2026-08-30-qwen35-1"></script>
     <script src="src/dicom-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>

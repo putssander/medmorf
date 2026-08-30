@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Medmorf — Model benchmark (standalone)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Same import map as index.html so the SAME pinned runtimes are exercised. -->
+<script type="importmap">
+{
+    "imports": {
+        "sharp": "../src/stubs/null-module.js",
+        "fs": "../src/stubs/empty-module.js",
+        "path": "../src/stubs/empty-module.js",
+        "url": "../src/stubs/empty-module.js",
+        "onnxruntime-node": "../src/stubs/null-module.js",
+        "@huggingface/jinja": "https://cdn.jsdelivr.net/npm/@huggingface/jinja@0.5.6/dist/index.js",
+        "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.all.min.mjs",
+        "onnxruntime-web/webgpu": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.webgpu.min.mjs",
+        "onnxruntime-web/wasm": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/ort.wasm.min.mjs",
+        "onnxruntime-common": "https://cdn.jsdelivr.net/npm/onnxruntime-common@1.24.0-dev.20251116-b39e144322/dist/esm/index.js",
+        "@huggingface/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js",
+        "@xenova/transformers": "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.web.js"
+    }
+}
+</script>
+<link rel="stylesheet" href="../styles/styles.css">
+<style>
+    body { max-width: 1240px; margin: 0 auto; padding: 1.5rem; }
+    h1 { font-size: 1.4rem; margin: 0 0 0.25rem; }
+    .sub { color: #6b7280; font-size: 0.9rem; margin-bottom: 1rem; }
+</style>
+</head>
+<body>
+<h1>Medmorf model benchmark</h1>
+<div class="sub">Standalone wrapper around <code>src/benchmark-handler.js</code> — the same benchmark is available in the app under the <b>Benchmark</b> tab. Serve from the repo root (<code>python3 -m http.server 8000</code>).</div>
+<div id="memoryMonitor" class="memory-monitor" data-level="ok" aria-live="polite"></div>
+<div id="benchmarkRoot" class="benchmark-root"></div>
+<script type="module">
+import '../src/memory-monitor.js?v=2026-08-30-memory-bar-3';
+import { mountBenchmark } from '../src/benchmark-handler.js?v=2026-08-30-wer-docs-1';
+mountBenchmark(document.getElementById('benchmarkRoot')).catch(err => { console.error(err); document.getElementById('benchmarkRoot').textContent = 'Init failed: ' + err.message; });
+</script>
+</body>
+</html>

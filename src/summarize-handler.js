@@ -1,9 +1,9 @@
 // Medical Document Summarization — LLM-powered structured report generation
-// Uses the same Qwen3 models available for anonymization (WebLLM/WebGPU).
+// Uses the same Qwen3.5 models available for anonymization (WebLLM/WebGPU).
 // Templates guide the LLM to fill in specific report sections.
 // Zero data leaves the browser — all processing is local.
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
 import { getCapabilities, recommendDefault } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
@@ -105,32 +105,26 @@ const SUMMARIZE_TEMPLATES = {
 };
 
 // ── LLM Model Options (shared with anonymize-handler) ──────────────────────────
-const DEFAULT_MODEL = 'Qwen3-4B-q4f16_1-MLC';
+const DEFAULT_MODEL = 'Qwen3.5-2B-q4f16_1-MLC';
 
 const LLM_MODEL_OPTIONS = {
-    'Qwen3-0.6B-q4f16_1-MLC': {
-        label: 'Qwen3 0.6B',
-        size: '~1.4 GB',
-        sizeMB: 1400,
-        note: 'Smallest & fastest. Requires WebGPU.',
+    'Qwen3.5-0.8B-q4f16_1-MLC': {
+        label: 'Qwen3.5 0.8B',
+        size: '~1.6 GB',
+        sizeMB: 1630,
+        note: 'Newer generation, small. Good summaries in benchmarks (86% fact coverage). Requires WebGPU.',
     },
-    'Qwen3-1.7B-q4f16_1-MLC': {
-        label: 'Qwen3 1.7B',
-        size: '~2 GB',
-        sizeMB: 2000,
-        note: 'Good balance of speed and quality. Requires WebGPU.',
+    'Qwen3.5-2B-q4f16_1-MLC': {
+        label: 'Qwen3.5 2B',
+        size: '~2.2 GB',
+        sizeMB: 2250,
+        note: 'Best PII recall under 3 GB in benchmarks (83% vs 52% for Qwen3 1.7B). Requires WebGPU.',
     },
-    'Qwen3-4B-q4f16_1-MLC': {
-        label: 'Qwen3 4B',
-        size: '~3.4 GB',
-        sizeMB: 3400,
-        note: 'Best quality. Requires WebGPU.',
-    },
-    'Qwen3-8B-q4f16_1-MLC': {
-        label: 'Qwen3 8B',
-        size: '~5.7 GB',
-        sizeMB: 5700,
-        note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
+    'Qwen3.5-4B-q4f16_1-MLC': {
+        label: 'Qwen3.5 4B',
+        size: '~3.9 GB',
+        sizeMB: 3870,
+        note: 'Largest browser-feasible option; needs ~4 GB GPU memory. Requires WebGPU.',
     },
 };
 
@@ -369,6 +363,9 @@ async function llmChat(messages, options = {}) {
     const reply = await engine.chat.completions.create({
         messages,
         max_tokens: options.max_tokens || 4096,
+        // Qwen3 / Qwen3.5 hybrid-thinking: skip the <think> block. Prompts already
+        // forbid reasoning; without this, Qwen3.5 spends the whole token budget thinking.
+        extra_body: { enable_thinking: false },
         temperature: options.temperature ?? 0.3,
     });
     return reply.choices[0].message.content || '';

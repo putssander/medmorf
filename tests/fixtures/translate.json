@@ -1,0 +1,22 @@
+{
+  "_comment": "Synthetic Dutch clinical sentences with English reference translations. Scored with chrF (character n-gram F-score, β=2) — the standard for sentence-level MT evaluation without a tokenizer.",
+  "src_lang": "nld_Latn",
+  "tgt_lang": "eng_Latn",
+  "pairs": [
+    { "id": 1, "nl": "De patiënt klaagt sinds twee dagen over koorts en hoesten.", "en": "The patient has been complaining of fever and coughing for two days." },
+    { "id": 2, "nl": "Bij lichamelijk onderzoek werd een verhoogde bloeddruk vastgesteld.", "en": "On physical examination, elevated blood pressure was found." },
+    { "id": 3, "nl": "Er zijn geen aanwijzingen voor een acuut coronair syndroom.", "en": "There are no indications of an acute coronary syndrome." },
+    { "id": 4, "nl": "Wij adviseren de dosering van metformine te verhogen naar 1000 mg tweemaal daags.", "en": "We recommend increasing the dose of metformin to 1000 mg twice daily." },
+    { "id": 5, "nl": "De wond geneest goed en de hechtingen kunnen over een week worden verwijderd.", "en": "The wound is healing well and the sutures can be removed in a week." },
+    { "id": 6, "nl": "Mevrouw is bekend met COPD en gebruikt dagelijks een inhalator.", "en": "The patient is known to have COPD and uses an inhaler daily." },
+    { "id": 7, "nl": "Het laboratoriumonderzoek toonde een licht verhoogd CRP en een normale nierfunctie.", "en": "Laboratory tests showed slightly elevated CRP and normal kidney function." },
+    { "id": 8, "nl": "Bij toename van de klachten dient de patiënt direct contact op te nemen met de huisarts.", "en": "If symptoms worsen, the patient should contact the general practitioner immediately." },
+    { "id": 9, "nl": "De echografie van de buik liet geen afwijkingen zien.", "en": "The abdominal ultrasound showed no abnormalities." },
+    { "id": 10, "nl": "Patiënt wordt verwezen naar de fysiotherapeut voor revalidatie na de knieoperatie.", "en": "The patient is referred to the physiotherapist for rehabilitation after the knee surgery." },
+    { "id": 11, "nl": "Tijdens het gesprek was de stemming somber en het affect vlak.", "en": "During the conversation the mood was depressed and the affect was flat." },
+    { "id": 12, "nl": "Hij slaapt slecht, piekert veel en heeft weinig eetlust.", "en": "He sleeps poorly, worries a lot and has little appetite." },
+    { "id": 13, "nl": "Er is een allergie voor penicilline gedocumenteerd.", "en": "An allergy to penicillin has been documented." },
+    { "id": 14, "nl": "De controleafspraak is gepland over zes weken op de polikliniek cardiologie.", "en": "The follow-up appointment is scheduled in six weeks at the cardiology outpatient clinic." },
+    { "id": 15, "nl": "Gezien de verhoogde bloedsuikers werd insuline gestart.", "en": "Given the elevated blood sugars, insulin was started." }
+  ]
+}

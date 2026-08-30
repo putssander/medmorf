@@ -5,6 +5,7 @@ const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.2
 // cannot handle ModernBERT's byte-level tokenizer format (causes t.split error).
 // v3's AutoTokenizer handles it correctly.
 const GLINER_URL = 'https://esm.sh/gliner@0.0.19?external=@xenova/transformers';
+import { unregisterLoadedModel } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 export const PRIVACY_RUNTIME_LABEL = 'Hugging Face Transformers.js';
 export const DEFAULT_NER_MODEL_ID = 'gliner_pii';
@@ -284,6 +285,7 @@ export async function preloadNERModel({ modelId = DEFAULT_NER_MODEL_ID, progress
 }
 
 export async function disposeNERPipeline() {
+    unregisterLoadedModel('ner');
     const pipelineToDispose = nerPipeline;
     const glinerToDispose = glinerInstance;
     nerPipeline = null;

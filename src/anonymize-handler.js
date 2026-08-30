@@ -1,6 +1,6 @@
 // Medical Data Anonymization — composable detector + LLM pipeline
 // NER / detectors: GLiNER, token-classification PII, mBERT, privacy filter
-// LLM: Qwen3 (WebLLM/WebGPU) for PII detection and verification
+// LLM: Qwen3.5 (WebLLM/WebGPU) for PII detection and verification
 // Zero data leaves the browser — all processing is local
 //
 // Model libraries are loaded lazily via dynamic import() when
@@ -20,8 +20,9 @@ import {
     isGLiNERModel,
     getGLiNERInstance,
     mapNEREntityType,
-} from './privacy-runtime.js?v=2026-05-28-browser-limits-1';
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
+} from './privacy-runtime.js?v=2026-08-30-memory-bar-2';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-08-30-memory-bar-2';
 import {
     classifyModelRisk,
     describeMemoryCeiling,
@@ -31,7 +32,7 @@ import {
 } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
-const DEFAULT_MODEL = 'Qwen3-1.7B-q4f16_1-MLC';
+const DEFAULT_MODEL = 'Qwen3.5-2B-q4f16_1-MLC';
 const DEFAULT_ANON_NER_MODEL_ID = 'openai_privacy_filter';
 const FALLBACK_ANON_NER_MODEL_ID = 'multilang_pii';
 const DEFAULT_MAX_CHUNK_CHARS = 2400;
@@ -39,33 +40,22 @@ const LOW_MEMORY_MAX_CHUNK_CHARS = 1600;
 const DEFAULT_CHUNK_OVERLAP_CHARS = 240;
 const LOW_MEMORY_CHUNK_OVERLAP_CHARS = 160;
 
+// Qwen3.5 only: same memory class and runtime as Qwen3 but far better PII recall
+// (Benchmark tab, 2026-08-30: 2B 83% vs Qwen3 1.7B 52%). Qwen3.5-0.8B is omitted
+// here because it returns an empty list with the extraction prompt.
 const LLM_MODEL_OPTIONS = {
-    'Qwen3-0.6B-q4f16_1-MLC': {
-        label: 'Qwen3 0.6B',
-        size: '~1.4 GB',
-        sizeMB: 1400,
-        note: 'Smallest & fastest. Requires WebGPU.',
+    'Qwen3.5-2B-q4f16_1-MLC': {
+        label: 'Qwen3.5 2B',
+        size: '~2.2 GB',
+        sizeMB: 2250,
+        note: 'Best PII recall under 3 GB in benchmarks (83% vs 52% for Qwen3 1.7B). Requires WebGPU.',
         engine: 'webllm',
     },
-    'Qwen3-1.7B-q4f16_1-MLC': {
-        label: 'Qwen3 1.7B',
-        size: '~2 GB',
-        sizeMB: 2000,
-        note: 'Good balance of speed and quality. Requires WebGPU.',
-        engine: 'webllm',
-    },
-    'Qwen3-4B-q4f16_1-MLC': {
-        label: 'Qwen3 4B',
-        size: '~3.4 GB',
-        sizeMB: 3400,
-        note: 'Best instruction-following at this size. Requires WebGPU.',
-        engine: 'webllm',
-    },
-    'Qwen3-8B-q4f16_1-MLC': {
-        label: 'Qwen3 8B',
-        size: '~5.7 GB',
-        sizeMB: 5700,
-        note: 'Highest quality, needs ≥6 GB VRAM. Requires WebGPU.',
+    'Qwen3.5-4B-q4f16_1-MLC': {
+        label: 'Qwen3.5 4B',
+        size: '~3.9 GB',
+        sizeMB: 3870,
+        note: 'Largest browser-feasible option; needs ~4 GB GPU memory. Requires WebGPU.',
         engine: 'webllm',
     },
 };
@@ -224,8 +214,8 @@ function getDefaultCombinationFeasibility(snap = getCapabilitiesSync()) {
     return {
         feasible,
         reason: feasible
-            ? 'OpenAI Privacy Filter + Qwen3 1.7B fits the current browser/device estimate.'
-            : `OpenAI Privacy Filter + Qwen3 1.7B needs about ${fmtResourceSize(peakMB)}; safe ceiling is ${fmtResourceSize(ceilingMB)}.`,
+            ? 'OpenAI Privacy Filter + Qwen3.5 2B fits the current browser/device estimate.'
+            : `OpenAI Privacy Filter + Qwen3.5 2B needs about ${fmtResourceSize(peakMB)}; safe ceiling is ${fmtResourceSize(ceilingMB)}.`,
         peakMB,
         ceilingMB,
         risk,
@@ -704,6 +694,9 @@ async function llmChat(messages, options = {}) {
     const reply = await engine.chat.completions.create({
         messages,
         max_tokens: options.max_tokens || 2048,
+        // Qwen3 / Qwen3.5 hybrid-thinking: skip the <think> block. Prompts already
+        // forbid reasoning; without this, Qwen3.5 spends the whole token budget thinking.
+        extra_body: { enable_thinking: false },
         temperature: options.temperature ?? 0,
     });
     return reply.choices[0].message.content || '';
@@ -808,6 +801,7 @@ async function initNerModel({ executionMode = 'default' } = {}) {
 
             anonModelStatusText.textContent = `${nerOption.label} loaded ✓`;
             anonModelProgress.style.width = '100%';
+            registerLoadedModel('ner', disposeNERPipeline, { sizeMB: nerOption.sizeMB || 0 });
             updateStatus('idle', `${nerOption.label} ready`);
             setTimeout(() => { anonModelStatus.style.display = 'none'; }, 1500);
         } catch (error) {
@@ -1013,31 +1007,7 @@ function isObviousGarbage(entity, type) {
     return false;
 }
 
-const SYSTEM_PROMPT = `You are a medical data anonymization expert. Identify ALL personally identifiable information (PII) in the given medical/clinical text.
-
-Entity types to detect:
-- PERSON: Any person names (patients, doctors, family members, nurses, children, spouses, emergency contacts)
-- LOCATION: Cities, towns, countries, regions, municipalities
-- DATE: Any dates (birth dates, visit dates, admission dates, year-only birth years like "2012" or "2015")
-- PHONE: Phone numbers, fax numbers
-- EMAIL: Email addresses
-- ADDRESS: Street addresses, postal/zip codes, house numbers, standalone street names when they identify a place
-- ORGANIZATION: Hospital names, clinic names, insurance companies, employers, schools, practices, companies
-- ID_NUMBER: Patient IDs, BSN/SSN numbers, insurance numbers, medical record numbers, IBAN, driver license numbers
-- AGE: Specific ages mentioned
-
-Rules:
-1. Return ONLY a valid JSON array with "entity" and "type" fields.
-2. "entity" must be the EXACT text as it appears in the input.
-3. Do NOT include diagnoses, symptoms, medications, or generic medical terms.
-4. No explanations, no markdown, no thinking. ONLY the JSON array.
-5. If no PII found, return: []
-
-Important examples:
-- In "Lucas de Vries (geboren 2012) en Emma de Vries (geboren 2015). Ze zitten op de basisschool De Horizon in Maastricht.", detect "Lucas de Vries" and "Emma de Vries" as PERSON, "2012" and "2015" as DATE, "De Horizon" as ORGANIZATION, and "Maastricht" as LOCATION.
-- In "Dr. Anne Jansen van Huisartsenpraktijk Sint Pieter", detect "Anne Jansen" as PERSON and "Huisartsenpraktijk Sint Pieter" as ORGANIZATION.
-
-Example: [{"entity":"Jan de Vries","type":"PERSON"},{"entity":"Amsterdam UMC","type":"ORGANIZATION"}]`;
+// SYSTEM_PROMPT lives in ./anonymize-prompts.js so tests/test-models.html scores the exact prompt the app uses.
 
 // Focused prompt for hybrid mode: NER already found PERSON/LOCATION/ORGANIZATION,
 // so the LLM focuses on the remaining PII types that NER cannot detect.

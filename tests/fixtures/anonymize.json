@@ -1,0 +1,109 @@
+{
+  "_comment": "Synthetic clinical documents (fictional patients) with every PII span annotated. Scoring: a ground-truth item is DETECTED if any predicted entity overlaps its text (case-insensitive substring in either direction). Recall per type is what matters for privacy (a missed item = a leak). Precision counts predictions that overlap no ground-truth item and are not in `allowed` (clinical terms that are acceptable to over-redact are listed in `allowed`).",
+  "types": ["PERSON", "DATE", "ADDRESS", "LOCATION", "PHONE", "EMAIL", "ID_NUMBER", "ORGANIZATION", "AGE"],
+  "documents": [
+    {
+      "id": "nl_huisartsbrief",
+      "language": "nl",
+      "text": "Betreft: Johan Pieter de Vries, geboren 12 maart 1981, BSN 731245689.\nAdres: Kastanjelaan 58, 6221 BN Maastricht. Telefoon 06-12345678, e-mail j.devries@example.nl.\n\nGeachte collega,\n\nBovengenoemde patiënt zag ik op 5 februari 2026 op mijn spreekuur bij Huisartsenpraktijk Sint Pieter. Hij is 44 jaar en werkt als monteur bij Van der Meer Installatietechniek. Sinds drie weken klachten van pijn op de borst bij inspanning. Bloeddruk 145/95, pols 78 regulair. ECG toont geen ischemie. Ik heb metoprolol 50 mg gestart en verwijs hem naar de cardioloog dr. Anne Jansen in het Maastricht UMC+. Zijn echtgenote Sanne de Vries is bereikbaar op 043-3456789. Verzekerd bij CZ, polisnummer ZD-99887766.\n\nMet vriendelijke groet,\nDr. Peter Bakker, huisarts",
+      "pii": [
+        { "text": "Johan Pieter de Vries", "type": "PERSON" },
+        { "text": "12 maart 1981", "type": "DATE" },
+        { "text": "731245689", "type": "ID_NUMBER" },
+        { "text": "Kastanjelaan 58", "type": "ADDRESS" },
+        { "text": "6221 BN", "type": "ADDRESS" },
+        { "text": "Maastricht", "type": "LOCATION" },
+        { "text": "06-12345678", "type": "PHONE" },
+        { "text": "j.devries@example.nl", "type": "EMAIL" },
+        { "text": "5 februari 2026", "type": "DATE" },
+        { "text": "Huisartsenpraktijk Sint Pieter", "type": "ORGANIZATION" },
+        { "text": "44 jaar", "type": "AGE" },
+        { "text": "Van der Meer Installatietechniek", "type": "ORGANIZATION" },
+        { "text": "Anne Jansen", "type": "PERSON" },
+        { "text": "Maastricht UMC+", "type": "ORGANIZATION" },
+        { "text": "Sanne de Vries", "type": "PERSON" },
+        { "text": "043-3456789", "type": "PHONE" },
+        { "text": "CZ", "type": "ORGANIZATION" },
+        { "text": "ZD-99887766", "type": "ID_NUMBER" },
+        { "text": "Peter Bakker", "type": "PERSON" }
+      ],
+      "allowed": ["metoprolol", "ECG", "cardioloog", "huisarts", "monteur"]
+    },
+    {
+      "id": "en_discharge_summary",
+      "language": "en",
+      "text": "DISCHARGE SUMMARY\nPatient: Margaret Ellen Thompson   DOB: 03/11/1952   MRN: 00482913\nAddress: 14 Orchard Road, Cambridge CB2 1TN   Phone: +44 7700 900123\nAdmitted: 14 Jan 2026   Discharged: 19 Jan 2026   Consultant: Dr. Rajesh Patel\n\nMrs Thompson, a 73-year-old retired teacher, was admitted via Addenbrooke's Hospital emergency department with community-acquired pneumonia. She was treated with IV amoxicillin and supplemental oxygen. By day 4 her saturations were 97% on room air and CRP had fallen from 186 to 42. She lives with her son David Thompson (contact 01223 456789) who will support her at home. Follow-up with her GP at Trumpington Street Medical Practice in two weeks. NHS number 943 476 5919. Email for correspondence: m.thompson52@example.com.",
+      "pii": [
+        { "text": "Margaret Ellen Thompson", "type": "PERSON" },
+        { "text": "03/11/1952", "type": "DATE" },
+        { "text": "00482913", "type": "ID_NUMBER" },
+        { "text": "14 Orchard Road", "type": "ADDRESS" },
+        { "text": "Cambridge", "type": "LOCATION" },
+        { "text": "CB2 1TN", "type": "ADDRESS" },
+        { "text": "+44 7700 900123", "type": "PHONE" },
+        { "text": "14 Jan 2026", "type": "DATE" },
+        { "text": "19 Jan 2026", "type": "DATE" },
+        { "text": "Rajesh Patel", "type": "PERSON" },
+        { "text": "Thompson", "type": "PERSON" },
+        { "text": "73-year-old", "type": "AGE" },
+        { "text": "Addenbrooke's Hospital", "type": "ORGANIZATION" },
+        { "text": "David Thompson", "type": "PERSON" },
+        { "text": "01223 456789", "type": "PHONE" },
+        { "text": "Trumpington Street Medical Practice", "type": "ORGANIZATION" },
+        { "text": "943 476 5919", "type": "ID_NUMBER" },
+        { "text": "m.thompson52@example.com", "type": "EMAIL" }
+      ],
+      "allowed": ["amoxicillin", "pneumonia", "CRP", "GP", "NHS", "teacher"]
+    },
+    {
+      "id": "nl_ggz_intake",
+      "language": "nl",
+      "text": "Intakeverslag GGZ Zuid-Limburg, datum 21-03-2026.\nCliënt: mevrouw Fatima el Amrani, 29 jaar, geboren te Rotterdam, wonende aan de Stationsstraat 12 te Heerlen. Cliënt is verwezen door huisarts J. van den Berg vanwege somberheid en slaapproblemen sinds het overlijden van haar vader Mohammed el Amrani in november 2025. Zij werkt als verpleegkundige bij Zuyderland Medisch Centrum en heeft twee kinderen, Yasmin (geboren 2019) en Adam (geboren 2022), die naar basisschool De Regenboog gaan. Contactpersoon bij crisis: zus Laila el Amrani, tel. 06 98765432. Cliëntnummer 2026-0457. Behandelaar: psycholoog drs. Tom Hendriks.",
+      "pii": [
+        { "text": "GGZ Zuid-Limburg", "type": "ORGANIZATION" },
+        { "text": "21-03-2026", "type": "DATE" },
+        { "text": "Fatima el Amrani", "type": "PERSON" },
+        { "text": "29 jaar", "type": "AGE" },
+        { "text": "Rotterdam", "type": "LOCATION" },
+        { "text": "Stationsstraat 12", "type": "ADDRESS" },
+        { "text": "Heerlen", "type": "LOCATION" },
+        { "text": "J. van den Berg", "type": "PERSON" },
+        { "text": "Mohammed el Amrani", "type": "PERSON" },
+        { "text": "november 2025", "type": "DATE" },
+        { "text": "Zuyderland Medisch Centrum", "type": "ORGANIZATION" },
+        { "text": "Yasmin", "type": "PERSON" },
+        { "text": "2019", "type": "DATE" },
+        { "text": "Adam", "type": "PERSON" },
+        { "text": "2022", "type": "DATE" },
+        { "text": "De Regenboog", "type": "ORGANIZATION" },
+        { "text": "Laila el Amrani", "type": "PERSON" },
+        { "text": "06 98765432", "type": "PHONE" },
+        { "text": "2026-0457", "type": "ID_NUMBER" },
+        { "text": "Tom Hendriks", "type": "PERSON" }
+      ],
+      "allowed": ["huisarts", "verpleegkundige", "psycholoog", "somberheid"]
+    },
+    {
+      "id": "en_nursing_note",
+      "language": "en",
+      "text": "Nursing note 02/28/2026 22:15 — Room 412B. Pt Carlos Mendoza (age 58, DOB 07/04/1967) c/o 6/10 chest pain radiating to left arm. Wife Ana Mendoza at bedside, cell 415-555-0142. Vitals: BP 158/94, HR 102, SpO2 95% RA. Paged Dr. Susan Whitfield; ordered troponin and 12-lead ECG. Pt insured via Blue Shield, member ID BSC-77812345. Pt is a bus driver for Muni in San Francisco and lives at 2890 Mission Street, Apt 3, SF, CA 94110. Chaplain Father Michael O'Brien visited at pt's request.",
+      "pii": [
+        { "text": "02/28/2026", "type": "DATE" },
+        { "text": "Carlos Mendoza", "type": "PERSON" },
+        { "text": "age 58", "type": "AGE" },
+        { "text": "07/04/1967", "type": "DATE" },
+        { "text": "Ana Mendoza", "type": "PERSON" },
+        { "text": "415-555-0142", "type": "PHONE" },
+        { "text": "Susan Whitfield", "type": "PERSON" },
+        { "text": "Blue Shield", "type": "ORGANIZATION" },
+        { "text": "BSC-77812345", "type": "ID_NUMBER" },
+        { "text": "Muni", "type": "ORGANIZATION" },
+        { "text": "San Francisco", "type": "LOCATION" },
+        { "text": "2890 Mission Street", "type": "ADDRESS" },
+        { "text": "94110", "type": "ADDRESS" },
+        { "text": "Michael O'Brien", "type": "PERSON" }
+      ],
+      "allowed": ["troponin", "ECG", "chest pain", "bus driver", "Chaplain", "Room 412B", "412B"]
+    }
+  ]
+}

@@ -138,6 +138,7 @@ function injectStylesOnce() {
  * @param {boolean} [opts.force]  If true, ignore the saved skip preference and always show.
  */
 export async function preflightWarn({ key, title, model, sizeMB, why, force }) {
+    _lastPreflight = { model, sizeMB: sizeMB || 0, at: Date.now() };
     const acked = loadAcked();
     if (!force && acked.has(key)) return true;
 
@@ -181,24 +182,35 @@ export async function preflightWarn({ key, title, model, sizeMB, why, force }) {
 
 let _chain = Promise.resolve();
 let _currentLabel = null;
+let _currentSizeMB = 0;
+let _lastPreflight = null; // {model, sizeMB, at} from the most recent preflightWarn()
 const _waiters = new Set();
 
 export function getActiveHeavyLoad() {
     return _currentLabel;
+}
+// Label + approximate weight size of the load in flight (used by the memory bar
+// so a model counts towards memory while it is still downloading/compiling).
+export function getActiveHeavyLoadInfo() {
+    return _currentLabel ? { label: _currentLabel, sizeMB: _currentSizeMB } : null;
 }
 export function onHeavyLoadChange(fn) {
     _waiters.add(fn);
     return () => _waiters.delete(fn);
 }
 
-export function withHeavyLoadLock(label, task) {
+export function withHeavyLoadLock(label, task, { sizeMB } = {}) {
+    // Fall back to the size announced by a preflightWarn() in the last minute.
+    const fallback = _lastPreflight && Date.now() - _lastPreflight.at < 60_000 ? _lastPreflight.sizeMB : 0;
     const next = _chain.then(async () => {
         _currentLabel = label;
+        _currentSizeMB = sizeMB ?? fallback;
         _waiters.forEach(fn => { try { fn(label); } catch { /* ignore */ } });
         try {
             return await task();
         } finally {
             _currentLabel = null;
+            _currentSizeMB = 0;
             _waiters.forEach(fn => { try { fn(null); } catch { /* ignore */ } });
         }
     });

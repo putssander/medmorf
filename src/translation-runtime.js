@@ -1,6 +1,6 @@
 const LEGACY_TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 export const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';

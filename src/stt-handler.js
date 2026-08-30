@@ -2,7 +2,7 @@
 // Uses whisper-small or whisper-tiny for browser-based transcription.
 // Zero data leaves the browser — all processing is local.
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-05-28-resource-1';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
@@ -70,8 +70,8 @@ const STT_MODEL_OPTIONS = {
         sizeMobile: '~40 MB',
         sizeGpu: '~150 MB',
         sizeMB: 150,
-        description: 'Fastest, lowest resource usage. Good for short recordings.',
-        quality: 'Basic',
+        description: 'Fastest, lowest resource usage. WER (FLEURS): Dutch 49%, English 12% — not usable for Dutch.',
+        quality: 'Basic (English only)',
     },
     'onnx-community/whisper-base': {
         id: 'onnx-community/whisper-base',
@@ -80,7 +80,7 @@ const STT_MODEL_OPTIONS = {
         sizeMobile: '~80 MB',
         sizeGpu: '~290 MB',
         sizeMB: 300,
-        description: 'Middle ground between tiny and small.',
+        description: 'Middle ground. WER (FLEURS): Dutch 33%, English 9%.',
         quality: 'Fair',
     },
     'onnx-community/whisper-small': {
@@ -90,14 +90,14 @@ const STT_MODEL_OPTIONS = {
         sizeMobile: '~170 MB',
         sizeGpu: '~460 MB',
         sizeMB: 500,
-        description: 'Best accuracy. Recommended with WebGPU.',
+        description: 'Best accuracy that fits a browser tab. WER (FLEURS): Dutch 16%, English 6%. Runs on iPhone (q4, ~170 MB) but slower than real time there. See “Accuracy: what to expect” above.',
         quality: 'Good',
     },
 };
 
-const DEFAULT_STT_MODEL = isMobile
-    ? 'onnx-community/whisper-tiny'
-    : 'onnx-community/whisper-small';
+// Small everywhere: tiny/base are not accurate enough for Dutch (see Benchmark tab).
+// On iPhone/iPad the q4 build (~170 MB) fits the per-tab memory cap (verified in the iOS Simulator).
+const DEFAULT_STT_MODEL = 'onnx-community/whisper-small';
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let pipeline = null;
@@ -111,27 +111,24 @@ let audioChunks = [];
 let recordedBlob = null;
 let transcriptionResult = null;
 
-// ── Live Transcription State ──────────────────────────────────────────────────
-let liveSegments = [];
+// ── Recording PCM State ───────────────────────────────────────────────────────
+// Live (as-you-speak) transcription is deliberately NOT offered: in-browser
+// Whisper is slower than real time on phones and the chunked loop was the
+// source of the "transcribing… hangs" reports. The flow is strictly two-phase:
+// 1) record — raw 16 kHz PCM is captured straight from the microphone graph,
+// 2) transcribe — one inference on that PCM after Stop (starts automatically).
+// MediaRecorder is only used to produce a downloadable file; transcription
+// never depends on decoding its container (which fails on some browsers).
 let pcmChunks = [];
 let pcmSampleCount = 0;
-let lastProcessedSample = 0;
-let liveAudioCtx = null;
-let liveSourceNode = null;
-let liveProcessorNode = null;
-let liveInterval = null;
-let isChunkBusy = false;
-let liveSampleRate = 16000;
-// Whisper is trained on 30 s windows. Larger live chunks =
-//  - dramatically better punctuation, casing and word boundaries
-//  - far fewer hallucinations on short utterances
-//  - fewer total inference calls → less CPU/GPU load → less "hanging"
-const MIN_CHUNK_SECONDS = 5;        // wait at least 5 s before sending a chunk
-const MAX_CHUNK_SECONDS = 20;       // never send more than 20 s at once,
-                                    //   so a slow machine can't build a 60 s backlog
-const MIN_COOLDOWN_MS = 250;        // brief pause between chunks; the loop is
-                                    //   gated by isChunkBusy + MIN_CHUNK_SECONDS
-let lastInferenceMs = 1000;    // adaptive: tracks how long inference takes
+let recordedPCM = null;       // Float32Array @ 16 kHz from the last recording
+let whisperStreamerCtor = null; // WhisperTextStreamer class, for per-chunk progress
+let loadedModelSizeMB = 0;
+let recAudioCtx = null;
+let recSourceNode = null;
+let recProcessorNode = null;
+let recSampleRate = 16000;
+let recStream = null;
 
 // ── Audio Quality & Hallucination Guards ───────────────────────────────────────
 const SILENCE_RMS_THRESHOLD = 0.01;  // below this RMS the chunk is considered silent
@@ -249,6 +246,7 @@ const dictExportBtn = document.getElementById('dictExportBtn');
 const dictClearBtn = document.getElementById('dictClearBtn');
 const dictEntryCount = document.getElementById('dictEntryCount');
 
+
 function updateStatus(state, message) {
     if (systemStatusIndicator) systemStatusIndicator.className = `status-indicator ${state}`;
     if (systemStatusText) systemStatusText.textContent = message;
@@ -314,7 +312,8 @@ async function initSTTModel(externalProgressCb) {
         updateStatus('loading', `Loading ${modelLabel}...`);
 
         try {
-            const { pipeline: createPipeline, env } = await import('@huggingface/transformers');
+            const { pipeline: createPipeline, env, WhisperTextStreamer } = await import('@huggingface/transformers');
+            whisperStreamerCtor = WhisperTextStreamer || null;
             env.allowLocalModels = false;
             env.useBrowserCache = true;
 
@@ -324,15 +323,22 @@ async function initSTTModel(externalProgressCb) {
             // (ort-wasm-simd-threaded.jsep.mjs) fails to load — in which case
             // Module.webgpuInit is never attached and the WebGPU backend errors
             // with: "z().webgpuInit is not a function".
+            const { dtype: modelDtype, device: modelDevice } = getModelConfig();
+            console.log(`[STT] Using device: ${modelDevice}, dtype:`, modelDtype);
             const ORT_DIST = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
             if (env.backends?.onnx?.wasm) {
                 env.backends.onnx.wasm.wasmPaths = ORT_DIST;
+                // Run the WASM backend in a worker ("proxy") so a long inference
+                // never blocks the main thread. Without this, browsers that lack
+                // cross-origin isolation (no SharedArrayBuffer → single-threaded
+                // WASM on the main thread, e.g. iOS Safari) freeze the whole page
+                // for the duration of a transcription — the classic "it hangs".
+                // The proxy is WASM-only; the opt-in WebGPU path must not use it.
+                env.backends.onnx.wasm.proxy = modelDevice === 'wasm';
             }
 
             const fileProgress = {};
             const loggedFiles = new Set();
-            const { dtype: modelDtype, device: modelDevice } = getModelConfig();
-            console.log(`[STT] Using device: ${modelDevice}, dtype:`, modelDtype);
 
             pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
                 dtype: modelDtype,
@@ -361,6 +367,7 @@ async function initSTTModel(externalProgressCb) {
             if (sttModelStatusText) sttModelStatusText.textContent = `${modelLabel} loaded ✓`;
             if (sttModelProgress) sttModelProgress.style.width = '100%';
             loadedModelId = selectedModel;
+            loadedModelSizeMB = sizeMB;
             registerLoadedModel('stt', disposeSTTModel, { sizeMB });
 
             // Pre-warm the pipeline: run one inference on 1 s of silence so all
@@ -418,11 +425,15 @@ async function disposeSTTModel() {
     unregisterLoadedModel('stt');
 }
 
-// ── Live PCM Capture ───────────────────────────────────────────────────────────
+// ── Recording PCM Capture ─────────────────────────────────────────────────────
 async function setupPCMCapture(stream) {
-    liveAudioCtx = new AudioContext({ sampleRate: 16000 });
-    liveSampleRate = liveAudioCtx.sampleRate;
-    liveSourceNode = liveAudioCtx.createMediaStreamSource(stream);
+    let ctx;
+    try { ctx = new AudioContext({ sampleRate: 16000 }); }
+    catch { ctx = new (window.AudioContext || window.webkitAudioContext)(); } // some browsers reject a forced rate
+    recAudioCtx = ctx;
+    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (_) {} } // iOS: must resume inside the gesture
+    recSampleRate = ctx.sampleRate;
+    recSourceNode = ctx.createMediaStreamSource(stream);
 
     try {
         const workletCode = [
@@ -437,50 +448,38 @@ async function setupPCMCapture(stream) {
         ].join('\n');
         const blob = new Blob([workletCode], { type: 'application/javascript' });
         const url = URL.createObjectURL(blob);
-        await liveAudioCtx.audioWorklet.addModule(url);
+        await recAudioCtx.audioWorklet.addModule(url);
         URL.revokeObjectURL(url);
-        liveProcessorNode = new AudioWorkletNode(liveAudioCtx, 'pcm-cap');
-        liveProcessorNode.port.onmessage = (e) => {
+        recProcessorNode = new AudioWorkletNode(recAudioCtx, 'pcm-cap');
+        recProcessorNode.port.onmessage = (e) => {
             pcmChunks.push(e.data);
             pcmSampleCount += e.data.length;
         };
-        liveSourceNode.connect(liveProcessorNode);
-        console.log('[STT] PCM capture via AudioWorklet at', liveSampleRate, 'Hz');
+        recSourceNode.connect(recProcessorNode);
+        console.log('[STT] PCM capture via AudioWorklet at', recSampleRate, 'Hz');
     } catch (err) {
         console.warn('[STT] AudioWorklet unavailable, using ScriptProcessor fallback:', err.message);
-        const proc = liveAudioCtx.createScriptProcessorNode(4096, 1, 1);
+        const proc = recAudioCtx.createScriptProcessor(4096, 1, 1);
         proc.onaudioprocess = (e) => {
             const data = new Float32Array(e.inputBuffer.getChannelData(0));
             pcmChunks.push(data);
             pcmSampleCount += data.length;
         };
-        liveSourceNode.connect(proc);
-        const silentGain = liveAudioCtx.createGain();
+        recSourceNode.connect(proc);
+        const silentGain = recAudioCtx.createGain();
         silentGain.gain.value = 0;
         proc.connect(silentGain);
-        silentGain.connect(liveAudioCtx.destination);
-        liveProcessorNode = proc;
-        console.log('[STT] PCM capture via ScriptProcessor at', liveSampleRate, 'Hz');
+        silentGain.connect(recAudioCtx.destination);
+        recProcessorNode = proc;
+        console.log('[STT] PCM capture via ScriptProcessor at', recSampleRate, 'Hz');
     }
 }
 
-function collectPCMRange(fromSample, toSample) {
-    let offset = 0;
-    const parts = [];
-    for (const chunk of pcmChunks) {
-        const chunkEnd = offset + chunk.length;
-        if (chunkEnd > fromSample && offset < toSample) {
-            const start = Math.max(0, fromSample - offset);
-            const end = Math.min(chunk.length, toSample - offset);
-            parts.push(chunk.subarray(start, end));
-        }
-        offset = chunkEnd;
-        if (offset >= toSample) break;
-    }
-    const totalLen = parts.reduce((a, c) => a + c.length, 0);
+function collectAllPCM() {
+    const totalLen = pcmChunks.reduce((a, c) => a + c.length, 0);
     const result = new Float32Array(totalLen);
     let pos = 0;
-    for (const part of parts) { result.set(part, pos); pos += part.length; }
+    for (const chunk of pcmChunks) { result.set(chunk, pos); pos += chunk.length; }
     return result;
 }
 
@@ -499,111 +498,21 @@ function resampleTo16k(data, fromRate) {
     return out;
 }
 
-// Hard ceiling on a single inference. If it doesn't return in this long,
-// the chunk is abandoned (advance the cursor, log a warning) so the live
-// loop never deadlocks. Picked generously — a healthy WASM inference on
-// whisper-small for 20 s of audio is ~3–8 s on modern desktops.
-const LIVE_INFER_TIMEOUT_MS = 90000;
-
-async function transcribeLiveChunk() {
-    if (!pipeline || !isPipelineWarm || isChunkBusy) return;
-    const currentCount = pcmSampleCount;
-    if (currentCount <= lastProcessedSample) return;
-    const newSamples = currentCount - lastProcessedSample;
-    if (newSamples < liveSampleRate * MIN_CHUNK_SECONDS) return;
-
-    // Cap chunk size so a slow inference can't snowball into a giant blob
-    // that looks like the app has "hung". If audio has piled up, we just
-    // process the next MAX_CHUNK_SECONDS and let the loop pick up the rest.
-    const maxSamples = Math.floor(liveSampleRate * MAX_CHUNK_SECONDS);
-    const chunkEnd = Math.min(currentCount, lastProcessedSample + maxSamples);
-
-    isChunkBusy = true;
-    if (sttLiveStatus) sttLiveStatus.textContent = 'Transcribing…';
-    try {
-        let chunkData = collectPCMRange(lastProcessedSample, chunkEnd);
-        if (liveSampleRate !== 16000) chunkData = resampleTo16k(chunkData, liveSampleRate);
-
-        // Skip silent chunks — avoids hallucinations on silence
-        if (isAudioSilent(chunkData)) {
-            lastProcessedSample = chunkEnd;
-            return;
-        }
-
-        const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
-        // Yield to event loop so the UI/waveform stays responsive
-        await new Promise(r => setTimeout(r, 0));
-        const t0 = performance.now();
-        // Race inference against a hard timeout so a stuck call can't freeze
-        // the live loop. On timeout we drop the chunk and advance the cursor;
-        // the stuck promise will eventually resolve and be ignored.
-        const inferPromise = pipeline(chunkData, {
-            language,
-            task: 'transcribe',
-            return_timestamps: false,
-        });
-        let timeoutId;
-        const timeoutPromise = new Promise((_, rej) => {
-            timeoutId = setTimeout(() => rej(new Error('inference timeout')), LIVE_INFER_TIMEOUT_MS);
-        });
-        let result;
-        try {
-            result = await Promise.race([inferPromise, timeoutPromise]);
-        } finally {
-            if (timeoutId) clearTimeout(timeoutId);
-        }
-        lastInferenceMs = performance.now() - t0;
-        const text = (result && result.text || '').trim();
-        if (text && !isHallucination(text)) {
-            liveSegments.push(text);
-            updateLiveDisplay();
-        }
-        lastProcessedSample = chunkEnd;
-    } catch (err) {
-        console.error('[STT] Live chunk error:', err);
-        // Advance the cursor regardless so we don't retry the same broken chunk
-        // forever (which is the classic "transcribing… hangs" symptom).
-        lastProcessedSample = chunkEnd;
-    } finally {
-        isChunkBusy = false;
-        if (sttLiveStatus && isRecording) sttLiveStatus.textContent = 'Listening…';
+async function cleanupPCMCapture() {
+    if (recSourceNode) { try { recSourceNode.disconnect(); } catch (_) {} recSourceNode = null; }
+    if (recProcessorNode) { try { recProcessorNode.disconnect(); } catch (_) {} recProcessorNode = null; }
+    if (recAudioCtx && recAudioCtx.state !== 'closed') {
+        try { await recAudioCtx.close(); } catch (_) {}
     }
+    recAudioCtx = null;
 }
 
-function updateLiveDisplay() {
-    const text = liveSegments.join(' ');
-    if (sttLiveText) sttLiveText.textContent = text;
-    transcriptionResult = text;
-    renderSTTResults(text);
-    if (sttResults) sttResults.style.display = 'block';
-    // Auto-scroll the live text container
-    const container = sttLiveText?.parentElement;
-    if (container) container.scrollTop = container.scrollHeight;
-}
-
-function startLiveLoop() {
-    // Adaptive loop: waits for inference to finish, then cools down
-    // based on how long inference took (slower machine = longer pause)
-    async function loop() {
-        if (!isRecording) return;
-        if (!isChunkBusy) {
-            await transcribeLiveChunk();
-        }
-        // Cooldown = max(MIN_COOLDOWN, inference time), so the CPU gets a breather
-        const cooldown = Math.max(MIN_COOLDOWN_MS, lastInferenceMs);
-        liveInterval = setTimeout(loop, cooldown);
+function pickRecorderMime() {
+    if (typeof MediaRecorder === 'undefined') return null;
+    for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus']) {
+        try { if (MediaRecorder.isTypeSupported(t)) return t; } catch (_) {}
     }
-    liveInterval = setTimeout(loop, MIN_COOLDOWN_MS);
-}
-
-async function cleanupLiveCapture() {
-    if (liveInterval) { clearTimeout(liveInterval); liveInterval = null; }
-    if (liveSourceNode) { try { liveSourceNode.disconnect(); } catch (_) {} liveSourceNode = null; }
-    if (liveProcessorNode) { try { liveProcessorNode.disconnect(); } catch (_) {} liveProcessorNode = null; }
-    if (liveAudioCtx && liveAudioCtx.state !== 'closed') {
-        try { await liveAudioCtx.close(); } catch (_) {}
-    }
-    liveAudioCtx = null;
+    return '';
 }
 
 // ── Audio Recording ────────────────────────────────────────────────────────────
@@ -688,28 +597,38 @@ async function startRecording() {
     }
 
     try {
-        // Live transcription has been removed (was unreliable). Recording now
-        // just captures audio to a blob; the user clicks “Transcribe” after
-        // stopping, which loads the model and runs inference on the full clip.
         if (sttRecordBtn) sttRecordBtn.disabled = false;
 
         audioChunks = [];
         recordedBlob = null;
+        recordedPCM = null;
         transcriptionResult = null;
+        pcmChunks = [];
+        pcmSampleCount = 0;
 
-        // MediaRecorder for the final blob (transcription + download).
-        mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-        mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-        };
-        mediaRecorder.onstop = () => {
-            recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
-        };
+        // Raw PCM capture — this is what gets transcribed.
+        await setupPCMCapture(stream);
 
-        // Waveform visualiser (visual feedback only, no transcription).
+        // MediaRecorder only for the downloadable file; optional.
+        const mime = pickRecorderMime();
+        if (mime !== null) {
+            try {
+                mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
+                mediaRecorder.onstop = () => { recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || mime || 'audio/webm' }); };
+                mediaRecorder.start(1000);
+            } catch (err) {
+                console.warn('[stt] MediaRecorder unavailable, download disabled:', err.message);
+                mediaRecorder = null;
+            }
+        } else {
+            mediaRecorder = null;
+        }
+        mediaRecorder && (mediaRecorder._stream = stream);
+        recStream = stream;
+
+        // Waveform visualiser (visual feedback only).
         startWaveform(stream, sttWaveformCanvas, 'stt');
-
-        mediaRecorder.start(1000);
         isRecording = true;
 
         // UI: show recording state. The live-transcript box is intentionally
@@ -738,20 +657,24 @@ async function stopRecording() {
     if (!isRecording) return;
     isRecording = false;
 
-    // Stop MediaRecorder
-    const stream = mediaRecorder?.stream;
+    // Stop MediaRecorder (download only)
     if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-        mediaRecorder.stop();
+        try { mediaRecorder.stop(); } catch (_) {}
     }
 
-    // Clean up PCM capture
-    await cleanupLiveCapture();
+    // Freeze the PCM buffer and tear down the audio graph
+    let pcm = collectAllPCM();
+    if (recSampleRate !== 16000) pcm = resampleTo16k(pcm, recSampleRate);
+    recordedPCM = pcm;
+    pcmChunks = [];
+    pcmSampleCount = 0;
+    await cleanupPCMCapture();
 
     // Stop waveform
     stopWaveform('stt');
 
     // Stop mic stream
-    if (stream) stream.getTracks().forEach(t => t.stop());
+    if (recStream) { recStream.getTracks().forEach(t => t.stop()); recStream = null; }
 
     // UI
     if (sttRecordingIndicator) sttRecordingIndicator.style.display = 'none';
@@ -759,43 +682,70 @@ async function stopRecording() {
     if (sttStopBtn) sttStopBtn.style.display = 'none';
     if (sttWaveformCanvas) sttWaveformCanvas.style.display = 'none';
 
-    // Transcribe any remaining audio
-    if (pipeline && pcmSampleCount > lastProcessedSample) {
-        if (sttLiveStatus) sttLiveStatus.textContent = 'Finalizing...';
-        await transcribeLiveChunk();
-    }
-
-    // Hide live area
     if (sttLiveTranscript) sttLiveTranscript.style.display = 'none';
 
-    // Show final result
-    if (liveSegments.length > 0) {
-        transcriptionResult = liveSegments.join(' ');
-        renderSTTResults(transcriptionResult);
-        if (sttResults) sttResults.style.display = 'block';
-    }
-
-    // Enable re-transcription from blob
+    const seconds = recordedPCM.length / 16000;
     if (sttFileInfo) {
         sttFileInfo.style.display = 'block';
-        if (sttFileName) sttFileName.textContent = 'Recorded audio';
+        if (sttFileName) sttFileName.textContent = `Recorded audio (${formatSeconds(seconds)})`;
     }
     if (transcribeBtn) transcribeBtn.disabled = false;
+
+    if (seconds < 0.5 || isAudioSilent(recordedPCM)) {
+        renderSTTResults('(no speech detected)');
+        return;
+    }
+    // Phase 2 starts automatically — no extra click needed.
+    await performTranscription();
 }
 
 // ── Audio Processing ───────────────────────────────────────────────────────────
 async function decodeAudioToFloat32(blob) {
     const arrayBuffer = await blob.arrayBuffer();
     const audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    const channelData = audioBuffer.getChannelData(0); // mono
-    audioContext.close();
-    return channelData;
+    try {
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        let data = audioBuffer.getChannelData(0); // mono
+        if (audioBuffer.sampleRate !== 16000) data = resampleTo16k(data, audioBuffer.sampleRate);
+        return data;
+    } catch (err) {
+        throw new Error(`This browser cannot decode this audio format (${blob.type || 'unknown'}). Convert it to WAV or MP3 and try again.`);
+    } finally {
+        try { audioContext.close(); } catch (_) {}
+    }
+}
+
+// While an inference is running the lifecycle manager must not dispose the
+// model (it evicts 60 s after the tab is hidden — a user switching apps during
+// a 15-minute transcription on a phone would otherwise lose the whole run).
+function setEvictionGuard(on) {
+    if (!pipeline) return;
+    registerLoadedModel('stt', disposeSTTModel, { sizeMB: loadedModelSizeMB, autoEvict: !on });
+}
+
+// Build a progress streamer for a long clip: reports "chunk k of N" and the
+// running transcript so a 15-minute file never looks frozen.
+function makeProgressStreamer(clipSeconds, chunkLen, stride, onProgress) {
+    if (!whisperStreamerCtor || !pipeline?.tokenizer) return null;
+    const step = Math.max(1, chunkLen - 2 * stride);
+    const totalChunks = Math.max(1, Math.ceil(clipSeconds / step));
+    let chunk = 0;
+    let textSoFar = '';
+    try {
+        return new whisperStreamerCtor(pipeline.tokenizer, {
+            skip_prompt: true,
+            on_chunk_start: () => { chunk += 1; onProgress(chunk, totalChunks, textSoFar); },
+            callback_function: (t) => { textSoFar = (textSoFar + t).slice(-2000); onProgress(chunk, totalChunks, textSoFar); },
+        });
+    } catch (err) {
+        console.warn('[STT] streamer unavailable:', err.message);
+        return null;
+    }
 }
 
 // ── Transcription ──────────────────────────────────────────────────────────────
 async function performTranscription() {
-    if (isTranscribing || !recordedBlob) return;
+    if (isTranscribing || (!recordedPCM && !recordedBlob)) return;
 
     isTranscribing = true;
     if (transcribeBtn) transcribeBtn.disabled = true;
@@ -813,34 +763,49 @@ async function performTranscription() {
         if (sttProgressBar) sttProgressBar.style.width = '30%';
         updateStatus('translating', 'Decoding audio...');
 
-        const audioData = await decodeAudioToFloat32(recordedBlob);
+        const audioData = recordedPCM || await decodeAudioToFloat32(recordedBlob);
+        const clipSeconds = audioData.length / 16000;
 
-        if (sttProgressText) sttProgressText.textContent = 'Transcribing...';
+        if (sttProgressText) sttProgressText.textContent = `Transcribing ${formatSeconds(clipSeconds)} of audio… ${isMobile ? '(on a phone this takes roughly as long as the recording)' : ''}`;
         if (sttProgressBar) sttProgressBar.style.width = '50%';
         updateStatus('translating', 'Transcribing audio...');
 
         const language = sttLanguageSelect ? sttLanguageSelect.value : 'nl';
 
-        // Hard timeout so a hung WASM/WebGPU inference can't freeze the UI.
-        // 10 minutes is generous — whisper-small on a 30-minute file under
-        // WASM lands well under that.
-        const FILE_INFER_TIMEOUT_MS = 10 * 60 * 1000;
+        // Hard timeout so a hung inference can't freeze the UI forever, scaled
+        // to the clip: phones run whisper-small at roughly real time on WASM,
+        // so allow 4× the clip length with a 10-minute floor.
+        const FILE_INFER_TIMEOUT_MS = Math.max(10 * 60 * 1000, clipSeconds * 4 * 1000);
+        const chunkLen = isMobile ? 15 : 30;
+        const stride = isMobile ? 3 : 5;
+        const tStart = performance.now();
+        const streamer = makeProgressStreamer(clipSeconds, chunkLen, stride, (k, n, text) => {
+            const pct = 50 + Math.round((Math.min(k, n) / n) * 50);
+            const elapsed = (performance.now() - tStart) / 1000;
+            const eta = k > 1 ? Math.max(0, Math.round((elapsed / (k - 1)) * (n - k + 1))) : null;
+            if (sttProgressBar) sttProgressBar.style.width = pct + '%';
+            if (sttProgressText) sttProgressText.textContent = `Transcribing… part ${Math.min(k, n)} of ${n}${eta != null ? ` · about ${formatSeconds(eta)} left` : ''}`;
+            if (text && sttOutputText) { sttOutputText.textContent = text; if (sttResults) sttResults.style.display = 'block'; }
+        });
+        setEvictionGuard(true);
         const inferPromise = pipeline(audioData, {
             language,
             task: 'transcribe',
-            chunk_length_s: isMobile ? 15 : 30,
-            stride_length_s: isMobile ? 3 : 5,
+            chunk_length_s: chunkLen,
+            stride_length_s: stride,
             return_timestamps: true,
+            ...(streamer ? { streamer } : {}),
         });
         let timeoutId;
         const timeoutPromise = new Promise((_, rej) => {
-            timeoutId = setTimeout(() => rej(new Error('inference timeout after 10 minutes — try a shorter clip or the Whisper Tiny model')), FILE_INFER_TIMEOUT_MS);
+            timeoutId = setTimeout(() => rej(new Error(`inference timeout after ${formatSeconds(FILE_INFER_TIMEOUT_MS / 1000)} — try a shorter clip or a smaller model`)), FILE_INFER_TIMEOUT_MS);
         });
         let result;
         try {
             result = await Promise.race([inferPromise, timeoutPromise]);
         } finally {
             if (timeoutId) clearTimeout(timeoutId);
+            setEvictionGuard(false);
         }
 
         if (sttProgressBar) sttProgressBar.style.width = '100%';
@@ -889,6 +854,7 @@ setupDropArea(sttUploadArea, sttFileInput, async (file) => {
         return;
     }
     recordedBlob = file;
+    recordedPCM = null;
     if (sttFileName) sttFileName.textContent = file.name;
     if (sttFileInfo) sttFileInfo.style.display = 'block';
     if (sttResults) sttResults.style.display = 'none';
@@ -937,11 +903,11 @@ function startWaveform(stream, canvas, target) {
     let audioCtx, analyser;
 
     if (target === 'stt') {
-        if (!liveAudioCtx) return;
-        audioCtx = liveAudioCtx;
+        if (!recAudioCtx) return;
+        audioCtx = recAudioCtx;
         analyser = audioCtx.createAnalyser();
         analyser.fftSize = 256;
-        liveSourceNode.connect(analyser);
+        recSourceNode.connect(analyser);
         waveformAnalyser = analyser;
     } else {
         if (!dictaphoneAudioCtx) return;
@@ -1162,6 +1128,7 @@ async function dictStopEntry() {
     dictaphoneRecording = false;
     const entryEnd = new Date();
 
+
     // Stop MediaRecorder
     if (dictaphoneMediaRec && dictaphoneMediaRec.state !== 'inactive') {
         dictaphoneMediaRec.stop();
@@ -1214,11 +1181,19 @@ async function dictStopEntry() {
             renderDictLog();
             return;
         }
-        const result = await pipeline(audioData, {
-            language,
-            task: 'transcribe',
-            return_timestamps: false,
-        });
+        setEvictionGuard(true);
+        let result;
+        try {
+            result = await pipeline(audioData, {
+                language,
+                task: 'transcribe',
+                chunk_length_s: isMobile ? 15 : 30,
+                stride_length_s: isMobile ? 3 : 5,
+                return_timestamps: false,
+            });
+        } finally {
+            setEvictionGuard(false);
+        }
         const rawText = (result.text || '').trim();
         entry.text = (!rawText || isHallucination(rawText)) ? '(no speech detected)' : rawText;
     } catch (err) {
@@ -1359,10 +1334,9 @@ window.medmorfSTTData = {
         recordedBlob = null;
         transcriptionResult = null;
         audioChunks = [];
-        liveSegments = [];
+        recordedPCM = null;
         pcmChunks = [];
         pcmSampleCount = 0;
-        lastProcessedSample = 0;
         dictaphoneEntries = [];
         dictaphoneSessionStart = null;
         await disposeSTTModel();
