@@ -53,6 +53,9 @@ const STT_NO_CACHE = /[?&]stt-no-cache=1\b/.test(typeof location !== 'undefined'
 const STT_NO_WARM = /[?&]stt-no-warm=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_KEEP_ARENA = /[?&]stt-arena=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_NO_SIMD = /[?&]stt-no-simd=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+// With the arena disabled, whisper-small's crash cause is gone in theory —
+// this flag lifts the iOS tier so small can be re-tested on a real device.
+const STT_ALLOW_SMALL = /[?&]stt-allow-small=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 // Crash breadcrumbs: persist the current load stage so that when iOS kills the
 // page mid-load we can show WHERE it died on the next visit.
 const LS_KEY_STT_STAGE = 'medmorf:stt-last-stage';
@@ -327,7 +330,7 @@ function populateSTTModelSelect() {
         el.value = id;
         const size = isMobile ? opt.sizeMobile : (hasWebGPU ? opt.sizeGpu : opt.sizeWasm);
         const badge = cfg.suffix ? ` [${cfg.suffix}]` : '';
-        const tooBig = isIos && (opt.sizeMobileMB || opt.sizeMB || 0) > IOS_MAX_STT_MB;
+        const tooBig = isIos && !STT_ALLOW_SMALL && (opt.sizeMobileMB || opt.sizeMB || 0) > IOS_MAX_STT_MB;
         el.textContent = `${opt.label} (${size})${badge}${tooBig ? ' — desktop only' : ''}`;
         el.disabled = tooBig;
         if (id === desired) el.selected = true;
@@ -357,7 +360,7 @@ async function initSTTModel(externalProgressCb) {
         throw new Error('Reloading to free memory — tap again after the page returns.');
     }
     const selOpt = STT_MODEL_OPTIONS[selectedModel];
-    if (isIos && (selOpt?.sizeMobileMB || selOpt?.sizeMB || 0) > IOS_MAX_STT_MB) {
+    if (isIos && !STT_ALLOW_SMALL && (selOpt?.sizeMobileMB || selOpt?.sizeMB || 0) > IOS_MAX_STT_MB) {
         throw new Error('This Whisper model is too large for iPhone/iPad (the page would reload). Whisper Base is the largest model that runs here; use a desktop browser for Whisper Small.');
     }
     if (pipeline && loadedModelId === selectedModel) return;

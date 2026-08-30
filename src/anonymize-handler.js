@@ -20,7 +20,7 @@ import {
     isGLiNERModel,
     getGLiNERInstance,
     mapNEREntityType,
-} from './privacy-runtime.js?v=2026-08-30-memory-bar-2';
+} from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
 import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
 import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-08-30-memory-bar-2';
 import {

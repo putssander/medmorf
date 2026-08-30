@@ -3,7 +3,7 @@ import {
     DEFAULT_NER_MODEL_ID,
     getNERModelOption,
     preloadNERModel,
-} from './privacy-runtime.js?v=2026-08-30-memory-bar-2';
+} from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
 
 // Cache & Storage Manager — inspect and manage browser-stored AI model data.
 // Shows Cache API entries (translation/NER models) and IndexedDB databases (WebLLM).

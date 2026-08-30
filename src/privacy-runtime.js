@@ -208,6 +208,10 @@ async function createNERPipelineWithFallback(pipeline, option, progressCallback,
             : [undefined]);
     let lastError = null;
 
+    // iOS: no ORT CPU memory arena — its contiguous first-inference
+    // pre-allocation crashed real iPhones (proven for Whisper; same runtime).
+    const iosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const iosSessionOptions = iosDevice ? { enableCpuMemArena: false, enableMemPattern: false } : null;
     for (const device of devices) {
         for (const dtype of dtypes) {
             try {
@@ -216,6 +220,7 @@ async function createNERPipelineWithFallback(pipeline, option, progressCallback,
                     progress_callback: progressCallback,
                 };
                 if (device) opts.device = device;
+                if (iosSessionOptions && (device || 'wasm') === 'wasm') opts.session_options = iosSessionOptions;
                 const instance = await pipeline('token-classification', option.model, opts);
                 const deviceLabel = device || 'wasm';
                 activeNerDtype = `${dtype} (${deviceLabel}${executionMode === 'low-memory' ? ', low-memory' : ''})`;

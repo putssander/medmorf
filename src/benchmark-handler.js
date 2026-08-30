@@ -9,7 +9,7 @@ import { wer, chrF, scorePII, scoreFacts, mean } from '../tests/metrics.js';
 import { getCapabilities, safeModelCeilingMB, getRuntimeMemorySnapshot } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { detectBrowser } from './memory-monitor.js?v=2026-08-30-memory-bar-3';
 import { withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
-import { NER_MODEL_OPTIONS, initNERPipeline, disposeNERPipeline, getNERPipeline, getGLiNERInstance, isGLiNERModel, mapNEREntityType } from './privacy-runtime.js?v=2026-08-30-memory-bar-2';
+import { NER_MODEL_OPTIONS, initNERPipeline, disposeNERPipeline, getNERPipeline, getGLiNERInstance, isGLiNERModel, mapNEREntityType } from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
 import { TRANSLATION_MODEL, TRANSLATION_MODEL_SIZE_MB, initTranslationPipeline, disposeTranslationPipeline } from './translation-runtime.js?v=2026-08-30-memory-bar-2';
 import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-08-30-memory-bar-2';
 

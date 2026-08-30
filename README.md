@@ -73,7 +73,7 @@ Do not rely on `file://` for normal local testing. Some simple UI paths may load
 
 ## Browser Notes
 
-- On iPhone/iPad, Summarize offers only Qwen3 0.6B (~1.4 GB) — the largest model empirically known to run on a real iPhone; Qwen3.5 0.8B (~1.63 GB) and up crashed an iPhone 17 Pro during load and are disabled there. Anonymize's LLM pipeline (2B minimum) stays blocked on iOS and falls back to NER-only; Speech and Translate work on iOS.
+- On iPhone/iPad, ONNX sessions run without ORT's CPU memory arena (`enableCpuMemArena: false`) — its contiguous first-inference pre-allocation crashed real iPhones during Whisper warm-up (found via crash-stage telemetry + URL-flag bisection). On iPhone/iPad, Summarize offers only Qwen3 0.6B (~1.4 GB) — the largest model empirically known to run on a real iPhone; Qwen3.5 0.8B (~1.63 GB) and up crashed an iPhone 17 Pro during load and are disabled there. Anonymize's LLM pipeline (2B minimum) stays blocked on iOS and falls back to NER-only; Speech and Translate work on iOS.
 
 - Chrome and Edge are the best-supported browsers for WebGPU model workflows.
 - Safari 18+ can support WebGPU on compatible devices, but browser memory reporting is more limited.
