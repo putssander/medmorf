@@ -2,7 +2,7 @@
 // Model weights are stored separately in IndexedDB (WebLLM) and Cache API (Transformers.js).
 // This SW ensures the JavaScript *libraries* that read those weights are also available offline.
 
-const CACHE_NAME = 'medmorf-app-v61';
+const CACHE_NAME = 'medmorf-app-v62';
 
 // App shell files (local)
 const APP_SHELL = [

@@ -705,19 +705,11 @@ async function acquireMicStream(report) {
         report('Microphone unavailable: this browser does not expose mediaDevices.getUserMedia. Try Chrome, Edge, Firefox or Safari, and check that microphone isn’t disabled by your browser/OS or a Permissions-Policy header.', 'error');
         return null;
     }
-    // 3. If permission was previously denied at the browser level, getUserMedia rejects
-    //    immediately without showing a prompt. Surface that clearly.
+    // NOTE: no permissions.query pre-check — WebKit can report 'denied' in
+    // states where a prompt would still be shown, which made Record exit
+    // silently. getUserMedia itself is the only authority.
     try {
-        if (navigator.permissions && navigator.permissions.query) {
-            const p = await navigator.permissions.query({ name: 'microphone' });
-            if (p && p.state === 'denied') {
-                report('Microphone permission was previously denied for this site. Click the lock/info icon in the address bar → Site settings → set Microphone to “Allow” (or “Ask”), then reload.', 'error');
-                return null;
-            }
-        }
-    } catch (_) { /* permissions.query for "microphone" is unsupported in some browsers — ignore */ }
-
-    try {
+        console.log('[stt] requesting microphone…');
         return await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (err) {
         const name = err && err.name;
@@ -747,6 +739,7 @@ async function acquireMicStream(report) {
 }
 
 async function startRecording() {
+    console.log('[stt] startRecording, isRecording=', isRecording);
     if (isRecording) return;
 
     const report = (msg, _kind) => {
@@ -760,6 +753,7 @@ async function startRecording() {
     // prompt is guaranteed to appear.
     if (sttRecordBtn) sttRecordBtn.disabled = true;
     const stream = await acquireMicStream(report);
+    console.log('[stt] mic stream:', stream ? 'acquired' : 'NULL (see message above)');
     if (!stream) {
         if (sttRecordBtn) sttRecordBtn.disabled = false;
         return;
@@ -780,6 +774,7 @@ async function startRecording() {
 
         // Raw PCM capture — this is what gets transcribed.
         await setupPCMCapture(stream);
+        console.log('[stt] PCM capture ready at', recSampleRate, 'Hz; ctx state:', recAudioCtx?.state);
 
         // MediaRecorder only for the downloadable file; optional.
         const mime = pickRecorderMime();
