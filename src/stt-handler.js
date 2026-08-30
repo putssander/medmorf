@@ -16,6 +16,12 @@ const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platfor
 // page on a real iPhone 17 Pro during load; base (~105 MB) is the largest
 // safe tier there. Mirrors the LLM tiering in summarize-handler.
 const IOS_MAX_STT_MB = 150; // compares against sizeMobileMB (q8/q4 build)
+const LS_KEY_STT_MODEL = 'medmorf:stt-model';
+// WASM memory grows but NEVER shrinks: after any model load the heap stays at
+// peak size even after dispose(). On iOS, loading a second model on top of a
+// grown heap is what pushes the page over WebKit's kill line ("memory is not
+// freed"). A controlled reload is the only real reset.
+let sttEverLoaded = false;
 let hasWebGPU = false;
 
 // Detect WebGPU at startup (M-series Macs, modern GPUs)
@@ -287,6 +293,11 @@ function populateSTTModelSelect() {
     if (!sttModelSelect) return;
     sttModelSelect.innerHTML = '';
     const cfg = getModelConfig();
+    let stored = null;
+    try { stored = localStorage.getItem(LS_KEY_STT_MODEL); } catch (_) {}
+    const storedOpt = stored && STT_MODEL_OPTIONS[stored];
+    const storedFits = storedOpt && !(isIos && (storedOpt.sizeMobileMB || storedOpt.sizeMB || 0) > IOS_MAX_STT_MB);
+    const desired = storedFits ? stored : DEFAULT_STT_MODEL;
     for (const [id, opt] of Object.entries(STT_MODEL_OPTIONS)) {
         const el = document.createElement('option');
         el.value = id;
@@ -295,7 +306,7 @@ function populateSTTModelSelect() {
         const tooBig = isIos && (opt.sizeMobileMB || opt.sizeMB || 0) > IOS_MAX_STT_MB;
         el.textContent = `${opt.label} (${size})${badge}${tooBig ? ' — desktop only' : ''}`;
         el.disabled = tooBig;
-        if (id === DEFAULT_STT_MODEL) el.selected = true;
+        if (id === desired) el.selected = true;
         sttModelSelect.appendChild(el);
     }
 }
@@ -312,6 +323,15 @@ function formatLoadError(error) {
 
 async function initSTTModel(externalProgressCb) {
     const selectedModel = getSelectedModel();
+    if (isIos && sttEverLoaded && loadedModelId !== selectedModel && dictaphoneEntries.length === 0) {
+        // Heap already grown by a previous model this session — reload for a
+        // clean slate, remembering the chosen model. The user re-triggers the
+        // action after the (fast, cached) reload.
+        try { localStorage.setItem(LS_KEY_STT_MODEL, selectedModel); } catch (_) {}
+        updateStatus('loading', 'Reloading the page to free memory for the new model…');
+        setTimeout(() => location.reload(), 600);
+        throw new Error('Reloading to free memory — tap again after the page returns.');
+    }
     const selOpt = STT_MODEL_OPTIONS[selectedModel];
     if (isIos && (selOpt?.sizeMobileMB || selOpt?.sizeMB || 0) > IOS_MAX_STT_MB) {
         throw new Error('This Whisper model is too large for iPhone/iPad (the page would reload). Whisper Base is the largest model that runs here; use a desktop browser for Whisper Small.');
@@ -337,6 +357,7 @@ async function initSTTModel(externalProgressCb) {
         throw new Error('Model load cancelled by user');
     }
 
+    sttEverLoaded = true;
     return withHeavyLoadLock(`STT: ${modelLabel}`, async () => {
         isModelLoading = true;
         if (sttModelStatus) sttModelStatus.style.display = 'block';
