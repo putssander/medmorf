@@ -50,6 +50,28 @@ const STT_FORCE_WASM = !/[?&]stt-gpu=1\b/.test(typeof location !== 'undefined' ?
 //   ?stt-no-cache=1  skip the browser Cache API for model weights
 const STT_NO_PROXY = /[?&]stt-no-proxy=1\b/.test(typeof location !== 'undefined' ? location.search : '');
 const STT_NO_CACHE = /[?&]stt-no-cache=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+const STT_NO_WARM = /[?&]stt-no-warm=1\b/.test(typeof location !== 'undefined' ? location.search : '');
+// Crash breadcrumbs: persist the current load stage so that when iOS kills the
+// page mid-load we can show WHERE it died on the next visit.
+const LS_KEY_STT_STAGE = 'medmorf:stt-last-stage';
+function stage(name) {
+    try { localStorage.setItem(LS_KEY_STT_STAGE, JSON.stringify({ name, model: getSelectedModel?.() || '?', at: Date.now(), flags: { noProxy: STT_NO_PROXY, noCache: STT_NO_CACHE, noWarm: STT_NO_WARM } })); } catch (_) {}
+}
+function clearStage() { try { localStorage.removeItem(LS_KEY_STT_STAGE); } catch (_) {} }
+function reportCrashedStage() {
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem(LS_KEY_STT_STAGE) || 'null'); } catch (_) {}
+    if (!rec) return;
+    clearStage();
+    const box = document.getElementById('sttRecoveryBanner');
+    if (!box) return;
+    box.style.display = 'block';
+    const flags = Object.entries(rec.flags || {}).filter(([, v]) => v).map(([k]) => k).join(',') || 'none';
+    const div = document.createElement('div');
+    div.innerHTML = `<strong>Previous attempt crashed.</strong> The page was killed during stage: <strong>${rec.name}</strong> (model ${String(rec.model).replace('onnx-community/', '')}, flags: ${flags}, ${new Date(rec.at).toLocaleTimeString()}). Please report this stage name.`;
+    box.prepend(div);
+}
+if (typeof document !== 'undefined') setTimeout(reportCrashedStage, 500);
 
 function getModelConfig() {
     // Whisper on transformers.js works best with a PER-MODULE dtype:
@@ -369,6 +391,7 @@ async function initSTTModel(externalProgressCb) {
         updateStatus('loading', `Loading ${modelLabel}...`);
 
         try {
+            stage('import-transformers');
             const { pipeline: createPipeline, env, WhisperTextStreamer } = await import('@huggingface/transformers');
             whisperStreamerCtor = WhisperTextStreamer || null;
             env.allowLocalModels = false;
@@ -399,6 +422,7 @@ async function initSTTModel(externalProgressCb) {
             const fileProgress = {};
             const loggedFiles = new Set();
 
+            stage('create-pipeline (download + ONNX session init)');
             pipeline = await createPipeline('automatic-speech-recognition', selectedModel, {
                 dtype: modelDtype,
                 device: modelDevice,
@@ -437,6 +461,8 @@ async function initSTTModel(externalProgressCb) {
             // pay the cost on its own first chunk).
             isPipelineWarm = false;
             try {
+                if (STT_NO_WARM) { console.warn('[STT] warm-up skipped via ?stt-no-warm=1'); isPipelineWarm = true; throw { __skip: true }; }
+                stage('warm-up inference');
                 if (sttModelStatusText) sttModelStatusText.textContent = `Warming up ${modelLabel}…`;
                 const warmAudio = new Float32Array(16000); // 1 s of silence at 16 kHz
                 const warmLang = (sttLanguageSelect && sttLanguageSelect.value) || 'en';
@@ -448,10 +474,12 @@ async function initSTTModel(externalProgressCb) {
                 isPipelineWarm = true;
                 console.log('[STT] pipeline pre-warmed');
             } catch (warmErr) {
+                if (warmErr && warmErr.__skip) { /* deliberate skip */ } else
                 console.warn('[STT] pre-warm failed (continuing anyway):', warmErr);
                 isPipelineWarm = true; // allow inference even if warm-up didn't finish; first real chunk will compile
             }
 
+            clearStage(); // survived the whole load
             updateStatus('idle', 'System Ready');
             setTimeout(() => { if (sttModelStatus) sttModelStatus.style.display = 'none'; }, 2000);
         } catch (error) {
@@ -911,6 +939,7 @@ async function performTranscription() {
         if (sttProgressBar) sttProgressBar.style.width = '30%';
         updateStatus('translating', 'Decoding audio...');
 
+        stage('decode-audio');
         const audioData = recordedPCM || await decodeAudioToFloat32(recordedBlob);
         const clipSeconds = audioData.length / 16000;
 
@@ -945,6 +974,7 @@ async function performTranscription() {
             } catch (_) { /* recovery store unavailable */ }
         }
 
+        stage('transcribe inference');
         setEvictionGuard(true);
         const tStart = performance.now();
         try {
@@ -995,6 +1025,7 @@ async function performTranscription() {
         if (sttProgressBar) sttProgressBar.style.width = '100%';
         if (sttProgressText) sttProgressText.textContent = 'Transcription complete ✓';
 
+        clearStage();
         transcriptionResult = pieces.join('\n');
         renderSTTResults(transcriptionResult);
         // Success: the recording no longer needs crash protection.
