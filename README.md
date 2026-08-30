@@ -156,6 +156,7 @@ medmorf/
 |-- _headers
 |-- sw.js
 |-- tools/
+|   |-- deploy-pages.sh
 |   `-- dev-server-isolated.mjs
 |-- README.md
 |-- AGENTS.md
@@ -270,7 +271,7 @@ Guidance built into the Speech tab: for long sessions on a phone use **Dictaphon
 
 ## Cross-origin isolation (multithreaded WASM)
 
-**Hosting:** the repo ships a `_headers` file with the isolation headers. GitHub Pages ignores it (the current medmorf.com host — runs single-threaded). Cloudflare Pages picks it up automatically; migration steps: create a Pages project → connect this repo (no build command, output directory `/`) → add the custom domain → move medmorf.com's nameservers to Cloudflare. After deploy, verify in the console that `crossOriginIsolated === true` and that CDN assets (jsDelivr, HF, cdnjs, Tailwind) still load. Browsers without `COEP: credentialless` support ignore the header and stay single-threaded — never broken.
+**Hosting:** deployed to Cloudflare Pages (`https://medmorf.pages.dev`, project `medmorf`) with the isolation headers from `_headers` active — the page is cross-origin isolated in production. Redeploy with `tools/deploy-pages.sh` (clean `git archive` of HEAD), or connect the repo in the Cloudflare dashboard for deploy-on-push. The repo ships a `_headers` file with the isolation headers. GitHub Pages ignores it (the current medmorf.com host — runs single-threaded). Cloudflare Pages picks it up automatically; migration steps: create a Pages project → connect this repo (no build command, output directory `/`) → add the custom domain → move medmorf.com's nameservers to Cloudflare. After deploy, verify in the console that `crossOriginIsolated === true` and that CDN assets (jsDelivr, HF, cdnjs, Tailwind) still load. Browsers without `COEP: credentialless` support ignore the header and stay single-threaded — never broken.
 
 Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a page gets no `SharedArrayBuffer`, so ONNX Runtime WASM runs **single-threaded** — the main reason Whisper small ran slower than real time. Measured on the same machine, same 100 s Dutch clip, Whisper small on WASM:
 
