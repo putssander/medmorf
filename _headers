@@ -1,0 +1,19 @@
+# Cloudflare Pages headers (ignored by GitHub Pages).
+# COOP+COEP make the page cross-origin isolated -> SharedArrayBuffer ->
+# multithreaded WASM: measured Whisper small at ~real time vs >20 min for a
+# 15-minute clip single-threaded. `credentialless` (not require-corp) so the
+# Tailwind CDN and Google-hosted assets keep loading; browsers that do not
+# support it ignore it and simply stay single-threaded.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+
+# Immutable model/test fixtures can cache hard; app shell must revalidate.
+/tests/fixtures/*
+  Cache-Control: public, max-age=31536000, immutable
+/index.html
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache

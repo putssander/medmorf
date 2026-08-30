@@ -153,6 +153,7 @@ Dutch, English, German, French, Spanish, Portuguese, Italian, Polish, Romanian, 
 medmorf/
 |-- index.html
 |-- manifest.webmanifest
+|-- _headers
 |-- sw.js
 |-- tools/
 |   `-- dev-server-isolated.mjs
@@ -269,7 +270,7 @@ Guidance built into the Speech tab: for long sessions on a phone use **Dictaphon
 
 ## Cross-origin isolation (multithreaded WASM)
 
-**medmorf.com note:** the site is hosted on GitHub Pages, which cannot send custom headers. Options: (a) add the [`coi-serviceworker`](https://github.com/gzuidhof/coi-serviceworker) shim, which injects COOP/COEP from a service worker (needs one extra reload on first visit and must be reconciled with `sw.js`), or (b) move hosting to Cloudflare Pages / Netlify where a `_headers` file works. Until then the hosted version runs single-threaded WASM.
+**Hosting:** the repo ships a `_headers` file with the isolation headers. GitHub Pages ignores it (the current medmorf.com host — runs single-threaded). Cloudflare Pages picks it up automatically; migration steps: create a Pages project → connect this repo (no build command, output directory `/`) → add the custom domain → move medmorf.com's nameservers to Cloudflare. After deploy, verify in the console that `crossOriginIsolated === true` and that CDN assets (jsDelivr, HF, cdnjs, Tailwind) still load. Browsers without `COEP: credentialless` support ignore the header and stay single-threaded — never broken.
 
 Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a page gets no `SharedArrayBuffer`, so ONNX Runtime WASM runs **single-threaded** — the main reason Whisper small ran slower than real time. Measured on the same machine, same 100 s Dutch clip, Whisper small on WASM:
 
