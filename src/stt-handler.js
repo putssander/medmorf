@@ -510,6 +510,14 @@ async function checkRecovery() {
 }
 checkRecovery();
 
+function resumeWithTimeout(ctx, ms = 1000) {
+    if (ctx.state !== 'suspended') return Promise.resolve();
+    return Promise.race([
+        ctx.resume().catch(() => {}),
+        new Promise(r => setTimeout(r, ms)),
+    ]).then(() => { if (ctx.state === 'suspended') console.warn('[STT] AudioContext still suspended — audio may be silent until the user interacts'); });
+}
+
 // ── Recording PCM Capture ─────────────────────────────────────────────────────
 async function setupPCMCapture(stream) {
     // NEVER force sampleRate: on iOS the mic runs at 48 kHz and an AudioContext
@@ -518,7 +526,9 @@ async function setupPCMCapture(stream) {
     // resample to 16 kHz in software when the buffer is collected.
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     recAudioCtx = ctx;
-    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (_) {} } // iOS: must resume inside the gesture
+    // resume() can stay pending forever when the browser withholds activation —
+    // NEVER await it unbounded or the Record button hangs with no feedback.
+    resumeWithTimeout(ctx);
     recSampleRate = ctx.sampleRate;
     recSourceNode = ctx.createMediaStreamSource(stream);
 
@@ -1143,7 +1153,7 @@ function formatClock(date) {
 async function setupDictaphonePCM(stream) {
     // Hardware-rate context, software resample — see setupPCMCapture.
     dictaphoneAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (dictaphoneAudioCtx.state === 'suspended') { try { await dictaphoneAudioCtx.resume(); } catch (_) {} }
+    resumeWithTimeout(dictaphoneAudioCtx);
     dictaphoneSampleRate = dictaphoneAudioCtx.sampleRate;
     dictaphoneSourceNode = dictaphoneAudioCtx.createMediaStreamSource(stream);
 
