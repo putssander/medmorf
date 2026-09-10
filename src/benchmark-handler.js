@@ -53,7 +53,7 @@ const $ = (s) => root.querySelector(s);
 const log = (...a) => { const el = $('#bmLog'); el.textContent += a.map(x => typeof x === 'string' ? x : JSON.stringify(x)).join(' ') + '\n'; el.scrollTop = el.scrollHeight; console.log('[bench]', ...a); };
 const fmtMB = (mb) => mb == null || !isFinite(mb) ? '—' : mb >= 1024 ? (mb / 1024).toFixed(2) + ' GB' : Math.round(mb) + ' MB';
 const fmtMs = (ms) => ms == null ? '—' : ms >= 1000 ? (ms / 1000).toFixed(1) + ' s' : Math.round(ms) + ' ms';
-const pct = (x) => isFinite(x) ? (x * 100).toFixed(0) + '%' : '—';
+const pct = (x) => typeof x === 'number' && isFinite(x) ? (x * 100).toFixed(0) + '%' : '—';
 const yieldUI = () => new Promise(r => setTimeout(r, 0));
 
 // Heap sampler: peak usedJSHeapSize while a test runs (Chromium only).
@@ -256,7 +256,7 @@ function piiAggregate(scores) {
     const perType = {};
     for (const s of scores) for (const [t, v] of Object.entries(s.perType)) { perType[t] ??= { total: 0, detected: 0 }; perType[t].total += v.total; perType[t].detected += v.detected; }
     const worst = Object.entries(perType).map(([t, v]) => `${t} ${v.detected}/${v.total}`).join(', ');
-    const out = { value: recall, recall, precision, perType, label: `recall ${pct(recall)} · prec ${pct(precision)}`, detail: `Per type: ${worst}. Recall = leak-safety; a missed item is an un-redacted identifier.` };
+    const out = { value: recall, recall, precision, f1: mean(scores.map(s => s.f1)), perType, label: `recall ${pct(recall)} · precision ${pct(precision)} · F1 ${pct(mean(scores.map(s => s.f1)))}`, detail: `Per type: ${worst}. Recall = leak-safety; a missed item is an un-redacted identifier.` };
     // Re-identification layer (fixtures with riskGroups / retain, e.g. the oncology interview).
     const reids = scores.map(s => s.reid).filter(Boolean);
     if (reids.length) {
@@ -476,58 +476,49 @@ function envInfo() {
     return { browser: `${b.name} ${b.version}`, os: b.os, deviceMemoryGB: navigator.deviceMemory ?? null, cores: navigator.hardwareConcurrency, webgpu: snap?.webgpu, jsHeapLimitMB: rt.jsHeapLimitMB, safeCeilingMB: safeModelCeilingMB(snap), heapMeasured: rt.jsHeapSupported };
 }
 
+const runnerTable = (section, title) => `<div class="bm-panel"><h4>${title} <button class="btn btn-ghost btn-small" data-run="${section}">Run selected models</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-${section}"></table></div></div>`;
+const runner = (content) => `<details class="bm-runner"><summary>Run this benchmark on your device <span>Optional · downloads models</span></summary><div class="bm-runner-body"><p class="bm-runner-status" role="status">Preparing local benchmark controls…</p>${content}</div></details>`;
+const emptyPublished = metric => `<div class="bm-empty"><strong>No measured run published yet</strong><p>${metric} Open the optional benchmark below to measure this device. Local runs do not replace the published results.</p></div>`;
 const MARKUP = `
-<div class="bm-panel">
-    <div class="bm-head"><h3>Model benchmark</h3>
-    <p class="bm-sub">Loads every model option per tab (plus Qwen3.5 candidates) on synthetic fixtures (fictional patients) and records load time, inference time, peak JS heap and a task quality score. Models run <b>sequentially</b> and are disposed between runs. Unload models in the other tabs first for clean numbers. Chrome/Edge give heap numbers and WebGPU; Safari/Firefox show n/a for heap.</p></div>
-    <div id="bmEnv" class="bm-kv"><span class="k">Probing…</span><span></span></div>
-    <div class="bm-row">
-        <label class="bm-inline"><input type="checkbox" id="bmSkipBig" checked> Skip models above the device's safe ceiling</label>
-        <label class="bm-inline"><input type="checkbox" id="bmSttGpu"> Whisper on WebGPU (fp16) instead of WASM</label>
-        <label class="bm-inline">Anonymize set <select id="bmAnonSet">${Object.entries(ANON_SETS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
-        <label class="bm-inline">Max docs per model <input type="number" id="bmNumDocs" value="4" min="1" max="30"></label>
-        <button class="btn btn-primary btn-small" id="bmRunAll">Run everything</button>
-        <button class="btn btn-ghost btn-small" id="bmExportJson">Export JSON</button>
-        <button class="btn btn-ghost btn-small" id="bmExportMd">Copy Markdown table</button>
-    </div>
-</div>
-<div class="bm-panel bm-legend"><h4>How to read the quality column</h4><ul class="bm-sub">
-<li><b>WER</b> (speech) — word error rate, lower is better. 0% perfect; 10% ≈ one word in ten wrong.</li>
-<li><b>chrF</b> (translation) — character-level overlap with a reference translation, higher is better; ≥60% is good for a 600M model, professional MT scores 70–80%.</li>
-<li><b>Recall / precision</b> (anonymize) — recall = share of real identifiers found (a miss is a leak, this is the number that matters); precision = share of flagged items that were really identifiers.</li>
-<li><b>Facts / halluc.</b> (summarize) — share of checklist facts present in the summary; share of hallucination probes (things not in the source) that appeared.</li>
-</ul><p class="bm-sub">All models here are sized to run inside a browser tab. Larger self-hosted or cloud models score better on every task — the trade-off Medmorf makes is that data never leaves the device.</p></div>
-<div class="bm-panel" id="bmPublished"></div>
-<div class="bm-panel"><h4>Translate <span class="bm-tag">Transformers.js v2 · WASM</span> <button class="btn btn-ghost btn-small" data-run="translate">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-translate"></table></div></div>
-<div class="bm-panel"><h4>Anonymize — NER detectors <span class="bm-tag">Transformers.js v4 / GLiNER</span> <button class="btn btn-ghost btn-small" data-run="ner">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-ner"></table></div></div>
-<div class="bm-panel"><h4>Anonymize — LLM extraction <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="anonllm">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-anonllm"></table></div>
-<p class="bm-sub" style="margin-top:0.6rem">Documents are chunked like the app (2400 chars, 240 overlap) and the app's sanity filter is applied to LLM output, so precision here matches what Anonymize keeps. Fixture sets include PROFESSION items the app does not detect yet; read that row as a known gap, not a model failure.</p></div>
-<div class="bm-panel"><h4>Anonymize — NER + LLM union <span class="bm-tag">computed, no extra runs</span></h4><div class="bm-wrap"><table class="bm-table" id="tbl-hybrid"></table></div>
-<p class="bm-sub" style="margin-top:0.6rem">Recall of the app's hybrid pipeline for every detector × LLM pair, computed from the predictions stored by the two sections above on the same set. Precision is a lower bound (the app's LLM validation pass, which removes NER false positives, is not simulated).</p></div>
-<div class="bm-panel"><h4>Summarize <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="summarize">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-summarize"></table></div></div>
-<div class="bm-panel"><h4>Speech <span class="bm-tag">Transformers.js v4 · Whisper</span> <button class="btn btn-ghost btn-small" data-run="stt">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-stt"></table></div>
-<p class="bm-sub" style="margin-top:0.6rem"><b>Reading the scores.</b> WER = words wrong ÷ words spoken (lower is better; 10% ≈ one word in ten). Reference points that do <em>not</em> fit in a browser (Whisper paper, FLEURS): medium — Dutch 10% / English 4%; large-v2 — Dutch 7% / English 4%; frontier cloud dictation services ≈ 4–6%. In-browser small: Dutch 16% / English 6% on the same benchmark. Clips here are synthetic TTS, so absolute numbers differ from FLEURS; compare models against each other, not against the reference.</p></div>
-<div class="bm-panel"><h4>DICOM · Merge PDF · Storage</h4><p class="bm-sub">No ML models — nothing to benchmark. (OCR via Tesseract is only used inside PDF burn-in and is not model-selectable.)</p></div>
-<div class="bm-panel"><h4>Log</h4><div id="bmLog" class="bm-log"></div><details><summary>Last model output</summary><textarea class="bm-out" id="bmLastOut" readonly></textarea></details></div>
-`;
+<div class="bm-overview"><span class="bm-eyebrow">Measured, reproducible, local</span><h3>Know what the models can do</h3><p>Published measurements first. Explore each tool’s results, then optionally run the same tests on your own hardware. All test data is synthetic.</p><nav aria-label="Benchmark tools"><a href="#benchmark-anonymize">Anonymize</a><a href="#benchmark-translate">Translate</a><a href="#benchmark-summarize">Summarize</a><a href="#benchmark-speech">Speech</a></nav></div>
+<section class="bm-tool" id="benchmark-anonymize"><div class="bm-tool-heading"><span class="bm-eyebrow">Identifier detection</span><h3>Anonymize</h3></div><div id="bmPublished"></div>
+${runner(runnerTable('ner', 'Detectors') + runnerTable('anonllm', 'LLM extraction') + `<div class="bm-panel"><h4>Detector + LLM combinations</h4><div class="bm-wrap"><table class="bm-table" id="tbl-hybrid"></table></div><p class="bm-sub">Computed from both models’ predictions on the same documents. The LLM validation pass is not simulated, so union precision is a lower bound.</p></div>`)}
+</section>
+<section class="bm-tool" id="benchmark-translate"><div class="bm-tool-heading"><span class="bm-eyebrow">Language quality</span><h3>Translate</h3></div>${emptyPublished('chrF measures character overlap with a reference translation; higher is better.')}${runner(runnerTable('translate', 'Translation models'))}</section>
+<section class="bm-tool" id="benchmark-summarize"><div class="bm-tool-heading"><span class="bm-eyebrow">Coverage & faithfulness</span><h3>Summarize</h3></div>${emptyPublished('Fact coverage measures retained checklist facts; hallucination probes check for unsupported statements.')}${runner(runnerTable('summarize', 'Summary models'))}</section>
+<section class="bm-tool" id="benchmark-speech"><div class="bm-tool-heading"><span class="bm-eyebrow">Transcription quality</span><h3>Speech</h3></div>${emptyPublished('Word error rate (WER) measures transcription errors; lower is better. Synthetic clips are not directly comparable with published read-speech benchmarks.')}<details class="bm-method"><summary>Earlier runtime observations · 2026-08-30</summary><p>These are historical development notes, not a published quality-scoring export. On the 15.3-minute Dutch conversation fixture, Whisper small completed 103 chunks on the iOS Simulator (iPhone 17, iOS 26.5) in about 28 minutes while a desktop run competed for CPU. The page remained responsive with approximately 500 MB in the memory bar.</p><p>Chrome 151 on an M-series desktop, single-threaded WASM with a proxy worker, had a 705 MB peak JS heap and was still finishing the last of 47 chunks after 20 minutes (about 0.75× real time). A separate 100-second Dutch clip with cross-origin isolation and multithreaded WASM completed in 89 seconds (about 1.1× real time). The clip lengths and conditions differ; this is not a controlled speed comparison.</p><p>For long phone sessions, use Dictaphone mode; keep the tab in the foreground for a single long recording.</p></details>${runner(runnerTable('stt', 'Speech models'))}</section>
+<section class="bm-tool"><h3>DICOM · Merge PDF · Storage</h3><p class="bm-sub">These tools have no selectable ML models to benchmark. PDF OCR quality is not covered by this benchmark.</p></section>
+<details class="bm-runner" id="bmRunSettings"><summary>Local run settings & exports <span>Shared across tools</span></summary><div class="bm-runner-body"><p class="bm-runner-status" role="status">Preparing local benchmark controls…</p>
+<p class="bm-sub">Models run sequentially and are disposed between runs. Unload models in other tabs for clean measurements. First use downloads model weights; your test data stays on this device.</p>
+<div id="bmEnv" class="bm-kv"></div><div class="bm-row">
+<label class="bm-inline"><input type="checkbox" id="bmSkipBig" checked> Skip models above the device’s safe ceiling</label>
+<label class="bm-inline"><input type="checkbox" id="bmSttGpu"> Whisper on WebGPU (fp16)</label>
+<label class="bm-inline">Anonymize dataset <select id="bmAnonSet">${Object.entries(ANON_SETS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+<label class="bm-inline">Max documents per model <input type="number" id="bmNumDocs" value="4" min="1" max="30"></label>
+<button class="btn btn-primary btn-small" id="bmRunAll">Run all tools</button><button class="btn btn-ghost btn-small" id="bmExportJson">Export local results</button><button class="btn btn-ghost btn-small" id="bmExportMd">Copy local results</button></div>
+<details><summary>Run log & last output</summary><div id="bmLog" class="bm-log"></div><textarea class="bm-out" id="bmLastOut" aria-label="Last model output" readonly></textarea></details></div></details>`;
 
-// ── Published results (src/benchmark-published.js, generated from a raw export) ─
-function renderPublished() {
+// The generated module and downloadable report share the same raw export.
+function renderPublished(selectedSet = PUBLISHED_BENCHMARK?.sets?.[0]?.key) {
     const el = $('#bmPublished'); if (!el) return;
     const b = PUBLISHED_BENCHMARK;
-    if (!b || !b.models) { el.innerHTML = '<h4>Published results</h4><p class="bm-sub">No published run yet.</p>'; return; }
-    const keys = (b.sets || []).map(s => s.key);
-    const esc = (x) => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    const cell = (r) => (r && typeof r.recall === 'number') ? `${pct(r.recall)} / ${pct(r.precision)}` : (r?.status ? esc(r.status) : '—');
-    const rows = [];
-    for (const [id, m] of Object.entries(b.models)) rows.push({ label: m.label, kind: m.kind === 'ner' ? 'NER' : 'LLM', results: m.results, id });
-    for (const u of b.unions || []) rows.push({ label: u.label, kind: 'NER + LLM (union)', results: u.results, best: b.best && u.ner === b.best.ner && u.llm === b.best.llm });
-    el.innerHTML = `<h4>Published results <span class="bm-tag">${esc(b.date)}</span></h4>
-        <p class="bm-sub">Measured on this app's fixtures with the same code as the tables below (recall / precision; recall = share of identifiers found). Produced from <code>${esc(b.sourceFile)}</code>${b.notesFile ? ` and <code>${esc(b.notesFile)}</code>` : ''} via <code>tools/benchmark-report.mjs</code>; full tables, per-type breakdown and misses in <a href="${esc(b.reportFile)}" target="_blank" rel="noopener noreferrer">${esc(b.reportFile)}</a>. Environment: ${esc(b.environment)}.</p>
-        <div class="bm-wrap"><table class="bm-table bm-published"><thead><tr><th>Model / pipeline</th><th>Kind</th>${keys.map(k => `<th>${esc((b.sets.find(s => s.key === k) || {}).label.split(' — ')[0])}</th>`).join('')}</tr></thead><tbody>
-        ${rows.map(r => `<tr class="${r.best ? 'bm-best' : ''}"><td>${esc(r.label)}${r.best ? ' <span class="bm-tag">best measured</span>' : ''}</td><td>${esc(r.kind)}</td>${keys.map(k => `<td class="bm-num">${cell(r.results?.[k])}</td>`).join('')}</tr>`).join('')}
-        </tbody></table></div>
-        <p class="bm-sub">Run a section below to reproduce on this device; then "Export JSON" and regenerate the published files with the command in README → Model Benchmark.</p>`;
+    if (!b?.models) { el.innerHTML = emptyPublished('Recall, precision and F1 measure identifier detection.'); return; }
+    const esc = x => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const set = b.sets.find(s => s.key === selectedSet) || b.sets[0];
+    const rows = [
+        ...(b.unions || []).map(u => ({ ...u, kind: 'Detector + LLM · computed union' })),
+        ...Object.values(b.models).map(m => ({ ...m, kind: m.kind === 'ner' ? 'Detector only' : 'LLM only' }))
+    ].sort((a, c) => (c.results?.[set.key]?.recall ?? -1) - (a.results?.[set.key]?.recall ?? -1));
+    const scores = r => `<dl class="bm-score-trio">${[['recall', 'Recall'], ['precision', 'Precision'], ['f1', 'F1']].map(([key, label]) => `<div><dt>${label}</dt><dd>${pct(r?.[key])}</dd></div>`).join('')}</dl>`;
+    const url = file => esc(new URL('../' + file, import.meta.url).href);
+    el.innerHTML = `<div class="bm-published-intro"><span class="bm-published-date">Measured ${esc(b.date)}</span><p>How many identifiers were found, how reliable the detections were, and the balance between both.</p></div>
+    <div class="bm-metric-guide"><p><strong>Recall</strong>Identifiers found. Misses can expose personal data.</p><p><strong>Precision</strong>Detections that were correct. Lower scores mean more unnecessary redaction.</p><p><strong>F1</strong>Balance of precision and recall. Higher is better for all three metrics.</p></div>
+    <label class="bm-dataset-label" for="bmPublishedSet">Published dataset</label><select id="bmPublishedSet" class="bm-dataset-select">${b.sets.map(s => `<option value="${esc(s.key)}"${s.key === set.key ? ' selected' : ''}>${esc(s.label.split(' (')[0])}</option>`).join('')}</select>
+    <p class="bm-sub">${esc(set.label)} · ${set.docs} document${set.docs === 1 ? '' : 's'} · ${set.items} annotated identifiers</p>
+    <div class="bm-results-list">${rows.map((r, i) => { const result = r.results?.[set.key]; return `<article class="bm-result${i === 0 && typeof result?.recall === 'number' ? ' bm-result-leading' : ''}"><div class="bm-result-name"><span>${i === 0 && typeof result?.recall === 'number' ? 'Highest recall in this dataset' : esc(r.kind)}</span><h4>${esc(r.label)}</h4>${typeof result?.recall !== 'number' ? `<p>${esc(result?.reason || 'Not measured on this dataset')}</p>` : ''}</div>${scores(result)}</article>`; }).join('')}</div>
+    <p class="bm-review"><strong>Human review remains essential.</strong> These synthetic results do not guarantee anonymization. Combinations of personal and clinical details can still identify someone.</p>
+    <details class="bm-method"><summary>Method, limitations & source data</summary><p>Scores are document averages, with whole-word overlap matching. F1 is calculated per document as 2 × precision × recall ÷ (precision + recall), then averaged; it is not calculated from the rounded averages shown above. Models are ordered by recall, not F1.</p><p>Detector + LLM results are unions of stored predictions. The app’s LLM validation pass is not simulated, so union precision is a lower bound. These are not directly comparable with scores on other datasets. Re-identification risk and per-type misses are in the detailed report.</p><p>${esc(b.environment)}</p><p><a href="${url(b.reportFile)}" target="_blank" rel="noopener noreferrer">Detailed generated report ↗</a> · <a href="${url(b.sourceFile)}" target="_blank" rel="noopener noreferrer">Raw measured export ↗</a></p></details>`;
+    $('#bmPublishedSet').addEventListener('change', e => { renderPublished(e.target.value); $('#bmPublishedSet').focus({ preventScroll: true }); });
 }
 
 let mounted = false;
@@ -537,7 +528,21 @@ export async function mountBenchmark(container) {
     mounted = true;
     root = container;
     container.innerHTML = MARKUP;
-    await init();
+    renderPublished();
+    document.dispatchEvent(new Event('benchmark-ready'));
+    let preparation;
+    container.querySelectorAll('.bm-runner').forEach(details => details.addEventListener('toggle', () => {
+        if (!details.open) return;
+        if (!preparation) {
+            container.querySelectorAll('.bm-runner button').forEach(button => button.disabled = true);
+            preparation = init().then(() => {
+                container.querySelectorAll('.bm-runner-status').forEach(el => el.textContent = 'Ready. Adjust the shared run settings below if needed.');
+                container.querySelectorAll('.bm-runner button').forEach(button => button.disabled = false);
+            }).catch(error => {
+                container.querySelectorAll('.bm-runner-status').forEach(el => el.textContent = 'Could not prepare this run. Reload to retry. ' + error.message);
+            });
+        }
+    }));
 }
 export function getBenchmarkResults() { return results; }
 
@@ -553,7 +558,6 @@ async function init() {
         'Safe model ceiling': fmtMB(e.safeCeilingMB),
         'Fixtures': `PII sets: ${Object.keys(ANON_SETS).map(k => `${k === 'anonymize' ? 'app' : k.replace('anonymize-', '')} ${fixtures[k].documents.length} docs / ${fixtures[k].documents.reduce((n, d) => n + d.pii.length, 0)} items`).join(' · ')} · ${fixtures.translate.pairs.length} sentence pairs · ${fixtures.summarize.documents.length} notes · ${fixtures.speech.clips.length} audio clips`,
     }).map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('');
-    renderPublished();
     for (const [s, fn] of Object.entries(SECTIONS)) buildTable(s, fn());
     root.addEventListener('click', (ev) => {
         const one = ev.target.closest('[data-one]'); if (one) { const [s, id] = one.dataset.one.split('|'); runSection(s, id); }

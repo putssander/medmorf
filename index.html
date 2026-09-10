@@ -148,8 +148,7 @@
             <div class="performance-banner-body">
                 <p>MedMorf runs smaller models on your local hardware, not massive GPU clusters. Expect noticeably lower accuracy, reasoning depth, and consistency on complex tasks.</p>
                 <div class="performance-banner-actions">
-                    <a class="performance-banner-link" href="https://github.com/putssander/medmorf#accuracy-and-wer" target="_blank" rel="noopener noreferrer">View benchmark numbers <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
-                    <a class="performance-banner-secondary" id="performanceBenchmarkLink" href="#tab-benchmark">Benchmark on your device <span aria-hidden="true">→</span></a>
+                    <a class="performance-banner-link" href="#benchmark">View measured benchmarks <span aria-hidden="true">→</span></a>
                 </div>
             </div>
         </details>
@@ -242,11 +241,8 @@
                     <p>Translate medical text or documents without sending them off your device.</p>
                 </div>
                 <details class="stt-accuracy quality-note" id="transAccuracyPanel">
-                    <summary>Accuracy and clinical safety</summary>
-                    <div class="stt-accuracy-body">
-<p><strong>chrF</strong> measures how much of a translation's character sequences match a reference translation (0–100%, higher is better). Roughly: above 60% the meaning is reliably preserved and sentences read naturally; 45–60% is understandable but needs editing; below 45% is unreliable. Medmorf's NLLB‑200 600M model scores ≈ 72% chrF on short Dutch→English clinical sentences in the Benchmark tab.</p>
-<p><strong>Larger models translate better.</strong> NLLB‑200 also ships 1.3B and 3.3B versions and a 54B research model; each step up improves quality, especially for long or rare-word sentences and languages other than English. Frontier services (DeepL, GPT‑4-class models) are better still on fluency and medical terminology — but they run in a vendor's cloud. Medmorf uses the 600M model because it is the largest that fits a browser tab (~600 MB) and runs on CPU without a GPU.</p>
-<p class="stt-accuracy-foot"><strong>Tips:</strong> translate short sentences, keep drug names and dosages in the source language if unsure, and verify numbers and negations ("no signs of…") — small models sometimes drop them.</p></div>
+                    <summary>Accuracy and required review</summary>
+                    <div class="stt-accuracy-body"><p>Small local models can miss medical terminology, numbers and negations. Keep drug names and dosages in the source language when unsure, and verify the translation before use.</p><p><a href="#benchmark-translate">View translate benchmarks, metrics and limitations →</a></p></div>
                 </details>
 
                 <!-- Text Translation Section -->
@@ -592,21 +588,7 @@
                     </div>
                 <details class="stt-accuracy quality-note" id="anonAccuracyPanel">
                     <summary>Accuracy and required review</summary>
-                    <div class="stt-accuracy-body">
-<p><strong>Recall</strong> is the share of real identifiers (names, dates, addresses, IDs…) that were found. <strong>Every missed identifier is a leak</strong>, so recall is the number that matters; <em>precision</em> only says how many flagged items were false alarms (harmless, just over-redaction). 90% recall on a letter with 20 identifiers means 2 are still in the output.</p>
-<p><strong>Measured, not estimated.</strong> The numbers below were measured on 2026-09-10 with the Benchmark tab on three synthetic sets: 4 short clinical notes (Dutch + English), a 34,000-character Dutch oncology patient interview with a physician-style gold standard, and 24 notes from the MedDeID Dutch de-identification benchmark. Everything runs in your browser, so the models are small: a 50–800 MB detector and a 2B-parameter LLM. Full tables, per-type breakdowns and the raw export: <a href="docs/BENCHMARKS.md" target="_blank" rel="noopener noreferrer">docs/BENCHMARKS.md</a>.</p>
-<div class="stt-accuracy-table-wrap"><table class="stt-accuracy-table">
-<thead><tr><th>Approach</th><th>Where it runs</th><th>Recall: notes / interview / MedDeID</th><th>Notes</th></tr></thead><tbody>
-<tr><td><strong>GLiNER PII Edge + Qwen3.5 2B (recommended)</strong></td><td>In browser, CPU + WebGPU</td><td><strong>96% / 94% / 84%</strong></td><td>Best on every set; GLiNER also flags some clinical terms, which the review panel lets you switch off</td></tr>
-<tr><td>Qwen3.5 2B only</td><td>In browser, WebGPU</td><td>84% / 75% / 64%</td><td>Most precise (98% / 94% / 86%), never removed a clinical term; misses partial dates, streets, ages in words</td></tr>
-<tr><td>GLiNER PII Edge only</td><td>In browser, CPU</td><td>79% / 58% / 67%</td><td>Fastest and lightest (≈ 50 MB); weak on dates</td></tr>
-<tr><td>Multilingual BERT NER only</td><td>In browser, CPU</td><td>53% / 50% / 30%</td><td>Names and places only; no dates, IDs or phone numbers</td></tr>
-<tr><td>OpenAI Privacy Filter only</td><td>In browser, WebGPU</td><td>20% / 14% / 18%</td><td>Not suitable for Dutch clinical text</td></tr>
-<tr><td>Frontier LLM (GPT‑4-class)</td><td>Vendor cloud</td><td>≈ 90–95% (literature)</td><td>Text leaves your device</td></tr>
-<tr><td>Specialised clinical de-id (RoBERTa-large, Philter…)</td><td>Server</td><td>≈ 96–99% (i2b2, literature)</td><td>English-centric; not in-browser</td></tr>
-</tbody></table></div>
-<p><strong>Re-identification is a separate question.</strong> On the interview, the best pipeline neutralised 62% of the quasi-identifier elements and 15 of 18 risk groups from the gold standard; what remains are combinations of profession, employment history and clinical detail with age and place. Removing names and numbers does not make a text anonymous — read the mapping and the highlighted preview with that in mind.</p>
-<p class="stt-accuracy-foot">Medmorf rows: own measurements (whole-word overlap scoring on synthetic data; Qwen3.5 4B not yet measured). Reference rows: i2b2 2014 de-identification benchmark and published GPT‑4 evaluations (Scientific Reports 2025; iScience 2025). <strong>Use Medmorf as a first pass, then review the highlighted mapping and search the output for anything the models missed — never treat the output as fully de-identified without a human check.</strong></p></div>
+                    <div class="stt-accuracy-body"><p>Recall is the share of identifiers found; every missed identifier can expose personal data. Precision measures how many detections were correct; F1 balances precision and recall. Removing names and numbers does not guarantee anonymity: combinations of profession, age, place and clinical details can still identify someone. Review the highlighted mapping and search the output for missed identifiers before sharing it.</p><p><a href="#benchmark-anonymize">View anonymize benchmarks, metrics and limitations →</a></p></div>
                 </details>
 
                     <details class="workflow-disclosure method-disclosure">
@@ -671,7 +653,7 @@
                                 </section>
                             </div>
                             <div id="anonModelSelectionError" class="anon-selection-error" role="status" aria-live="polite"></div>
-                            <section id="anonBenchNote" class="anon-bench-panel" aria-labelledby="anonBenchTitle" hidden></section>
+                            <p class="storage-hint"><a href="#benchmark-anonymize">Compare measured recall, precision and F1 →</a></p>
                         </div>
                         <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
                             <div class="setting-group compact" style="flex:1">
@@ -690,7 +672,7 @@
                         <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
                         <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.9 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
                         <ul>
-                            <li><strong>Qwen3.5 2B</strong> (default) — ~2.2 GB VRAM. Best PII recall under 3 GB in the Benchmark tab (83%).</li>
+                            <li><strong>Qwen3.5 2B</strong> (default) — ~2.2 GB VRAM. See the Benchmark page for measured identifier detection scores.</li>
                             <li><strong>Qwen3.5 4B</strong> — ~3.9 GB VRAM. Largest browser-feasible option; needs ~4 GB GPU memory. All models are kept ≤4B by design.</li>
                             <li><strong>Multilingual PII NER</strong> — ~280 MB. XLM-RoBERTa, no GPU needed. Names, addresses, dates, IDs in 8+ languages.</li>
                             <li><strong>GLiNER PII Edge</strong> — ~46 MB. Zero-shot, no GPU needed. Best for English.</li>
@@ -992,10 +974,8 @@
                         <span>Requires WebGPU. The model runs locally in this browser.</span>
                     </div>
                 <details class="stt-accuracy quality-note" id="sumAccuracyPanel">
-                    <summary>Accuracy and clinical safety</summary>
-                    <div class="stt-accuracy-body">
-<p>Medmorf scores summaries by <strong>fact coverage</strong> — the share of clinically relevant facts from the source that appear in the summary — and by <strong>hallucination probes</strong>, statements that appear although they are not in the source. On the synthetic notes in the Benchmark tab the in-browser models cover ≈ 85% of the facts with no hallucinations, but they do drop items (in one test: the trigger event and a passive death wish), and they write less fluent Dutch than large models.</p>
-<p><strong>Larger models are better here.</strong> In a Nature Medicine study (2024), an adapted GPT‑4 produced clinical summaries judged equal or better than physicians' in 81% of cases; 2–4B in-browser models are well below that. Medmorf's trade-off is that the note never leaves your device. <strong>Treat the summary as a draft: check it against the source for missing risk information, medication, and numbers.</strong> Prefer the 4B model when your device allows it (see the memory bar), and use the structured templates — they force the model to cover each section.</p></div>
+                    <summary>Accuracy and required review</summary>
+                    <div class="stt-accuracy-body"><p>Local models can omit clinical facts or introduce unsupported statements. Compare every summary with its source, especially medication, dosage, negation and risk information.</p><p><a href="#benchmark-summarize">View summarize benchmarks, metrics and limitations →</a></p></div>
                 </details>
                 </div>
 
@@ -1133,27 +1113,10 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M9 9h6v6H9z"></path></svg>
                         <span>Whisper runs offline in your browser. Audio is never uploaded.</span>
                     </div>
-                    <details class="stt-accuracy" id="sttAccuracyPanel">
-                        <summary>Accuracy and clinical safety</summary>
-                        <div class="stt-accuracy-body">
-                            <p><strong>WER (word error rate)</strong> is the share of words a transcript gets wrong — substitutions, missed words and inserted words, divided by the number of words actually spoken. <strong>10% WER means roughly one word in ten needs correcting</strong>; 0% is perfect. Below ~10% a transcript is usually usable after a quick read-through; above ~25% it is often faster to dictate again. WER treats every word the same, so a wrong drug name or dose counts exactly like a wrong “the” — always verify medication, numbers and names.</p>
-                            <p><strong>Why Medmorf uses small models.</strong> Everything here runs inside your browser on your own device, so nothing leaves it. That limits model size: the largest Whisper that fits a phone or laptop tab is <em>small</em> (~500 MB). Larger Whisper models (medium ~1.5 GB, large-v2/v3 ~3 GB) and the commercial “frontier” dictation services are noticeably more accurate, but need a GPU server or send your audio to a cloud provider.</p>
-                            <div class="stt-accuracy-table-wrap">
-                                <table class="stt-accuracy-table">
-                                    <thead><tr><th>Model</th><th>Where it runs</th><th>Dutch WER</th><th>English WER</th><th>Notes</th></tr></thead>
-                                    <tbody>
-                                        <tr><td>Whisper tiny</td><td>In browser</td><td>49%</td><td>12%</td><td>Not usable for Dutch; English only for rough notes</td></tr>
-                                        <tr><td>Whisper base</td><td>In browser</td><td>33%</td><td>9%</td><td>Fair for English, poor for Dutch</td></tr>
-                                        <tr><td><strong>Whisper small (default)</strong></td><td>In browser</td><td><strong>16%</strong></td><td><strong>6%</strong></td><td>Best that fits a browser tab; review before use</td></tr>
-                                        <tr><td>Whisper medium</td><td>Server GPU</td><td>10%</td><td>4%</td><td>Too large for a browser tab</td></tr>
-                                        <tr><td>Whisper large-v2/v3</td><td>Server GPU</td><td>7%</td><td>4%</td><td>Too large for a browser tab</td></tr>
-                                        <tr><td>Frontier cloud dictation (2026)</td><td>Vendor cloud</td><td colspan="2">≈4–6% average across languages; medical-tuned services report ~3% missed medical terms</td><td>Audio leaves your device</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <p class="stt-accuracy-foot">Whisper figures: OpenAI Whisper paper, FLEURS read-speech benchmark (clean audio, native speakers). Real dictation — accents, background noise, phone microphones, jargon — scores worse for every model; Medmorf’s own <em>Benchmark</em> tab measures the in-browser models on synthetic clinical clips on your device. Frontier figures from public 2026 vendor benchmarks (Microsoft MAI-Transcribe-1, AssemblyAI Universal-3, NVIDIA Parakeet). <strong>Tips:</strong> use the small model, speak clearly in short sentences, keep the microphone close, choose the correct language, and always proofread numbers, dosages and names.</p>
-                        </div>
-                    </details>
+                    <details class="stt-accuracy quality-note" id="sttAccuracyPanel">
+                    <summary>Accuracy and required review</summary>
+                    <div class="stt-accuracy-body"><p>Local speech models can mishear accents, background noise, names and medical terminology. Use short, clear recordings and always proofread numbers, dosages and names.</p><p><a href="#benchmark-speech">View speech benchmarks, metrics and limitations →</a></p></div>
+                </details>
                     <div class="workflow-step-heading workflow-step-heading-compact">
                         <span class="workflow-step-number">1</span>
                         <div>
@@ -1982,7 +1945,7 @@
             <div class="tab-panel" id="tab-benchmark">
                 <div class="page-heading">
                     <h2>Benchmark</h2>
-                    <p>Compare local model speed, memory use, and quality on synthetic data.</p>
+                    <p>Measured model quality, grouped by tool. Explore the results or run the benchmarks yourself.</p>
                 </div>
                 <div id="benchmarkRoot" class="benchmark-root"><p class="storage-hint">Open this tab to load the benchmark.</p></div>
             </div>
@@ -2057,25 +2020,41 @@
                 document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
                 btn.classList.add('active');
                 document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                if (btn.dataset.tab === 'benchmark' && !location.hash.startsWith('#benchmark')) history.replaceState(null, '', '#benchmark');
+                if (btn.dataset.tab !== 'benchmark' && location.hash.startsWith('#benchmark')) history.replaceState(null, '', location.pathname + location.search);
                 try { localStorage.setItem('medmod_active_tab', btn.dataset.tab); } catch (_) {}
             });
         });
 
-        document.getElementById('performanceBenchmarkLink').addEventListener('click', event => {
-            event.preventDefault();
-            const benchmarkTab = document.querySelector('.tab-btn[data-tab="benchmark"]');
-            benchmarkTab.click();
-            benchmarkTab.focus({ preventScroll: true });
-            benchmarkTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        // Shareable benchmark routes take precedence over the remembered tool.
+        function openBenchmarkRoute() {
+            if (!/^#benchmark(?:-(anonymize|translate|summarize|speech))?$/.test(location.hash)) return false;
+            document.querySelector('.tab-btn[data-tab="benchmark"]').click();
+            const destination = location.hash.slice(1);
+            const reveal = () => {
+                const target = document.getElementById(destination) || document.querySelector('#tab-benchmark h2');
+                target.setAttribute('tabindex', '-1');
+                target.focus({ preventScroll: true });
+                target.scrollIntoView({ block: 'start' });
+            };
+            if (document.getElementById('benchmark-anonymize')) reveal();
+            else document.addEventListener('benchmark-ready', reveal, { once: true });
+            return true;
+        }
+        window.addEventListener('hashchange', openBenchmarkRoute);
+        document.addEventListener('click', event => {
+            const link = event.target.closest('a[href^="#benchmark"]');
+            if (link && link.hash === location.hash) { event.preventDefault(); openBenchmarkRoute(); }
         });
+        if (!openBenchmarkRoute()) {
+            try {
+                const saved = localStorage.getItem('medmod_active_tab');
+                if (saved && document.querySelector('.tab-btn[data-tab="' + saved + '"]')) {
+                    document.querySelector('.tab-btn[data-tab="' + saved + '"]').click();
+                }
+            } catch (_) {}
+        }
 
-        // Restore last active tab
-        try {
-            const saved = localStorage.getItem('medmod_active_tab');
-            if (saved && document.querySelector('.tab-btn[data-tab="' + saved + '"]')) {
-                document.querySelector('.tab-btn[data-tab="' + saved + '"]').click();
-            }
-        } catch (_) {}
     </script>
 </body>
 </html>

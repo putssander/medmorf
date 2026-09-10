@@ -32,7 +32,6 @@ import {
 } from './text-chunking.js?v=2026-09-10-bench-1';
 import { createDetectionKey, isObviousGarbage, filterLLMEntities, normalizeForMatch } from './anonymize-filters.js?v=2026-09-10-bench-1';
 import { parseEntityArray, streamEntityExtraction } from './llm-extract.js?v=2026-09-10-bench-1';
-import { PUBLISHED_BENCHMARK } from './benchmark-published.js?v=2026-09-10-bench-1';
 import {
     classifyModelRisk,
     describeMemoryCeiling,
@@ -1659,32 +1658,6 @@ function createModelCard(family, option) {
     return button;
 }
 
-// ── Published benchmark numbers (src/benchmark-published.js, generated) ──────
-// Results are presented separately from model-selection controls.
-const BENCH = PUBLISHED_BENCHMARK || null;
-const benchPct = (r) => (r && r.status !== 'skipped' && r.status !== 'fail' && typeof r.recall === 'number') ? `${Math.round(r.recall * 100)}%` : '—';
-function renderPublishedBenchNote() {
-    const el = document.getElementById('anonBenchNote');
-    if (!el) return;
-    if (!BENCH?.models || !BENCH?.best) { el.hidden = true; return; }
-    el.hidden = false;
-    const sets = BENCH.sets || [];
-    const best = (BENCH.unions || []).find(u => u.ner === BENCH.best.ner && u.llm === BENCH.best.llm);
-    const label = s => s.label.split(' (')[0].replace(/ — .*$/, '');
-    const rows = [
-        ...(BENCH.unions || []).map(u => ({ label: u.label, kind: 'Detector + LLM', results: u.results, best: u === best })),
-        ...Object.values(BENCH.models).map(m => ({ ...m, kind: m.kind === 'ner' ? 'Detector only' : 'LLM only' }))
-    ];
-    rows.sort((a, b) => Number(Boolean(b.best)) - Number(Boolean(a.best)));
-    el.innerHTML = `
-        <div class="anon-bench-heading"><div><span class="anon-bench-kicker">Measured performance</span><h3 id="anonBenchTitle">How many identifiers were found?</h3></div><span class="anon-bench-date">${escapeHTML(BENCH.date)}</span></div>
-        <p class="anon-bench-intro"><strong>Recall</strong> is the share of real identifiers detected. Higher is better. A score of 90% means roughly 10 in every 100 identifiers were missed.</p>
-        ${best ? `<div class="anon-bench-best"><span class="anon-bench-kicker">Best measured combination</span><h4>${escapeHTML(BENCH.best.label)}</h4><dl class="anon-bench-scores">${sets.map(s => `<div><dt>${escapeHTML(label(s))}</dt><dd>${benchPct(best.results?.[s.key])}<span>recall</span></dd><small>${s.docs} document${s.docs === 1 ? '' : 's'} · ${s.items} identifiers</small></div>`).join('')}</dl></div>` : ''}
-        <div class="anon-bench-table-wrap" role="region" aria-label="Anonymization recall comparison" tabindex="0"><table class="anon-bench-table"><caption>Recall by model and dataset</caption><thead><tr><th scope="col">Model / combination</th>${sets.map(s => `<th scope="col">${escapeHTML(label(s))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr${r.best ? ' class="is-best"' : ''}><th scope="row">${escapeHTML(r.label)}<small>${escapeHTML(r.kind)}${r.best ? ' · Best measured' : ''}</small></th>${sets.map(s => `<td>${benchPct(r.results?.[s.key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-        <p class="anon-bench-review"><strong>Review is still required.</strong> These are synthetic test results, not a guarantee of anonymization. Missed identifiers and combinations of personal details can still identify someone.</p>
-        <p class="anon-bench-source">— = not measured or unavailable. <a href="${escapeHTML(BENCH.reportFile)}" target="_blank" rel="noopener noreferrer">Full results, precision &amp; missed identifiers ↗</a><br>Source: <code>${escapeHTML(BENCH.sourceFile)}</code></p>`;
-}
-
 function renderModelPicker() {
     if (anonNerModelCards) {
         anonNerModelCards.innerHTML = '';
@@ -1698,7 +1671,6 @@ function renderModelPicker() {
             anonLlmModelCards.appendChild(createModelCard('llm', { ...option, id }));
         });
     }
-    renderPublishedBenchNote();
     syncModelPickerState();
 }
 

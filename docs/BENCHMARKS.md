@@ -1,8 +1,10 @@
-# Anonymize benchmark — 2026-09-10
+# Anonymize benchmark
 
 Generated 2026-09-10 with `tools/benchmark-report.mjs`.
 
-**Produced from:** raw export `tests/benchmark-results/2026-09-10-anonymize.json` (every model's per-document predictions, misses and timings), conclusions `tests/benchmark-results/2026-09-10-anonymize.notes.md`; fixtures `tests/fixtures/anonymize.json`, `tests/fixtures/anonymize-interview.json` (+ `interview-gold/`), `tests/fixtures/anonymize-meddeid.json`; scoring `tests/metrics.js`. The same numbers are shown in the app (Anonymize → Advanced settings model cards, Benchmark tab) via `src/benchmark-published.js`.
+**Produced from:** raw export `tests/benchmark-results/2026-09-10-anonymize.json` (every model's per-document predictions, misses and timings), conclusions `tests/benchmark-results/2026-09-10-anonymize.notes.md`; fixtures `tests/fixtures/anonymize.json`, `tests/fixtures/anonymize-interview.json` (+ `interview-gold/`), `tests/fixtures/anonymize-meddeid.json`; scoring `tests/metrics.js`. The same numbers are shown in the app (Benchmark page at https://medmorf.com/#benchmark) via `src/benchmark-published.js`.
+
+Canonical results page: [Medmorf benchmarks](https://medmorf.com/#benchmark). This report and the page are generated from the same raw export.
 
 ## What the numbers say
 
@@ -29,22 +31,22 @@ Measured 2026-09-10 on a 16 GB Apple-silicon Mac in headless Chrome 151 with Met
 
 Environment: Browser | Chrome 151 · macOS | Reported RAM | 16 GB (bucket) | JS heap limit | 4.09 GB | WebGPU | yes · apple · max buffer 4.00 GB | Safe model ceiling | 4.00 GB | Fixtures | PII sets: app 4 docs / 71 items · interview 1 docs / 64 items · meddeid 24 docs / 259 items · 15 sentence pairs · 2 notes · 4 audio clips
 
-Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output passed through the app's sanity filter; entity scoring = whole-word text overlap (recall per document, averaged; "micro" = pooled over all identifiers); quasi-ID / risk groups / over-redaction only for sets with gold risk groups (see README → Model Benchmark). NER + LLM rows are computed unions of the stored predictions (the app's hybrid pipeline; precision is a lower bound because the LLM validation pass is not simulated).
+Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output passed through the app's sanity filter; entity scoring = whole-word text overlap (recall, precision and F1 per document, averaged; "micro" = pooled over all identifiers); quasi-ID / risk groups / over-redaction only for sets with gold risk groups (see README → Model Benchmark). NER + LLM rows are computed unions of the stored predictions (the app's hybrid pipeline; precision is a lower bound because the LLM validation pass is not simulated).
 
 ## App fixtures (4 short synthetic notes, NL + EN)
 
-| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | Per type | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Multilingual PII NER (XLM-RoBERTa) | NER | 14.1 s | 882 ms | +519 MB | 58% | 58% | 40% | PERSON 17/19, DATE 7/11, ADDR 4/7, LOC 4/5, PHONE 1/6, EMAIL 0/2, ID 0/6, ORG 4/11, AGE 4/4 | pass |
-| Multilingual BERT NER | NER | 10.9 s | 777 ms | +346 MB | 53% | 54% | 93% | PERSON 19/19, DATE 0/11, ADDR 4/7, LOC 5/5, PHONE 0/6, EMAIL 0/2, ID 0/6, ORG 10/11, AGE 0/4 | pass |
-| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 79.7 s | 1.1 s | +1.21 GB | 20% | 20% | 22% | PERSON 9/19, DATE 0/11, ADDR 1/7, LOC 1/5, PHONE 0/6, EMAIL 2/2, ID 0/6, ORG 1/11, AGE 0/4 | pass |
-| GLiNER PII Edge (ModernBERT) | NER | 3.1 s | 2.4 s | +51 MB | 79% | 79% | 83% | PERSON 19/19, DATE 2/11, ADDR 5/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 4/6, ORG 10/11, AGE 4/4 | pass |
-| Qwen3.5 2B | LLM | 7.8 s | 19.1 s | +2.02 GB | 84% | 85% | 98% | PERSON 17/19, DATE 9/11, ADDR 5/7, LOC 4/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 2/4 | pass |
-| Qwen3.5 4B | LLM | 3.5 s | — | n/a | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
-| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 20.0 s | — | 96% | 96% | 60% | PERSON 19/19, DATE 10/11, ADDR 6/7, LOC 5/5, PHONE 6/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 4/4 | computed on 4 docs |
-| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 19.9 s | — | 91% | 92% | 96% | PERSON 19/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 11/11, AGE 2/4 | computed on 4 docs |
-| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 20.2 s | — | 88% | 89% | 54% | PERSON 18/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 2/4 | computed on 4 docs |
-| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 21.5 s | — | 96% | 96% | 89% | PERSON 19/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 6/6, EMAIL 2/2, ID 6/6, ORG 11/11, AGE 4/4 | computed on 4 docs |
+| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | F1 (doc avg) | Per type | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Multilingual PII NER (XLM-RoBERTa) | NER | 14.1 s | 882 ms | +519 MB | 58% | 58% | 40% | 47% | PERSON 17/19, DATE 7/11, ADDR 4/7, LOC 4/5, PHONE 1/6, EMAIL 0/2, ID 0/6, ORG 4/11, AGE 4/4 | pass |
+| Multilingual BERT NER | NER | 10.9 s | 777 ms | +346 MB | 53% | 54% | 93% | 67% | PERSON 19/19, DATE 0/11, ADDR 4/7, LOC 5/5, PHONE 0/6, EMAIL 0/2, ID 0/6, ORG 10/11, AGE 0/4 | pass |
+| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 79.7 s | 1.1 s | +1.21 GB | 20% | 20% | 22% | 21% | PERSON 9/19, DATE 0/11, ADDR 1/7, LOC 1/5, PHONE 0/6, EMAIL 2/2, ID 0/6, ORG 1/11, AGE 0/4 | pass |
+| GLiNER PII Edge (ModernBERT) | NER | 3.1 s | 2.4 s | +51 MB | 79% | 79% | 83% | 80% | PERSON 19/19, DATE 2/11, ADDR 5/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 4/6, ORG 10/11, AGE 4/4 | pass |
+| Qwen3.5 2B | LLM | 7.8 s | 19.1 s | +2.02 GB | 84% | 85% | 98% | 90% | PERSON 17/19, DATE 9/11, ADDR 5/7, LOC 4/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 2/4 | pass |
+| Qwen3.5 4B | LLM | 3.5 s | — | n/a | — | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
+| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 20.0 s | — | 96% | 96% | 60% | 74% | PERSON 19/19, DATE 10/11, ADDR 6/7, LOC 5/5, PHONE 6/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 4/4 | computed on 4 docs |
+| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 19.9 s | — | 91% | 92% | 96% | 93% | PERSON 19/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 11/11, AGE 2/4 | computed on 4 docs |
+| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 20.2 s | — | 88% | 89% | 54% | 67% | PERSON 18/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 5/6, EMAIL 2/2, ID 6/6, ORG 10/11, AGE 2/4 | computed on 4 docs |
+| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 21.5 s | — | 96% | 96% | 89% | 92% | PERSON 19/19, DATE 9/11, ADDR 6/7, LOC 5/5, PHONE 6/6, EMAIL 2/2, ID 6/6, ORG 11/11, AGE 4/4 | computed on 4 docs |
 
 - **Multilingual PII NER (XLM-RoBERTa) missed:** 731245689 (ID_NUMBER); 6221 BN (ADDRESS); 06-12345678 (PHONE); j.devries@example.nl (EMAIL); 5 februari 2026 (DATE); 043-3456789 (PHONE); CZ (ORGANIZATION); ZD-99887766 (ID_NUMBER); 00482913 (ID_NUMBER); CB2 1TN (ADDRESS); Addenbrooke's Hospital (ORGANIZATION); 01223 456789 (PHONE); Trumpington Street Medical Practice (ORGANIZATION); 943 476 5919 (ID_NUMBER); m.thompson52@example.com (EMAIL); GGZ Zuid-Limburg (ORGANIZATION); 21-03-2026 (DATE); Heerlen (LOCATION); Zuyderland Medisch Centrum (ORGANIZATION); Yasmin (PERSON); 2019 (DATE); 2022 (DATE); 06 98765432 (PHONE); 2026-0457 (ID_NUMBER); 415-555-0142 (PHONE); Blue Shield (ORGANIZATION); BSC-77812345 (ID_NUMBER); Muni (ORGANIZATION); 94110 (ADDRESS); Michael O'Brien (PERSON)
 - **Multilingual BERT NER missed:** 12 maart 1981 (DATE); 731245689 (ID_NUMBER); 6221 BN (ADDRESS); 06-12345678 (PHONE); j.devries@example.nl (EMAIL); 5 februari 2026 (DATE); 44 jaar (AGE); 043-3456789 (PHONE); CZ (ORGANIZATION); ZD-99887766 (ID_NUMBER); 03/11/1952 (DATE); 00482913 (ID_NUMBER); CB2 1TN (ADDRESS); +44 7700 900123 (PHONE); 14 Jan 2026 (DATE); 19 Jan 2026 (DATE); 73-year-old (AGE); 01223 456789 (PHONE); 943 476 5919 (ID_NUMBER); m.thompson52@example.com (EMAIL); 21-03-2026 (DATE); 29 jaar (AGE); november 2025 (DATE); 2019 (DATE); 2022 (DATE); 06 98765432 (PHONE); 2026-0457 (ID_NUMBER); 02/28/2026 (DATE); age 58 (AGE); 07/04/1967 (DATE); 415-555-0142 (PHONE); BSC-77812345 (ID_NUMBER); 94110 (ADDRESS)
@@ -54,18 +56,18 @@ Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output pa
 
 ## Oncology interview (1 long synthetic NL transcript, 64 identifiers, 18 risk groups)
 
-| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | Quasi-ID | Risk groups | Over-redaction | Per type | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Multilingual PII NER (XLM-RoBERTa) | NER | 1.6 s | 25.6 s | +620 MB | 44% | 44% | 21% | 31% | 6/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 13/18, DATE 6/15, ADDR 0/5, LOC 3/11, ID 1/2, ORG 3/9, AGE 2/4 | pass |
-| Multilingual BERT NER | NER | 610 ms | 26.1 s | +244 MB | 50% | 50% | 97% | 39% | 10/18 | 0% | PERSON 15/18, DATE 0/15, ADDR 3/5, LOC 9/11, ID 0/2, ORG 5/9, AGE 0/4 | pass |
-| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 3.9 s | 6.8 s | +1.43 GB | 14% | 14% | 22% | 18% | 3/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 4/18, DATE 5/15, ADDR 0/5, LOC 0/11, ID 0/2, ORG 0/9, AGE 0/4 | pass |
-| GLiNER PII Edge (ModernBERT) | NER | 3.0 s | 129.7 s | +56 MB | 58% | 58% | 49% | 43% | 9/18 | 22% (HER2-negatief, paclitaxel, borstsparende operatie, neuropathie, BI-RADS) | PERSON 8/18, DATE 6/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 7/9, AGE 2/4 | pass |
-| Qwen3.5 2B | LLM | 5.3 s | 154.5 s | +1.91 GB | 75% | 75% | 94% | 52% | 13/18 | 0% | PERSON 18/18, DATE 9/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 6/9, AGE 1/4 | pass |
-| Qwen3.5 4B | LLM | 932 ms | — | n/a | — | — | — | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
-| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 180.1 s | — | 84% | 84% | 73% | 62% | 15/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 18/18, DATE 11/15, ADDR 4/5, LOC 9/11, ID 2/2, ORG 8/9, AGE 2/4 | computed on 1 docs |
-| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 180.7 s | — | 86% | 86% | 95% | 60% | 16/18 | 0% | PERSON 18/18, DATE 9/15, ADDR 5/5, LOC 11/11, ID 2/2, ORG 9/9, AGE 1/4 | computed on 1 docs |
-| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 161.3 s | — | 77% | 77% | 68% | 56% | 14/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 18/18, DATE 10/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 6/9, AGE 1/4 | computed on 1 docs |
-| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 284.3 s | — | 94% | 94% | 63% | 62% | 15/18 | 22% (HER2-negatief, paclitaxel, borstsparende operatie, neuropathie, BI-RADS) | PERSON 18/18, DATE 14/15, ADDR 5/5, LOC 11/11, ID 2/2, ORG 8/9, AGE 2/4 | computed on 1 docs |
+| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | F1 (doc avg) | Quasi-ID | Risk groups | Over-redaction | Per type | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Multilingual PII NER (XLM-RoBERTa) | NER | 1.6 s | 25.6 s | +620 MB | 44% | 44% | 21% | 29% | 31% | 6/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 13/18, DATE 6/15, ADDR 0/5, LOC 3/11, ID 1/2, ORG 3/9, AGE 2/4 | pass |
+| Multilingual BERT NER | NER | 610 ms | 26.1 s | +244 MB | 50% | 50% | 97% | 66% | 39% | 10/18 | 0% | PERSON 15/18, DATE 0/15, ADDR 3/5, LOC 9/11, ID 0/2, ORG 5/9, AGE 0/4 | pass |
+| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 3.9 s | 6.8 s | +1.43 GB | 14% | 14% | 22% | 17% | 18% | 3/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 4/18, DATE 5/15, ADDR 0/5, LOC 0/11, ID 0/2, ORG 0/9, AGE 0/4 | pass |
+| GLiNER PII Edge (ModernBERT) | NER | 3.0 s | 129.7 s | +56 MB | 58% | 58% | 49% | 53% | 43% | 9/18 | 22% (HER2-negatief, paclitaxel, borstsparende operatie, neuropathie, BI-RADS) | PERSON 8/18, DATE 6/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 7/9, AGE 2/4 | pass |
+| Qwen3.5 2B | LLM | 5.3 s | 154.5 s | +1.91 GB | 75% | 75% | 94% | 83% | 52% | 13/18 | 0% | PERSON 18/18, DATE 9/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 6/9, AGE 1/4 | pass |
+| Qwen3.5 4B | LLM | 932 ms | — | n/a | — | — | — | — | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
+| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 180.1 s | — | 84% | 84% | 73% | 78% | 62% | 15/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 18/18, DATE 11/15, ADDR 4/5, LOC 9/11, ID 2/2, ORG 8/9, AGE 2/4 | computed on 1 docs |
+| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 180.7 s | — | 86% | 86% | 95% | 90% | 60% | 16/18 | 0% | PERSON 18/18, DATE 9/15, ADDR 5/5, LOC 11/11, ID 2/2, ORG 9/9, AGE 1/4 | computed on 1 docs |
+| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 161.3 s | — | 77% | 77% | 68% | 72% | 56% | 14/18 | 9% (tumor van ongeveer 3,8 centimeter, pulmonale nodulus van vier millimeter) | PERSON 18/18, DATE 10/15, ADDR 4/5, LOC 8/11, ID 2/2, ORG 6/9, AGE 1/4 | computed on 1 docs |
+| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 284.3 s | — | 94% | 94% | 63% | 75% | 62% | 15/18 | 22% (HER2-negatief, paclitaxel, borstsparende operatie, neuropathie, BI-RADS) | PERSON 18/18, DATE 14/15, ADDR 5/5, LOC 11/11, ID 2/2, ORG 8/9, AGE 2/4 | computed on 1 docs |
 
 - **Multilingual PII NER (XLM-RoBERTa) missed:** Marieke (PERSON); 3 november 1978 (DATE); Gouda (LOCATION); Driebergen-Rijsenburg (LOCATION); Lijsterlaan (ADDRESS); Judith Vermeer (PERSON); dokter Judith Vermeer (PERSON); Anneke (PERSON); Anneke Smit (PERSON); nummer 18 (ADDRESS); Stadshaven Medisch Centrum (ORGANIZATION); Revius Lyceum (ORGANIZATION); RevaPlus (ORGANIZATION); Vitaal (ORGANIZATION); praktijk Vitaal (ORGANIZATION); Traay (ADDRESS); Noorderlicht Zorgverzekeringen (ORGANIZATION); ONC-24-771 (ID_NUMBER); 19 maart (DATE); 26 maart (DATE); 22 april 2024 (DATE); 8 mei (DATE); november 2024 (DATE); 18 december 2024 (DATE); zomer 2012 (DATE); mei (DATE); Korreweg (ADDRESS); Woerden (LOCATION); Karnemelksloot (ADDRESS); Culemborg (LOCATION); Amersfoort (LOCATION); Hilversum (LOCATION); Zeist (LOCATION); Denemarken (LOCATION); twintig (AGE); zestien (AGE)
 - **Multilingual BERT NER missed:** 3 november 1978 (DATE); 47 (AGE); Judith Vermeer (PERSON); dokter Judith Vermeer (PERSON); Bas van Leeuwen (PERSON); nummer 18 (ADDRESS); Huisartsenpraktijk De Eiken (ORGANIZATION); RevaPlus (ORGANIZATION); Vitaal (ORGANIZATION); praktijk Vitaal (ORGANIZATION); Traay (ADDRESS); ONC-24-771 (ID_NUMBER); NZ-8842 (ID_NUMBER); 17 maart 2026 (DATE); februari 2024 (DATE); 11 maart 2024 (DATE); 19 maart (DATE); 26 maart (DATE); 22 april 2024 (DATE); 8 mei (DATE); 27 september 2024 (DATE); november 2024 (DATE); 12 februari (DATE); 18 december 2024 (DATE); zomer 2012 (DATE); mei (DATE); november (DATE); Tiel (LOCATION); Zeist (LOCATION); 79 (AGE); twintig (AGE); zestien (AGE)
@@ -75,16 +77,16 @@ Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output pa
 
 ## MedDeID sample (24 synthetic Belgian-Dutch clinical notes, 259 identifiers)
 
-| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | Per type | Status |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Multilingual PII NER (XLM-RoBERTa) | NER | 6.4 s | 1.1 s | +546 MB | 42% | 41% | 34% | PERSON 9/61, DATE 35/64, ADDR 15/17, LOC 0/2, PHONE 10/13, EMAIL 1/4, ID 5/14, ORG 21/53, AGE 8/10, PROF 1/21 | pass |
-| Multilingual BERT NER | NER | 1.6 s | 1.2 s | +292 MB | 30% | 29% | 87% | PERSON 26/61, DATE 0/64, ADDR 17/17, LOC 1/2, PHONE 0/13, EMAIL 0/4, ID 0/14, ORG 30/53, AGE 0/10, PROF 1/21 | pass |
-| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 4.2 s | 252 ms | +1.18 GB | 18% | 18% | 24% | PERSON 10/61, DATE 10/64, ADDR 6/17, LOC 0/2, PHONE 9/13, EMAIL 4/4, ID 3/14, ORG 4/53, AGE 0/10, PROF 0/21 | pass |
-| GLiNER PII Edge (ModernBERT) | NER | 3.5 s | 3.7 s | +54 MB | 67% | 66% | 42% | PERSON 39/61, DATE 16/64, ADDR 17/17, LOC 2/2, PHONE 11/13, EMAIL 4/4, ID 13/14, ORG 49/53, AGE 8/10, PROF 11/21 | pass |
-| Qwen3.5 4B | LLM | 847 ms | — | n/a | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
-| Qwen3.5 2B | LLM | 6.9 s | 18.4 s | +1.91 GB | 64% | 64% | 86% | PERSON 30/61, DATE 48/64, ADDR 16/17, LOC 2/2, PHONE 6/13, EMAIL 4/4, ID 12/14, ORG 40/53, AGE 6/10, PROF 1/21 | pass |
-| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 19.5 s | — | 70% | 70% | 51% | PERSON 31/61, DATE 53/64, ADDR 17/17, LOC 2/2, PHONE 10/13, EMAIL 4/4, ID 13/14, ORG 40/53, AGE 9/10, PROF 2/21 | computed on 24 docs |
-| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 19.6 s | — | 69% | 69% | 85% | PERSON 35/61, DATE 48/64, ADDR 17/17, LOC 2/2, PHONE 6/13, EMAIL 4/4, ID 12/14, ORG 47/53, AGE 6/10, PROF 2/21 | computed on 24 docs |
-| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 18.7 s | — | 71% | 71% | 54% | PERSON 39/61, DATE 51/64, ADDR 17/17, LOC 2/2, PHONE 10/13, EMAIL 4/4, ID 13/14, ORG 41/53, AGE 6/10, PROF 1/21 | computed on 24 docs |
-| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 22.1 s | — | 84% | 83% | 53% | PERSON 44/61, DATE 52/64, ADDR 17/17, LOC 2/2, PHONE 12/13, EMAIL 4/4, ID 13/14, ORG 51/53, AGE 9/10, PROF 12/21 | computed on 24 docs |
+| Model | Kind | Load | Inference / doc | Peak heap Δ | Recall (doc avg) | Recall (micro) | Precision | F1 (doc avg) | Per type | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Multilingual PII NER (XLM-RoBERTa) | NER | 6.4 s | 1.1 s | +546 MB | 42% | 41% | 34% | 35% | PERSON 9/61, DATE 35/64, ADDR 15/17, LOC 0/2, PHONE 10/13, EMAIL 1/4, ID 5/14, ORG 21/53, AGE 8/10, PROF 1/21 | pass |
+| Multilingual BERT NER | NER | 1.6 s | 1.2 s | +292 MB | 30% | 29% | 87% | 43% | PERSON 26/61, DATE 0/64, ADDR 17/17, LOC 1/2, PHONE 0/13, EMAIL 0/4, ID 0/14, ORG 30/53, AGE 0/10, PROF 1/21 | pass |
+| OpenAI Privacy Filter (1.5B, WebGPU) | NER | 4.2 s | 252 ms | +1.18 GB | 18% | 18% | 24% | 20% | PERSON 10/61, DATE 10/64, ADDR 6/17, LOC 0/2, PHONE 9/13, EMAIL 4/4, ID 3/14, ORG 4/53, AGE 0/10, PROF 0/21 | pass |
+| GLiNER PII Edge (ModernBERT) | NER | 3.5 s | 3.7 s | +54 MB | 67% | 66% | 42% | 50% | PERSON 39/61, DATE 16/64, ADDR 17/17, LOC 2/2, PHONE 11/13, EMAIL 4/4, ID 13/14, ORG 49/53, AGE 8/10, PROF 11/21 | pass |
+| Qwen3.5 4B | LLM | 847 ms | — | n/a | — | — | — | — | — | skipped: not run: the 3.9 GB download did not fit on the benchmark machine (3.6 GB free) |
+| Qwen3.5 2B | LLM | 6.9 s | 18.4 s | +1.91 GB | 64% | 64% | 86% | 67% | PERSON 30/61, DATE 48/64, ADDR 16/17, LOC 2/2, PHONE 6/13, EMAIL 4/4, ID 12/14, ORG 40/53, AGE 6/10, PROF 1/21 | pass |
+| Multilingual PII NER (XLM-RoBERTa) + Qwen3.5 2B | NER + LLM (union) | — | 19.5 s | — | 70% | 70% | 51% | 55% | PERSON 31/61, DATE 53/64, ADDR 17/17, LOC 2/2, PHONE 10/13, EMAIL 4/4, ID 13/14, ORG 40/53, AGE 9/10, PROF 2/21 | computed on 24 docs |
+| Multilingual BERT NER + Qwen3.5 2B | NER + LLM (union) | — | 19.6 s | — | 69% | 69% | 85% | 71% | PERSON 35/61, DATE 48/64, ADDR 17/17, LOC 2/2, PHONE 6/13, EMAIL 4/4, ID 12/14, ORG 47/53, AGE 6/10, PROF 2/21 | computed on 24 docs |
+| OpenAI Privacy Filter (1.5B, WebGPU) + Qwen3.5 2B | NER + LLM (union) | — | 18.7 s | — | 71% | 71% | 54% | 59% | PERSON 39/61, DATE 51/64, ADDR 17/17, LOC 2/2, PHONE 10/13, EMAIL 4/4, ID 13/14, ORG 41/53, AGE 6/10, PROF 1/21 | computed on 24 docs |
+| GLiNER PII Edge (ModernBERT) + Qwen3.5 2B | NER + LLM (union) | — | 22.1 s | — | 84% | 83% | 53% | 64% | PERSON 44/61, DATE 52/64, ADDR 17/17, LOC 2/2, PHONE 12/13, EMAIL 4/4, ID 13/14, ORG 51/53, AGE 9/10, PROF 12/21 | computed on 24 docs |
 

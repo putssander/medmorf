@@ -2167,42 +2167,50 @@ mark.anon-hl.is-disabled {
     #mappingTable { min-width: 640px; }
 }
 
-/* Read-only anonymization benchmark comparison */
-.anon-bench-panel { margin-top: 24px; padding: 22px; border: 1px solid #DCE3EE; border-radius: 16px; background: #FFF; color: var(--mm-ink); }
-.anon-bench-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-.anon-bench-kicker { color: #52648A; font-size: .65rem; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
-.anon-bench-heading h3 { margin: 5px 0 0; font-size: 1.05rem; letter-spacing: -.02em; }
-.anon-bench-date { color: #64748B; font-size: .72rem; white-space: nowrap; }
-.anon-bench-intro, .anon-bench-review { font-size: .79rem; line-height: 1.7; color: #475569; }
-.anon-bench-best { margin: 18px 0; padding: 18px; border-radius: 12px; background: linear-gradient(115deg, #EFF6FF, #F5F3FF); }
-.anon-bench-best h4 { margin: 5px 0 18px; font-size: .88rem; }
-.anon-bench-scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; margin: 0; }
-.anon-bench-scores > div + div { border-left: 1px solid #D6DFF1; padding-left: 18px; }
-.anon-bench-scores dt { color: #475569; font-size: .72rem; }
-.anon-bench-scores dd { margin: 6px 0; color: #3730A3; font-size: 2rem; font-weight: 750; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
-.anon-bench-scores dd span { margin-left: 6px; font-size: .65rem; font-weight: 500; letter-spacing: 0; }
-.anon-bench-scores small { color: #64748B; font-size: .65rem; }
-.anon-bench-table-wrap { overflow-x: auto; border: 1px solid #E2E8F0; border-radius: 10px; }
-.anon-bench-table-wrap:focus-visible { outline: 2px solid var(--mm-blue); outline-offset: 3px; }
-.anon-bench-table { width: 100%; min-width: 580px; border-collapse: collapse; font-size: .75rem; }
-.anon-bench-table caption { text-align: left; padding: 14px; font-weight: 700; }
-.anon-bench-table th, .anon-bench-table td { padding: 12px 14px; border-top: 1px solid #E2E8F0; text-align: right; }
-.anon-bench-table th:first-child { text-align: left; }
-.anon-bench-table thead th { background: #F8FAFC; color: #64748B; font-size: .68rem; font-weight: 600; }
-.anon-bench-table tbody th { font-weight: 600; }
-.anon-bench-table th small { display: block; margin-top: 4px; color: #64748B; font-weight: 400; font-size: .65rem; }
-.anon-bench-table td { font-variant-numeric: tabular-nums; }
-.anon-bench-table .is-best { background: #EFF6FF; }
-.anon-bench-table .is-best td { color: #3730A3; font-weight: 750; }
-.anon-bench-review { border-left: 3px solid #D97706; padding-left: 12px; margin: 18px 0 12px; }
-.anon-bench-source { font-size: .68rem; line-height: 1.8; color: #64748B; overflow-wrap: anywhere; }
-.anon-bench-source a { color: #4338CA; text-decoration: underline; text-underline-offset: 3px; }
-.anon-bench-source code { font-size: inherit; }
+/* Benchmark page: published measurements first, optional local runs per tool. */
+.bm-overview { padding: 26px; margin-bottom: 22px; border-radius: 18px; background: linear-gradient(120deg, #EFF6FF, #F5F3FF); }
+.bm-eyebrow { display: block; color: #52648A; font-size: .65rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+.bm-overview h3 { margin: 8px 0 10px; font-size: 1.5rem; letter-spacing: -.035em; }
+.bm-overview p { max-width: 640px; color: #475569; line-height: 1.7; }
+.bm-overview nav { display: flex; flex-wrap: wrap; gap: 12px 24px; margin-top: 20px; }
+.bm-overview a { color: #4338CA; text-underline-offset: 5px; font-weight: 600; }
+.bm-tool { margin: 22px 0; padding: 24px; border: 1px solid #DFE5EE; border-radius: 18px; background: #FFF; scroll-margin-top: 90px; }
+.bm-tool-heading h3 { margin: 4px 0 16px; font-size: 1.3rem; letter-spacing: -.025em; }
+.bm-published-date { color: #536580; font-size: .72rem; }
+.bm-published-intro p { margin: 8px 0 18px; color: #475569; line-height: 1.65; }
+.bm-metric-guide { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 16px 0; margin-bottom: 20px; border-top: 1px solid #E2E8F0; border-bottom: 1px solid #E2E8F0; }
+.bm-metric-guide p { margin: 0; font-size: .73rem; line-height: 1.65; color: #64748B; }
+.bm-metric-guide strong { display: block; color: #334155; margin-bottom: 4px; }
+.bm-dataset-label { display: block; margin-bottom: 7px; font-size: .75rem; font-weight: 650; }
+.bm-dataset-select { max-width: 100%; min-height: 44px; padding: 10px 36px 10px 12px; border: 1px solid #CBD5E1; border-radius: 10px; background: #FFF; color: #102033; font: inherit; }
+.bm-results-list { margin: 18px 0; }
+.bm-result { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(220px, 1fr); gap: 20px; align-items: center; padding: 18px 14px; border-bottom: 1px solid #E2E8F0; }
+.bm-result-leading { margin-bottom: 6px; border: 1px solid #DADFF8; border-radius: 12px; background: linear-gradient(115deg, #EFF6FF, #F5F3FF); }
+.bm-result-name > span { font-size: .65rem; color: #64748B; }
+.bm-result-leading .bm-result-name > span { color: #4338CA; font-weight: 650; }
+.bm-result-name h4 { margin: 5px 0 0; font-size: .81rem; line-height: 1.5; }
+.bm-result-name p { margin: 6px 0 0; font-size: .68rem; color: #64748B; overflow-wrap: anywhere; }
+.bm-score-trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0; text-align: right; }
+.bm-score-trio dt { color: #64748B; font-size: .64rem; }
+.bm-score-trio dd { margin: 4px 0 0; font-size: 1.22rem; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.bm-result-leading dd { color: #4338CA; }
+.bm-review { margin: 20px 0; padding: 12px 14px; border-left: 3px solid #D97706; background: #FFFBEB; font-size: .76rem; line-height: 1.7; color: #78521B; }
+.bm-method { font-size: .74rem; line-height: 1.7; color: #64748B; overflow-wrap: anywhere; }
+.bm-method a { color: #4338CA; text-decoration: underline; }
+.benchmark-root .bm-runner { margin-top: 20px; border: 1px solid #E2E8F0; border-radius: 12px; background: #F8FAFC; overflow: hidden; }
+.benchmark-root .bm-runner > summary { margin: 0; padding: 16px; min-height: 48px; font-size: .8rem; font-weight: 650; color: #334155; cursor: pointer; }
+.bm-runner > summary span { display: block; margin: 5px 0 0 16px; color: #64748B; font-size: .68rem; font-weight: 400; }
+.bm-runner-body { padding: 0 14px 14px; }
+.bm-runner-status { font-size: .73rem; color: #64748B; }
+.bm-empty { padding: 18px; border-radius: 12px; background: #F8FAFC; color: #475569; }
+.bm-empty strong { font-size: .85rem; color: #334155; }
+.bm-empty p { margin-bottom: 0; font-size: .77rem; line-height: 1.7; }
+.benchmark-root :is(a, summary, select, button):focus-visible { outline: 2px solid #2563EB; outline-offset: 3px; }
 @media (max-width: 600px) {
-    .anon-bench-panel { padding: 14px; }
-    .anon-bench-heading { flex-direction: column; gap: 6px; }
-    .anon-bench-scores { grid-template-columns: 1fr; gap: 12px; }
-    .anon-bench-scores > div + div { border-left: 0; border-top: 1px solid #D6DFF1; padding: 12px 0 0; }
+    .bm-overview, .bm-tool { padding: 16px; }
+    .bm-overview h3 { font-size: 1.25rem; }
+    .bm-metric-guide { grid-template-columns: 1fr; gap: 10px; }
+    .bm-result { grid-template-columns: 1fr; gap: 12px; }
+    .bm-score-trio { text-align: left; }
+    .bm-dataset-select { width: 100%; }
 }
-.bm-published td, .bm-published th { white-space: nowrap; }
-.bm-published .bm-best td { background: #EFF6FF; font-weight: 600; }
