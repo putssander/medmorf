@@ -158,6 +158,7 @@ medmorf/
 |-- _headers
 |-- sw.js
 |-- tools/
+|   |-- convert-meddeid.mjs
 |   |-- deploy-pages.sh
 |   |-- dev-server-isolated.mjs
 |   `-- stamp-build.sh
@@ -191,6 +192,8 @@ medmorf/
 |-- src/
 |   |-- anonymize-handler.js
 |   |-- anonymize-prompts.js
+|   |-- anonymize-filters.js
+|   |-- text-chunking.js
 |   |-- benchmark-handler.js
 |   |-- app.js
 |   |-- cache-manager.js
@@ -221,6 +224,8 @@ medmorf/
     |-- metrics.js
     |-- fixtures/
     |   |-- anonymize.json
+    |   |-- anonymize-interview.json
+    |   |-- anonymize-meddeid.json
     |   |-- summarize.json
     |   |-- translate.json
     |   |-- speech.json
@@ -300,7 +305,17 @@ Note: Safari's support for `credentialless` should be verified on target iOS ver
 
 The **Benchmark** tab in the app (also standalone at `http://localhost:8000/tests/test-models.html`; logic in `src/benchmark-handler.js`) loads every model option per tab — NLLB translation, the four NER detectors, Whisper tiny/base/small, and the WebLLM LLMs for Anonymize and Summarize (the app's Qwen3.5 0.8B/2B/4B plus Qwen3 0.6B/1.7B/4B as reference baselines, all from the pinned WebLLM 0.2.83; anything larger — Qwen3 8B, Qwen3.5 9B, Qwen3.6/3.8 at 27B+ — is excluded as not browser-viable) — and runs each on synthetic fixtures in `tests/fixtures/` (fictional patients, no real data). For every model it records load time, inference time per document, peak JS heap delta (Chromium only) and a task quality score computed by `tests/metrics.js`:
 
-- Anonymize (NER and LLM): PII **recall** per type (a miss is a leak), precision against annotated spans; the LLM uses the exact prompt from `src/anonymize-prompts.js`.
+- Anonymize (NER and LLM): PII **recall** per type (a miss is a leak), precision against annotated spans; the LLM uses the exact prompt from `src/anonymize-prompts.js`, documents are chunked with the app's `src/text-chunking.js` settings, and LLM output goes through the app's sanity filter (`src/anonymize-filters.js`), so numbers reflect what Anonymize really keeps. A **NER + LLM union** table computes the hybrid pipeline's recall for every detector × LLM pair from the stored predictions, so combinations need no extra runs.
+
+Anonymize can be run on three fixture sets (selector in the tab):
+
+| Set | File | Content |
+| --- | --- | --- |
+| App fixtures | `tests/fixtures/anonymize.json` | 4 short synthetic notes, NL + EN, with `allowed` clinical terms |
+| Oncology interview | `tests/fixtures/anonymize-interview.json` | 1 long synthetic Dutch patient interview (~34k chars, transcript style) with names in several forms, family, employer, clinicians, partial IDs, dates, and quasi-identifiers |
+| MedDeID sample | `tests/fixtures/anonymize-meddeid.json` | 24 documents from the MedDeID Dutch synthetic benchmark (Belgian-Dutch clinical notes, physician-reviewed, no real patients): all 8 "targeted-difficult" documents plus 16 seeded-random ones. Source: Hellemans et al., University of Antwerp / UZA, CC BY 4.0, [doi:10.5281/zenodo.21890965](https://doi.org/10.5281/zenodo.21890965). Regenerate with `node tools/convert-meddeid.mjs <unzipped-archive-dir>`; every item keeps its original MedDeID label. |
+
+Fixture format: `{ types, documents: [{ id, language, text, pii: [{ text, type }], allowed: [] }] }`. Scoring is lenient text overlap (case-insensitive substring either way, type ignored for recall), which is comparable between models but not with span-level evaluations such as MedDeID's. The two new sets include **PROFESSION** items (occupations are quasi-identifiers in both sources); the app does not detect that type yet, so read that row as a known gap.
 - Translate: **chrF** against reference English.
 - Summarize: **fact coverage** from a checklist plus hallucination probes.
 - Speech: **WER** for Dutch and English clips (macOS TTS audio; real dictation scores worse).

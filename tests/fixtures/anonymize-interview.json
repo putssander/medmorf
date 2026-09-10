@@ -1,0 +1,308 @@
+{
+  "_comment": "Synthetic Dutch oncology patient interview (fictional; ~34k chars, transcript style with timestamps and speaker labels), written by Sander Puts on 2026-09-10 as de-identification test material: full and alternative names, birth date, ages, birthplace, home town and street, family members and their towns, a child's school, profession and specialised work, employer and manager, GP and practice, hospital and clinicians, pharmacy, rehab centre, insurer, partial patient and policy numbers, exact treatment dates, and quasi-identifiers that only identify in combination. Scoring as in anonymize.json (case-insensitive substring overlap either way; `allowed` lists role words and clinical terms that are acceptable to over-redact). PROFESSION is included because it is a quasi-identifier here; the app does not detect it yet, so expect 0/2 on that row. Ages written as words are included on purpose. The document is long, so the benchmark chunks it exactly like the app (2400 chars, 240 overlap).",
+  "types": [
+    "PERSON",
+    "DATE",
+    "ADDRESS",
+    "LOCATION",
+    "PHONE",
+    "EMAIL",
+    "ID_NUMBER",
+    "ORGANIZATION",
+    "AGE",
+    "PROFESSION"
+  ],
+  "documents": [
+    {
+      "id": "nl_oncologie_interview",
+      "language": "nl",
+      "text": "# Synthetisch interviewtranscript — leven met kanker en ervaringen met de Nederlandse zorg\n\n**Doel:** testmateriaal voor de-identificatie / anonimisering  \n**Duur:** circa 45 minuten  \n**Taal:** Nederlands  \n**Let op:** alle personen en gegevens in dit transcript zijn fictief. Eventuele overeenkomsten met bestaande personen zijn toevallig.\n\n**Interviewer:** Sanne de Wit  \n**Respondent:** Marieke van Dalen-Visser  \n**Interviewdatum:** 17 maart 2026  \n**Locatie interview:** woning respondent, Driebergen-Rijsenburg\n\n---\n\n**[00:00] Interviewer:** Dank je wel dat ik vandaag bij je thuis mag komen. Zou je om te beginnen iets over jezelf kunnen vertellen?\n\n**Respondent:** Ja, natuurlijk. Ik ben Marieke van Dalen, officieel Marieke Johanna Visser-van Dalen, hoewel dat op sommige papieren weer andersom staat. Sinds mijn huwelijk gebruik ik meestal Van Dalen-Visser. Ik ben 47, ik ben geboren op 3 november 1978 in Gouda. We wonen nu sinds, even denken, zomer 2012 in Driebergen-Rijsenburg. In de wijk bij het oude station, aan de Lijsterlaan. Ik woon hier met mijn man Pieter en onze jongste dochter, Noor. Onze oudste, Emma, studeert inmiddels in Groningen.\n\nIk werkte tot vorig jaar 32 uur per week als restauratiearchitect bij Van Rijn Erfgoedrestauratie in Utrecht. Dat is best specialistisch werk. Vooral oude kerken, boerderijen en monumentale scholen. Ik deed bijvoorbeeld de afgelopen jaren veel aan de restauratie van een negentiende-eeuwse watertoren in de buurt van Culemborg. Daardoor kennen mensen in mijn vakgebied me ook vrij snel, denk ik. Dat is misschien relevant als je dit later gaat anonimiseren.\n\n**[01:22] Interviewer:** Ja, zeker. Wanneer begon voor jou het verhaal rond kanker?\n\n**Respondent:** Achteraf waarschijnlijk al eerder dan ik dacht. Ik voelde in februari 2024 een verdikking in mijn linkerborst. Niet echt een duidelijk knobbeltje, meer alsof het weefsel anders aanvoelde. Ik dacht eerst dat het hormonaal was. Mijn moeder heeft ook altijd cystes gehad. Toen heb ik het nog een paar weken aangekeken.\n\nOp maandag 11 maart 2024 heb ik de huisarts gebeld. Ik zit bij Huisartsenpraktijk De Eiken, hier in het dorp. Mijn eigen huisarts is dokter Judith Vermeer. Ik kon twee dagen later terecht. Zij voelde het ook en zei vrij snel: “Ik wil hier niet mee afwachten.”\n\nDaarna ging het ineens hard. Op 19 maart had ik een mammografie en echo in het Stadshaven Medisch Centrum in Utrecht. Dat is het ziekenhuis waar ik uiteindelijk vrijwel alles heb gehad. Een week later, op 26 maart, kreeg ik de uitslag van de biopten.\n\n**[02:42] Interviewer:** Weet je nog hoe dat gesprek ging?\n\n**Respondent:** Heel scherp. Sommige stukken zijn bijna fotografisch in mijn hoofd opgeslagen.\n\nMijn man Pieter zat links van mij. De chirurg, dokter N. van Loon, zat tegenover ons. Er was ook een mammacareverpleegkundige, Anneke, erbij. Ik wist eigenlijk al dat het niet goed zat, omdat ze hadden gezegd dat Pieter mee moest komen.\n\nZe zei: “De biopten laten kwaadaardige cellen zien.”\n\nIk weet nog dat ik naar haar handen keek. Ze had een heel dun zilveren horloge om. Heel raar waar je brein zich aan vastklampt.\n\nHet bleek invasief ductaal mammacarcinoom te zijn, links, hormoonreceptorpositief en HER2-negatief. De tumor was op de MRI ongeveer 3,8 centimeter. Later bleek er ook een lymfeklier betrokken.\n\nOp dat moment hoorde ik alleen “kanker”. Daarna praatten ze nog zeker twintig minuten, maar misschien heb ik vijf procent opgeslagen.\n\n**[04:05] Interviewer:** Wat veranderde er vanaf dat moment in je dagelijks leven?\n\n**Respondent:** Eigenlijk alles, ook al zag je dat aan de buitenkant eerst niet.\n\nDe eerste verandering was tijd. Mijn agenda was niet meer van mij. Voorheen plande ik mijn werk, mijn dochters, sporten, etentjes, bezoek aan mijn vader. Opeens draaide alles om afspraken: bloedprikken, scans, gesprekken, infusen, controles.\n\nOp mijn werk had ik bijvoorbeeld elke donderdag een bouwvergadering op locatie. Dat heb ik vrij snel moeten loslaten. Mijn leidinggevende, Bas van Leeuwen, was gelukkig heel begripvol. Maar je verliest meteen een stuk van je normale identiteit.\n\nJe bent niet meer “Marieke die die lastige restauratie begeleidt”, maar “Marieke die kanker heeft”.\n\nEn thuis werd het ook anders. Pieter ging automatisch veel meer doen. Boodschappen, koken, administratie. In het begin vond ik dat fijn, maar later voelde ik me soms bijna een gast in mijn eigen huis.\n\n**[05:18] Interviewer:** Hoe zag je behandeling eruit?\n\n**Respondent:** Eerst chemotherapie. Omdat de tumor vrij groot was en er een verdachte lymfeklier was, wilden ze neoadjuvant behandelen, dus vóór de operatie.\n\nIk begon op 22 april 2024. Eerst vier kuren AC, om de twee weken. Daarna twaalf keer paclitaxel, wekelijks.\n\nDe eerste kuur herinner ik me vooral omdat ik dacht dat ik me meteen verschrikkelijk zou voelen. Tijdens het infuus voelde ik eigenlijk weinig. Pieter en ik hebben zelfs een broodje gegeten in het restaurant beneden.\n\nMaar twee dagen later kwam de klap. Misselijk, metaalachtige smaak, uitgeput. Niet “ik heb slecht geslapen”-moe, maar alsof iedere cel in je lichaam zegt dat je moet gaan liggen.\n\nMijn patiëntnummer bij de oncologie begon trouwens met ONC-24-771, dat stond werkelijk op iedere brief en afsprakenkaart. Op een gegeven moment kende ik dat nummer uit mijn hoofd.\n\n**[06:37] Interviewer:** Wat betekende die vermoeidheid praktisch?\n\n**Respondent:** Dat ik opnieuw moest leren wat energie kost.\n\nDouchen kost energie. Een gesprek kost energie. Naar de supermarkt lopen kost energie. Zelfs beslissen wat je wilt eten kan te veel zijn.\n\nOnze supermarkt is op nog geen tien minuten lopen. Voor mijn ziekte liep ik daarheen, twee tassen terug, geen probleem. Tijdens de chemo ging ik soms met de auto. Dan zat ik daarna vijf minuten in de auto voor ons huis omdat ik geen energie had om de boodschappen naar binnen te brengen.\n\nDat vond ik confronterend.\n\nEn traplopen. We slapen boven. Na de derde AC-kuur zat ik halverwege de trap soms op een trede uit te hijgen.\n\n**[07:45] Interviewer:** Kon je nog werken?\n\n**Respondent:** In het begin dacht ik dat ik dat wel zou kunnen. Ik ben nogal van het doorgaan.\n\nIk zei tegen mijn werkgever: misschien werk ik tussen de kuren door halve dagen thuis. Mijn bedrijfsarts zei eigenlijk meteen dat ik mezelf te optimistisch inschatte.\n\nHij kreeg gelijk.\n\nNa de tweede kuur kon ik nauwelijks een bouwtekening twintig minuten geconcentreerd bekijken. Ik las dezelfde zin vijf keer. Ik maakte fouten met maten. Een collega vroeg een keer waarom ik een maatvoering van 2,40 meter had overgenomen als 24 meter. Dat soort fouten maak ik normaal echt niet.\n\nToen dacht ik: dit is niet verantwoord.\n\nVanaf mei ben ik volledig ziekgemeld. Later, in november, ben ik voorzichtig begonnen met re-integratie, eerst twee keer twee uur.\n\n**[08:57] Interviewer:** Had dat financiële gevolgen?\n\n**Respondent:** Ja, maar gelukkig minder dramatisch dan in sommige andere landen.\n\nMijn werkgever betaalt volgens onze cao het eerste jaar grotendeels door. Maar er waren wel indirecte kosten.\n\nParkeren bij het ziekenhuis bijvoorbeeld. Elke keer zes, acht, soms twaalf euro. Tijdens wekelijkse chemo tikt dat aan.\n\nEigen risico was ik natuurlijk meteen kwijt. Dan heb je nog fysiotherapie, sommige hulpmiddelen, speciale bh's na de operatie, pruik, huidproducten.\n\nMijn pruik kostte bijna vijfhonderd euro. Een deel werd vergoed, maar niet alles.\n\nEn Pieter nam regelmatig vrij. Hij is zelfstandig geluidstechnicus en werkt onder andere voor theaters in Amersfoort en Hilversum. Als hij niet werkt, factureert hij niet. Dus dat voel je uiteindelijk wel.\n\n**[10:05] Interviewer:** Hoe was haarverlies voor jou?\n\n**Respondent:** Veel heftiger dan ik had verwacht.\n\nIk dacht vooraf: haar groeit weer aan, dat is niet het ergste. Medisch gezien is dat natuurlijk waar.\n\nMaar haarverlies maakt ziekte zichtbaar.\n\nMijn haar begon ongeveer zestien dagen na de eerste kuur uit te vallen. Op 8 mei heeft mijn zus Laura het afgeschoren. Zij woont in Woerden en kwam speciaal daarvoor.\n\nNoor was toen zestien. Ze wilde erbij zijn, maar toen de tondeuse aanging liep ze huilend naar boven.\n\nDat moment vond ik erger dan het haar zelf.\n\nDaarna merkte ik dat mensen op straat anders keken. Met een mutsje of kale kop zien mensen meteen: chemo.\n\nJe privacy verandert daardoor ook.\n\n**[11:20] Interviewer:** Had dat effect op sociale contacten?\n\n**Respondent:** Zeker. Sommige mensen werden heel lief en praktisch. Mijn buurvrouw, Ingrid van nummer 18, zette bijvoorbeeld iedere dinsdag soep voor de deur.\n\nAndere mensen verdwenen een beetje.\n\nNiet uit onwil, denk ik. Ze wisten gewoon niet wat ze moesten zeggen.\n\nEn sommige mensen zeiden dingen waarvan ik dacht: meen je dit nou?\n\n“Je moet positief blijven.”\n\n“Mijn tante had ook borstkanker en die is alweer twintig jaar gezond.”\n\nOf: “Heb je al gelezen over suiker vermijden?”\n\nDan moet jij als patiënt ineens de ander geruststellen of uitleggen dat je je behandeling gewoon met de oncoloog bespreekt.\n\nDat kost energie.\n\n**[12:27] Interviewer:** Hoe ging het binnen je gezin?\n\n**Respondent:** Heel verschillend per persoon.\n\nPieter werd praktisch. Hij maakte spreadsheets met medicatie en afspraken. Hij zette alarmen voor dexamethason en anti-misselijkheidstabletten.\n\nEmma, onze oudste, was toen twintig en woonde net op kamers in Groningen, aan de Korreweg. Zij belde bijna elke avond. Maar ik merkte dat ze op afstand soms angstiger was, omdat ze niet zag hoe ik erbij zat.\n\nNoor, die nog thuis woonde, trok zich meer terug. Ze was net bezig met haar eindexamenjaar havo op het Revius Lyceum. Ik voelde me daar schuldig over. Zij moest leren voor haar examens terwijl thuis alles om kanker draaide.\n\nMijn vader is weer een ander verhaal. Hij is 79 en woont nog alleen in Gouda, vlak bij de Karnemelksloot. Normaal help ik hem met administratie en boodschappen. Dat kon ineens niet meer.\n\nDus de zorg die ik voor hem deed, moest mijn broer overnemen.\n\nJe ziekte verspreidt zich als het ware door je hele sociale netwerk.\n\n**[13:51] Interviewer:** Wat deed de behandeling lichamelijk nog meer?\n\n**Respondent:** Tijdens paclitaxel kreeg ik neuropathie. Eerst tintelende vingertoppen, alsof ze slapen. Later ook mijn tenen.\n\nVoor iemand die veel tekent en op locatie details bekijkt is dat vervelend.\n\nIk liet kopjes vallen. Knopen dichtdoen was lastig. Mijn handschrift werd slechter.\n\nDat is nu, bijna twee jaar later, nog niet volledig weg.\n\nMijn voeten zijn vooral 's avonds gevoelig. Het voelt soms alsof ik op een dun laagje watten loop.\n\nVerder veranderde mijn smaak. Koffie, waar ik normaal dol op ben, smaakte naar verbrand karton.\n\nEn mijn nagels verkleurden.\n\nIk had mondproblemen.\n\nMijn menstruatie stopte.\n\nJe krijgt een hele lijst bijwerkingen die afzonderlijk klein lijken, maar samen bepalen ze je hele dag.\n\n**[15:08] Interviewer:** Hoe vond je de begeleiding vanuit het ziekenhuis bij al die bijwerkingen?\n\n**Respondent:** Wisselend. De oncologieverpleegkundigen waren fantastisch. Echt.\n\nIk kon de afdeling bellen en kreeg meestal iemand die begreep wat ik bedoelde.\n\nEr was één verpleegkundige, Anneke Smit, die op een gegeven moment aan mijn stem hoorde dat ik te weinig dronk. Ze zei: “Marieke, hoeveel glazen heb je vandaag werkelijk gehad?” Niet hoeveel ik dacht dat ik had gehad.\n\nDat soort persoonlijke aandacht was heel waardevol.\n\nMaar de informatie was soms versnipperd.\n\nVoor neuropathie zei de oncoloog: meld het als het erger wordt. De verpleegkundige zei hetzelfde. De fysiotherapeut gaf weer andere adviezen.\n\nIk miste één overzicht: dit zijn jouw klachten, dit kun je doen, en deze persoon houdt het geheel in de gaten.\n\n**[16:18] Interviewer:** Dus de afzonderlijke zorgverleners waren goed, maar de samenhang minder?\n\n**Respondent:** Ja, precies.\n\nDat is eigenlijk mijn belangrijkste ervaring met de Nederlandse zorg.\n\nEr zitten heel goede mensen in het systeem. Maar het systeem zelf verwacht soms dat de patiënt de projectmanager is.\n\nEn als je kanker hebt, ben je daar juist minder toe in staat.\n\nIk had afspraken bij chirurgie, medische oncologie, radiotherapie, fysiotherapie, psychologie, huisarts en later gynaecologie vanwege hormoonbehandeling.\n\nIedereen heeft zijn eigen dossierstuk, eigen telefoonnummer, soms eigen patiëntenportaal.\n\nJe denkt dat ziekenhuizen één computersysteem hebben, maar intern lijken het soms nog steeds losse eilanden.\n\n**[17:17] Interviewer:** Kun je daar een concreet voorbeeld van geven?\n\n**Respondent:** Ja.\n\nNa mijn operatie had ik veel pijn rond mijn linkeroksel en beperkte mobiliteit van mijn arm. De chirurg zei dat fysiotherapie nuttig kon zijn.\n\nDus ik ging naar een oncologiefysiotherapeut hier in de buurt, praktijk Vitaal aan de Traay.\n\nDie fysiotherapeut wilde weten hoeveel lymfeklieren waren verwijderd en of ik radiotherapie zou krijgen.\n\nIk wist het aantal niet precies. Ik dacht zes.\n\nDe fysiotherapeut kon niet in het ziekenhuisdossier.\n\nIk kon het operatieverslag wel openen in het patiëntenportaal, maar daar stond allerlei medische terminologie in.\n\nUiteindelijk bleek dat ze negen klieren hadden verwijderd, waarvan één met restziekte.\n\nIk zat letterlijk met mijn telefoon mijn eigen operatieverslag voor te lezen aan de fysiotherapeut.\n\nToen dacht ik wel: waarom ben ík de informatieverbinding tussen deze professionals?\n\n**[18:33] Interviewer:** Wanneer was de operatie?\n\n**Respondent:** 27 september 2024.\n\nIk heb een borstsparende operatie gehad met okselklierdissectie. Vooraf was nog sprake van misschien een amputatie, omdat ze niet zeker wisten hoe goed de chemo zou werken.\n\nDe tumor was duidelijk kleiner geworden.\n\nDe operatie zelf ging technisch goed.\n\nIk lag één nacht in het ziekenhuis en mocht de volgende ochtend naar huis.\n\nDaar had ik achteraf gemengde gevoelens over.\n\n**[19:13] Interviewer:** Waarom?\n\n**Respondent:** Omdat “naar huis mogen” wordt gepresenteerd als iets positiefs. En dat is het natuurlijk vaak ook.\n\nMaar thuis betekent dat iemand anders de zorg overneemt.\n\nPieter moest de wond controleren, helpen douchen, medicijnen bijhouden, opletten op koorts.\n\nWe kregen instructies mee, maar hij is geen verpleegkundige.\n\nDe eerste nacht thuis kreeg ik behoorlijk veel pijn en twijfelden we: is dit normaal? Moeten we bellen?\n\nJe wilt ook niet voor ieder ding het ziekenhuis lastigvallen.\n\nDat vind ik een zwakke plek: er wordt veel zorg naar huis verplaatst, maar mantelzorgers krijgen niet altijd echt training of begeleiding.\n\n**[20:17] Interviewer:** Hebben jullie uiteindelijk gebeld?\n\n**Respondent:** Ja, rond half twee 's nachts.\n\nWe belden het nummer dat op de ontslagbrief stond. Eerst kwamen we via de centrale bij een afdeling die niet precies wist waar we moesten zijn.\n\nUiteindelijk kregen we een verpleegkundige die heel rustig uitlegde wat we moesten controleren.\n\nGeen koorts, wond zag er normaal uit, geen plotselinge zwelling.\n\nIk mocht extra pijnstilling nemen binnen het schema.\n\nHet bleek dus niet gevaarlijk.\n\nMaar dat telefoongesprek van misschien acht minuten voorkwam waarschijnlijk dat we naar de spoedeisende hulp waren gereden.\n\nDus goede telefonische bereikbaarheid is enorm belangrijk.\n\n**[21:04] Interviewer:** Hoe verliep daarna de radiotherapie?\n\n**Respondent:** Die startte in november 2024. Vijftien bestralingen en daarna nog een paar gerichte boosts.\n\nWat ik daarvan vooral onderschatte was de logistiek.\n\nDe bestraling zelf duurt misschien tien minuten.\n\nMaar je moet erheen rijden, parkeren, wachten, omkleden, behandeling, weer naar huis.\n\nIedere werkdag.\n\nIk woon relatief dichtbij Utrecht, dus voor mij was dat misschien drie kwartier tot een uur enkele reis afhankelijk van verkeer.\n\nEr zat een mevrouw naast me in de wachtkamer die uit de buurt van Tiel kwam. Zij was soms langer onderweg dan dat ze in het ziekenhuis was.\n\nDat soort reistijd zie je niet terug als “bijwerking”, maar het beïnvloedt je leven enorm.\n\n**[22:15] Interviewer:** En daarna kwam hormoontherapie?\n\n**Respondent:** Ja. Omdat mijn tumor sterk hormoongevoelig was.\n\nIk begon eerst met tamoxifen en later, na overleg, kreeg ik een aromataseremmer in combinatie met onderdrukking van mijn eierstokken.\n\nDaar begon eigenlijk een tweede fase waar ik minder goed op voorbereid was.\n\nTijdens chemo weet iedereen: dit is zwaar.\n\nNa de actieve behandeling zeiden mensen: “Zo, klaar!”\n\nMaar ik was helemaal niet klaar.\n\nIk had opvliegers, gewrichtspijn, slaapproblemen, concentratieproblemen en nul conditie.\n\nOok mijn seksualiteit veranderde. Vaginale droogheid, minder zin, pijn. Dat wordt niet makkelijk besproken.\n\n**[23:21] Interviewer:** Werd dat vanuit de zorg aangekaart?\n\n**Respondent:** Niet meteen.\n\nIk moest er zelf over beginnen.\n\nMijn oncoloog vroeg wel netjes naar opvliegers en gewrichtspijn, maar seksueel functioneren stond kennelijk minder hoog op de standaardlijst.\n\nPas toen ik bij een verpleegkundig specialist zei: “Er is nog iets waar ik me een beetje voor schaam,” kwam het gesprek.\n\nZij reageerde gelukkig heel normaal en verwees me naar een gespecialiseerde gynaecoloog.\n\nMaar je moet dus als patiënt de drempel over.\n\nIk denk dat veel mensen dat niet doen.\n\nAls een arts gewoon zou vragen: “Heeft de behandeling gevolgen voor intimiteit of seksualiteit?” dan geef je toestemming om daarover te praten.\n\n**[24:26] Interviewer:** Was psychologische ondersteuning beschikbaar?\n\n**Respondent:** Ja, maar niet direct.\n\nTijdens de chemo was ik vooral in overlevingsstand. Ik dacht: volgende kuur halen.\n\nNa de radiotherapie stortte ik mentaal meer in.\n\nIk werd heel angstig voor terugkeer van de kanker. Iedere pijn dacht ik: uitzaaiing.\n\nHoofdpijn? Hersenmetastasen.\n\nPijn in mijn rug? Botmetastasen.\n\nDat klinkt rationeel overdreven, maar angst werkt niet rationeel.\n\nMijn huisarts heeft me uiteindelijk verwezen naar een medisch psycholoog.\n\nDaar zat ongeveer zeven weken wachttijd op.\n\nZeven weken is misschien normaal in de zorg, maar als jij iedere nacht wakker ligt van doodsangst voelt dat eindeloos.\n\n**[25:35] Interviewer:** Wat had je in die periode nodig gehad?\n\n**Respondent:** Eigenlijk al vóór het einde van de behandeling informatie dat die mentale terugslag normaal kan voorkomen.\n\nNiemand zei: het kan zijn dat je je juist slechter voelt als de behandeling stopt.\n\nTijdens behandeling heb je een schema en een team.\n\nDaarna krijg je ineens: over drie maanden controle.\n\nDan sta je buiten met een map papieren en denk je: en nu?\n\nDat “zwarte gat” na behandeling is heel echt.\n\nIk had graag een afspraak gehad twee of drie weken na de laatste bestraling, specifiek over herstel, angst, werk, relatie en conditie.\n\nNiet alleen: hoe ziet de borst eruit?\n\n**[26:30] Interviewer:** Hoe ervaar je de controles nu?\n\n**Respondent:** Dubbel.\n\nIk ben natuurlijk blij dat ze me volgen.\n\nMaar controles veroorzaken ook stress. In de week ervoor slaap ik slechter.\n\nZe noemen dat soms scanxiety, al krijg ik niet iedere keer een scan.\n\nMijn jaarlijkse mammografie was bijvoorbeeld op 12 februari dit jaar. De dagen ervoor was ik compleet van slag.\n\nDe uitslag was gelukkig goed.\n\nMaar het systeem is soms vreemd: je krijgt een afspraak voor het onderzoek en dan moet je wachten op de uitslag. Soms staat een uitslag technisch al in het patiëntenportaal vóórdat een arts je heeft gesproken.\n\n**[27:20] Interviewer:** Is dat bij jou gebeurd?\n\n**Respondent:** Ja, één keer.\n\nNa een CT tijdens de chemo zag ik 's avonds in het portaal een verslag.\n\nDaar stond iets over “een aspecifieke pulmonale nodulus van vier millimeter”.\n\nIk dacht: longuitzaaiing.\n\nIk heb die nacht bijna niet geslapen.\n\nDe volgende ochtend bleek dat dit een heel klein, waarschijnlijk onschuldig plekje was waar ze alleen naar wilden kijken bij een eventuele volgende scan.\n\nDe arts zei dat zulke bevindingen heel vaak voorkomen.\n\nMaar als patiënt lees je “pulmonaal” en “nodulus” en gaat Google aan.\n\nIk vind toegang tot je eigen gegevens goed, absoluut. Maar uitslagen zonder context kunnen ook schade doen.\n\n**[28:24] Interviewer:** Hoe zou dat beter kunnen?\n\n**Respondent:** Misschien moet je kunnen kiezen.\n\nBijvoorbeeld: “Ik wil uitslagen meteen zien” of “Ik wil ze pas zien nadat een zorgverlener ze met mij besproken heeft.”\n\nOf er moet direct een begrijpelijke uitleg naast staan.\n\nNiet alleen radiologentaal.\n\nBij mijn verslag stond bijvoorbeeld BI-RADS, partiële respons, axillaire adenopathie. Inmiddels weet ik wat veel termen betekenen. In het begin niet.\n\nEen patiëntenportaal is technisch transparant, maar transparantie is niet hetzelfde als begrijpelijkheid.\n\n**[29:12] Interviewer:** Je noemde eerder de huisarts. Welke rol speelde zij?\n\n**Respondent:** Een grotere rol dan ik vooraf dacht.\n\nIn het ziekenhuis gaat alles over de kanker. Mijn huisarts zag meer de hele mens.\n\nZij vroeg ook hoe het met Pieter ging en met de kinderen.\n\nToen ik slecht sliep tijdens hormoontherapie heeft zij met me besproken wat wel en niet kon.\n\nOok hielp ze met mijn angst.\n\nMaar de informatie vanuit het ziekenhuis kwam soms laat bij haar.\n\nIk herinner me dat ik na mijn operatie bij haar kwam voor iets anders en zij nog niet het definitieve pathologieverslag in haar systeem had.\n\nIk wist de uitslag al wel.\n\nDat vind ik echt onhandig.\n\n**[30:03] Interviewer:** Heb je ook ervaringen gehad waarbij verschillende zorgverleners elkaar tegenspraken?\n\n**Respondent:** Een paar keer.\n\nBijvoorbeeld over sporten en belasting van mijn arm na de okseloperatie.\n\nDe chirurg zei: rustig opbouwen, maar in principe gebruiken.\n\nEen verpleegkundige was voorzichtiger met zwaar tillen.\n\nDe fysiotherapeut zei juist dat geleidelijke krachttraining belangrijk was.\n\nAls patiënt hoor je dan drie verschillende boodschappen.\n\nWaarschijnlijk bedoelen ze medisch ongeveer hetzelfde, maar de formulering maakt verschil.\n\nIk werd bang om mijn arm verkeerd te gebruiken en lymfoedeem te veroorzaken.\n\nDaardoor heb ik hem misschien juist te lang ontzien.\n\n**[31:00] Interviewer:** Heb je lymfoedeem gekregen?\n\n**Respondent:** Licht.\n\nMijn linkerarm wordt aan het einde van sommige dagen wat dikker en zwaar, vooral als het warm is.\n\nIk heb een compressiemouw voor langere autoritten en vliegen.\n\nWe zijn afgelopen zomer voor het eerst weer op vakantie gegaan, naar Denemarken. Ik zat in de auto met die mouw en dacht: twee jaar geleden dacht ik bij vakantie aan welke boeken ik wilde meenemen. Nu denk ik aan oedeem, medicijnen en waar het dichtstbijzijnde ziekenhuis is.\n\nDat is zo'n voorbeeld van hoe kanker in je dagelijks denken blijft zitten.\n\n**[31:54] Interviewer:** Heeft het ook invloed gehad op je zelfbeeld?\n\n**Respondent:** Ja.\n\nMijn borst ziet er anders uit. Er zit een litteken en de vorm is veranderd door operatie en bestraling.\n\nMijn linkeroksel voelt vreemd, deels doof.\n\nMijn haar is terug, maar het kwam eerst heel krullend terug terwijl ik vroeger steil haar had.\n\nIk ben door hormoontherapie ook een paar kilo aangekomen.\n\nLos daarvan voel ik me ouder dan vóór de ziekte.\n\nNiet alleen lichamelijk. Alsof mijn lichaam niet meer vanzelfsprekend betrouwbaar is.\n\nDat vertrouwen ben ik kwijtgeraakt.\n\n**[32:47] Interviewer:** En je werk, hoe gaat dat nu?\n\n**Respondent:** Ik werk inmiddels 24 uur per week.\n\nDat is meer dan tijdens mijn re-integratie, maar minder dan de 32 uur die ik daarvoor deed.\n\nOp papier ben ik grotendeels hersteld. In praktijk moet ik mijn energie veel bewuster verdelen.\n\nEen hele dag bouwplaats, met reizen en vergaderen, betekent dat ik 's avonds niets meer kan.\n\nIk plan daarom maximaal twee intensieve werkdagen achter elkaar.\n\nMijn collega's weten waarom, maar nieuwe opdrachtgevers niet altijd.\n\nDaar zit ook privacy in. Hoeveel vertel je?\n\nAls ik zeg dat ik 24 uur werk vanwege mijn gezondheid, komen vragen.\n\nAls ik zeg dat ik kanker heb gehad, verandert soms de manier waarop mensen naar je kijken.\n\n**[33:48] Interviewer:** Ben je bang dat het invloed heeft op je loopbaan?\n\n**Respondent:** Soms wel.\n\nNiet eens omdat mijn werkgever moeilijk doet. Die is juist heel goed geweest.\n\nMaar ik vraag mezelf af of ik nog projectleider wil zijn van grote restauraties waarbij je drie jaar verantwoordelijkheid draagt.\n\nDurf ik een project aan als ik bang ben dat de kanker terugkomt?\n\nDat is misschien niet rationeel, maar het speelt mee.\n\nOok verzekeringen en financiële planning voelen anders.\n\nPieter en ik wilden eigenlijk ooit nog verhuizen naar een ouder huis buiten het dorp. Nu denk ik: wil ik een hogere hypotheek? Wat als ik opnieuw ziek word?\n\nKanker beïnvloedt beslissingen die helemaal niet medisch lijken.\n\n**[34:43] Interviewer:** Wat vind je dat goed geregeld is in het Nederlandse zorgstelsel?\n\n**Respondent:** Heel veel, ondanks mijn kritiek.\n\nIk hoefde nooit na te denken of ik de chemotherapie kon betalen.\n\nNiemand zei: deze behandeling krijg je niet omdat je verzekering niet goed genoeg is.\n\nToen de diagnose er eenmaal was, ging het diagnostische traject snel.\n\nDe multidisciplinaire aanpak vond ik ook goed. Chirurg, oncoloog, radioloog, patholoog, radiotherapeut — mijn situatie werd in een team besproken.\n\nIk voelde dat behandelbeslissingen niet door één persoon in een kamertje werden genomen.\n\nEn de verpleegkundigen zijn voor mij echt de ruggengraat van de zorg geweest.\n\nZij vertalen medische behandeling naar het dagelijkse leven.\n\n**[35:42] Interviewer:** En wat vind je structureel minder goed?\n\n**Respondent:** Fragmentatie.\n\nDat woord vat veel samen.\n\nIedere afdeling optimaliseert zijn eigen stukje.\n\nDe chirurg kijkt naar de operatie.\n\nDe oncoloog kijkt naar systemische behandeling.\n\nDe radiotherapeut naar bestraling.\n\nDe bedrijfsarts naar werk.\n\nDe huisarts naar de algemene gezondheid.\n\nMaar ik heb maar één lichaam en één leven.\n\nIk mis iemand die gedurende het hele traject verantwoordelijk is voor het overzicht.\n\nEen soort vaste casemanager die niet verdwijnt wanneer je van behandelonderdeel wisselt.\n\n**[36:34] Interviewer:** Had je niet een mammacareverpleegkundige als vast aanspreekpunt?\n\n**Respondent:** In theorie wel, maar dat veranderde tijdens het traject.\n\nVoor de operatie had ik veel contact met mammacare.\n\nTijdens de chemo was medische oncologie mijn belangrijkste aanspreekpunt.\n\nBij radiotherapie weer een ander team.\n\nNa behandeling werd het minder duidelijk.\n\nDus er zijn aanspreekpunten per fase, maar niet per patiënt over alle fases heen.\n\nDat is een belangrijk verschil.\n\n**[37:11] Interviewer:** Hoe vond je de administratieve kant?\n\n**Respondent:** Vermoeiend.\n\nNiet rampzalig, maar je krijgt veel brieven, apps en formulieren.\n\nZiekenhuisportaal, apotheekapp, huisartsportaal, zorgverzekeraar.\n\nMijn apotheek is Apotheek De Bosrand, hier in Driebergen. Soms stond een medicijn klaar volgens de ziekenhuisbrief, maar had de apotheek het recept nog niet ontvangen.\n\nDan bel je ziekenhuis.\n\nZiekenhuis zegt dat het verstuurd is.\n\nApotheek zegt dat het niet binnen is.\n\nDaar zit jij tussen.\n\nEn ik ben hoogopgeleid en digitaal vaardig. Ik dacht vaak: hoe doet iemand dit die slecht Nederlands spreekt of moeite heeft met computers?\n\n**[38:09] Interviewer:** Heb je voorbeelden rond de zorgverzekering?\n\n**Respondent:** Ja.\n\nMijn verzekeraar in dat jaar was Noorderlicht Zorgverzekeringen, polisnummer begon met NZ-8842. Ik kreeg op een gegeven moment een rekening die ik niet begreep vanwege een DBC.\n\nOp de rekening stond een behandelperiode die niet overeenkwam met één concrete afspraak.\n\nIk dacht dat er iets fout was.\n\nDe medewerker legde uiteindelijk netjes uit hoe zo'n diagnose-behandelcombinatie administratief wordt geopend en gesloten.\n\nMaar voor een patiënt is dat totaal niet intuïtief.\n\nJe denkt: ik ben op 4 juni in het ziekenhuis geweest, dus waarom staat er een rekening met een periode van maanden?\n\nHet systeem is gebouwd vanuit financiering, niet vanuit hoe patiënten zorg ervaren.\n\n**[39:10] Interviewer:** Je zei dat taal en digitale vaardigheden een rol kunnen spelen. Heb je dat bij andere patiënten gezien?\n\n**Respondent:** Ja, tijdens chemo zat ik natuurlijk vaak met dezelfde mensen in de behandelruimte.\n\nIk raakte aan de praat met een vrouw die niet goed Nederlands sprak. Haar dochter ging bij bijna ieder gesprek mee om te vertalen.\n\nIk weet niet precies wat hun achtergrond was en dat doet er ook niet toe, maar ik dacht wel: je bent dan enorm afhankelijk van familie.\n\nEen professionele tolk lijkt me bij zulke gesprekken veel beter.\n\nMedische informatie over prognose of bijwerkingen wil je niet door je kind laten vertalen.\n\nIk weet niet hoe het beleid officieel is, maar in de praktijk zag ik familieleden vaak tolken.\n\n**[40:02] Interviewer:** Wat zou volgens jou de eerste verbetering moeten zijn?\n\n**Respondent:** Een persoonlijk zorgplan dat niet alleen medisch is.\n\nDus niet alleen: tumorstadium, behandeling, medicatie.\n\nMaar ook: wie is je aanspreekpunt, wat zijn mogelijke late effecten, wat betekent dit voor werk, psychisch herstel, relaties, beweging, voeding en financiën?\n\nEn dat plan moet meegroeien.\n\nNa diagnose heb je andere vragen dan na anderhalf jaar.\n\nIk zou ook willen dat het in gewone taal beschikbaar is.\n\nBij wijze van spreken één scherm waarop staat: dit is waar je nu bent, dit komt hierna en voor deze vijf dingen kun je deze persoon bellen.\n\n**[41:00] Interviewer:** Zijn er dingen die je zelf pas later hebt ontdekt?\n\n**Respondent:** Heel veel.\n\nOncologische revalidatie bijvoorbeeld.\n\nDat kwam pas laat ter sprake.\n\nIk had maanden gedacht dat ik mijn conditie gewoon zelf moest terugtrainen.\n\nToen hoorde ik via een lotgenotengroep dat er programma's bestaan met fysiotherapie, psychologische begeleiding en soms ergotherapie.\n\nIk heb uiteindelijk een traject gedaan bij RevaPlus in Zeist.\n\nDat heeft enorm geholpen.\n\nMaar waarom hoorde ik daar niet automatisch over bij het einde van mijn behandeling?\n\nToegang tot ondersteuning hangt nog te veel af van toevallig de juiste persoon spreken.\n\n**[41:55] Interviewer:** Hebben lotgenoten een belangrijke rol gespeeld?\n\n**Respondent:** Ja, meer dan ik verwachtte.\n\nIk zat eerst helemaal niet te wachten op een patiëntengroep. Ik dacht: ik wil niet dat kanker mijn identiteit wordt.\n\nMaar online vond ik een besloten groep voor vrouwen onder de vijftig met hormoongevoelige borstkanker.\n\nDaar werden vragen gesteld die ik in het ziekenhuis niet durfde te stellen.\n\nOver seks.\n\nOver concentratie.\n\nOver angst.\n\nOver kinderen.\n\nOver werk.\n\nMaar lotgenotengroepen hebben ook een nadeel: je leest veel heftige verhalen.\n\nIemand krijgt een recidief, iemand heeft uitzaaiingen, iemand overlijdt.\n\nDan kan je angst juist toenemen.\n\nDus ik doseer het nu.\n\n**[42:43] Interviewer:** Heeft de ziekte veranderd hoe je naar de zorg kijkt?\n\n**Respondent:** Absoluut.\n\nVroeger dacht ik vrij simpel: Nederland heeft goede gezondheidszorg, dus als je iets hebt word je behandeld.\n\nNu zie ik hoeveel werk patiënten zelf doen om die zorg passend te maken.\n\nAfspraken bijhouden.\n\nBijwerkingen registreren.\n\nVragen voorbereiden.\n\nUitslagen lezen.\n\nApotheek bellen.\n\nWerkgever informeren.\n\nVerzekeraar bellen.\n\nFamilie organiseren.\n\nDat is allemaal onbetaalde arbeid rondom ziek zijn.\n\nVoor een gezonde buitenstaander is behandeling misschien: chemotherapie krijgen.\n\nVoor de patiënt is behandeling een bijna volledige reorganisatie van het dagelijks leven.\n\n**[43:33] Interviewer:** Als je één boodschap aan zorgprofessionals mocht geven, welke zou dat zijn?\n\n**Respondent:** Vraag niet alleen: “Hoe gaat het medisch?”\n\nVraag: “Hoe ziet je dag eruit?”\n\nWant dan hoor je de echte gevolgen.\n\nDat ik na een werkdag niet meer kan koken.\n\nDat ik bang ben vóór een controle.\n\nDat Pieter soms ook uitgeput is.\n\nDat Noor twee jaar later nog schrikt als ik zeg dat ik hoofdpijn heb.\n\nDat ik medicijnen vergeet als mijn routine verandert.\n\nDat ik niet graag in een warme ruimte zit vanwege opvliegers.\n\nDat ik bij ieder nieuw pijntje moet beslissen of ik een dokter bel of mezelf geruststel.\n\nDie dingen staan niet allemaal in een tumordossier, maar dat is wel mijn leven.\n\n**[44:19] Interviewer:** En wat zou je tegen iemand zeggen die net dezelfde diagnose krijgt?\n\n**Respondent:** Dat weet ik moeilijk, want iedereen is anders.\n\nIk zou in ieder geval zeggen: schrijf dingen op en neem iemand mee naar belangrijke gesprekken.\n\nEn vraag eerder om hulp dan ik deed.\n\nNiet omdat je alles zelf zou moeten kunnen, maar omdat kanker zoveel tegelijk raakt.\n\nMedisch, psychisch, praktisch, financieel, relationeel.\n\nIk dacht in het begin: als ik de chemo maar doorkom.\n\nMaar herstellen is een veel langer proces.\n\nEn ik zou zeggen dat je twee dingen tegelijk mag voelen.\n\nJe kunt heel dankbaar zijn voor goede zorg en tegelijkertijd kritiek hebben op hoe het systeem georganiseerd is.\n\nIk ben ontzettend dankbaar dat mijn behandeling beschikbaar was en dat veel zorgverleners zo betrokken waren.\n\nMaar juist omdat de medische zorg zo goed is, zou de organisatie rondom de patiënt ook beter kunnen.\n\n**[45:09] Interviewer:** Is er nog iets dat we niet besproken hebben waarvan je vindt dat het belangrijk is?\n\n**Respondent:** Misschien dat “klaar met kanker” voor veel mensen niet bestaat op de dag dat de behandeling stopt.\n\nMijn laatste bestraling was 18 december 2024. Mensen stuurden felicitaties en bloemen.\n\nDat was lief.\n\nMaar ik slik nog steeds medicijnen. Ik heb nog controles. Ik heb fysieke klachten. En soms is de angst er ineens weer.\n\nTegelijk wil ik ook niet voortdurend patiënt zijn.\n\nVorige maand stond ik weer op een bouwsteiger bij een oude kerk en was ik twintig minuten volledig vergeten dat ik ooit kanker had.\n\nDat vond ik misschien wel het mooiste herstelmoment tot nu toe.\n\nNiet dat alles weer hetzelfde is.\n\nMaar dat kanker soms even niet het belangrijkste verhaal over mij is.\n\n**[45:52] Interviewer:** Dank je wel, Marieke.\n\n**Respondent:** Graag gedaan.\n",
+      "pii": [
+        {
+          "text": "Sanne de Wit",
+          "type": "PERSON"
+        },
+        {
+          "text": "Marieke van Dalen-Visser",
+          "type": "PERSON"
+        },
+        {
+          "text": "Marieke van Dalen",
+          "type": "PERSON"
+        },
+        {
+          "text": "Marieke Johanna Visser-van Dalen",
+          "type": "PERSON"
+        },
+        {
+          "text": "Van Dalen-Visser",
+          "type": "PERSON"
+        },
+        {
+          "text": "Marieke",
+          "type": "PERSON"
+        },
+        {
+          "text": "Pieter",
+          "type": "PERSON"
+        },
+        {
+          "text": "Noor",
+          "type": "PERSON"
+        },
+        {
+          "text": "Emma",
+          "type": "PERSON"
+        },
+        {
+          "text": "Judith Vermeer",
+          "type": "PERSON"
+        },
+        {
+          "text": "N. van Loon",
+          "type": "PERSON"
+        },
+        {
+          "text": "Anneke Smit",
+          "type": "PERSON"
+        },
+        {
+          "text": "Anneke",
+          "type": "PERSON"
+        },
+        {
+          "text": "Bas van Leeuwen",
+          "type": "PERSON"
+        },
+        {
+          "text": "Laura",
+          "type": "PERSON"
+        },
+        {
+          "text": "Ingrid",
+          "type": "PERSON"
+        },
+        {
+          "text": "17 maart 2026",
+          "type": "DATE"
+        },
+        {
+          "text": "3 november 1978",
+          "type": "DATE"
+        },
+        {
+          "text": "zomer 2012",
+          "type": "DATE"
+        },
+        {
+          "text": "februari 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "maandag 11 maart 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "19 maart",
+          "type": "DATE"
+        },
+        {
+          "text": "26 maart",
+          "type": "DATE"
+        },
+        {
+          "text": "22 april 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "8 mei",
+          "type": "DATE"
+        },
+        {
+          "text": "27 september 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "november 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "12 februari",
+          "type": "DATE"
+        },
+        {
+          "text": "4 juni",
+          "type": "DATE"
+        },
+        {
+          "text": "18 december 2024",
+          "type": "DATE"
+        },
+        {
+          "text": "Ik ben 47",
+          "type": "AGE"
+        },
+        {
+          "text": "Hij is 79",
+          "type": "AGE"
+        },
+        {
+          "text": "Noor was toen zestien",
+          "type": "AGE"
+        },
+        {
+          "text": "was toen twintig",
+          "type": "AGE"
+        },
+        {
+          "text": "Driebergen-Rijsenburg",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Driebergen",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Gouda",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Groningen",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Utrecht",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Culemborg",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Woerden",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Amersfoort",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Hilversum",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Tiel",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Zeist",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Denemarken",
+          "type": "LOCATION"
+        },
+        {
+          "text": "Lijsterlaan",
+          "type": "ADDRESS"
+        },
+        {
+          "text": "Korreweg",
+          "type": "ADDRESS"
+        },
+        {
+          "text": "Karnemelksloot",
+          "type": "ADDRESS"
+        },
+        {
+          "text": "nummer 18",
+          "type": "ADDRESS"
+        },
+        {
+          "text": "de Traay",
+          "type": "ADDRESS"
+        },
+        {
+          "text": "Van Rijn Erfgoedrestauratie",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "Huisartsenpraktijk De Eiken",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "Stadshaven Medisch Centrum",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "Revius Lyceum",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "praktijk Vitaal",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "Apotheek De Bosrand",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "Noorderlicht Zorgverzekeringen",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "RevaPlus",
+          "type": "ORGANIZATION"
+        },
+        {
+          "text": "ONC-24-771",
+          "type": "ID_NUMBER"
+        },
+        {
+          "text": "NZ-8842",
+          "type": "ID_NUMBER"
+        },
+        {
+          "text": "restauratiearchitect",
+          "type": "PROFESSION"
+        },
+        {
+          "text": "geluidstechnicus",
+          "type": "PROFESSION"
+        }
+      ],
+      "allowed": [
+        "Interviewer",
+        "Respondent",
+        "huisarts",
+        "chirurg",
+        "oncoloog",
+        "mammacareverpleegkundige",
+        "bedrijfsarts",
+        "fysiotherapeut",
+        "oncologiefysiotherapeut",
+        "verpleegkundige",
+        "verpleegkundig specialist",
+        "gynaecoloog",
+        "medisch psycholoog",
+        "radiotherapeut",
+        "radioloog",
+        "patholoog",
+        "leidinggevende",
+        "werkgever",
+        "buurvrouw",
+        "paclitaxel",
+        "tamoxifen",
+        "dexamethason",
+        "aromataseremmer",
+        "HER2",
+        "BI-RADS",
+        "mammografie",
+        "havo",
+        "Google",
+        "Nederland",
+        "Nederlandse"
+      ]
+    }
+  ]
+}

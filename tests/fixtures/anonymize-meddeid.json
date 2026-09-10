@@ -1,0 +1,1513 @@
+{
+  "_comment": "Sample of 24 documents from the MedDeID Dutch synthetic benchmark (300 physician-reviewed synthetic Belgian-Dutch clinical notes; no real patients). Source: Hellemans S. et al., \"MedDeID Dutch synthetic corpus, synthetic benchmark and annotation guidelines\", Adrem Data Lab, University of Antwerp / Antwerp University Hospital, 2026, CC BY 4.0, https://doi.org/10.5281/zenodo.21890965. Converted by tools/convert-meddeid.mjs (all 8 \"targeted-difficult\" documents plus 16 seeded-random synthetic ones, seed 20260910); each pii item keeps the original MedDeID label. Scoring is Medmorf's lenient text-overlap scoring (tests/metrics.js), not MedDeID's span-level evaluation, so numbers are comparable between models here but not with the MedDeID paper. Note Belgian conventions (+32 phones, rijksregister-style IDs, Flemish hospital names). `allowed` is empty: the source leaves non-identifying clinical terms unmarked, so precision is stricter than on anonymize.json.",
+  "source": {
+    "title": "MedDeID Dutch synthetic corpus, synthetic benchmark and annotation guidelines",
+    "authors": "Hellemans S., Stroobants T., Scheurwegs E., Meysman P., Jorens P., Laukens K.",
+    "doi": "10.5281/zenodo.21890965",
+    "license": "CC-BY-4.0",
+    "file": "data/meddeid-dutch-synthetic-benchmark.jsonl",
+    "seed": 20260910,
+    "count": 24
+  },
+  "types": [
+    "PERSON",
+    "DATE",
+    "ADDRESS",
+    "LOCATION",
+    "PHONE",
+    "EMAIL",
+    "ID_NUMBER",
+    "ORGANIZATION",
+    "AGE",
+    "PROFESSION"
+  ],
+  "documents": [
+    {
+      "id": "meddeid_synthetic-00060",
+      "language": "nl",
+      "text": "Preoperatieve evaluatie radiologie\n\nPatiënt: Lylo Vangoidsenhoven, 34 jaren, geboren op 26.10.1971.\n\nReden van aanmelding: toevallig gevonden bijnierincidentaloom op CT, naar aanleiding van verdere evaluatie door endocrinologie/radiologie. Klinisch beeld met hypertensie en spierzwakte. Er is sprake van lopende behandeling met spironolacton en kaliumsuppletie; eveneens uitgevoerd dexamethason suppressietest.\n\nBiochemie in dossier: cortisol na suppressie 2.4 ug/dL, aldosteron 21 ng/dL.\n\nBeeldvorming en context doen denken aan een hormonaal actief bijniervolume. Verdere opvolging en besluitvorming volgens multidisciplinair overleg. Controle voorzien op wo 29/11/2006.\n\nAdministratief: 45618927; dossierreferentie Eindrapport 149417-UZA-MDO.pdf.\n\nContact: patiënt bereikbaar via +32 472 70 70 39 en lylo.vangoidsenhoven14@hotmail.be.",
+      "pii": [
+        {
+          "text": "Lylo Vangoidsenhoven",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "34 jaren",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "26.10.1971",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "wo 29/11/2006",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "45618927",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "Eindrapport 149417-UZA-MDO.pdf",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "+32 472 70 70 39",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "lylo.vangoidsenhoven14@hotmail.be",
+          "type": "EMAIL",
+          "label": "Contactdetails"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-01801",
+      "language": "nl",
+      "text": "SOAP-nota cardiologie\n\nS: GG, 42jr oud, gepensioneerde postbode, gezien op raadpleging op 10/9. Meldt drukkende thoracale pijn, dyspneu bij inspanning en nausea. Pijn momenteel beperkt, pijnscore 1.2/10. Relevante VG van refluxklachten en vroegere pneumonie. Woonachtig op Oude Borgwormseweg 90, 4432 Xhendremael.\n\nO: Parameters: T 38.3 °C, HF 98/min, AF 14/min, BD 126/57 mmHg. Lengte 169.8 cm, gewicht 79.2 kg, BMI 28.5 kg/m2. pO2 72 mmHg, CRP 44 mg/L. Beeldvorming en vorige opnames vergeleken; radiologiebespreking met beeld passend bij inflammatoire restletsels.\n\nA: Ischemische hartziekte, met partiële klinische evolutie maar persisterende inspanningsgebonden klachten. Geen tekenen van hemodynamische instabiliteit. \n\nP: Rx behouden: Clopidogrel, Simvastatin en 24 HR metoprolol succinate verderzetten. Nitroglycerin Mucosal Spray zo nodig. Opvolging en herbeoordeling bij desaturatie of toename van thoracale pijn. FU voorzien op 17 okt. 2002. Bespreking in MDO indien verdere evolutie dat vraagt.\n\nContact/administratief: dossier onder MRN-423061. Behandelend team via DR-439167, lokaal in Puurs-Sint-Amands. Bespreking gebeurde in context van Ziekenhuis aan de Stroom - PVT Antwerpen; verdere evaluatie kan ook afgestemd worden met Kinesitherapiepraktijk Boeckaerts-De hont. Bij nood is contact mogelijk voor verdere afstemming.",
+      "pii": [
+        {
+          "text": "GG",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "42jr",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "gepensioneerde postbode",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "10/9.",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "Oude Borgwormseweg 90, 4432 Xhendremael",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "17 okt. 2002",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "MRN-423061",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "DR-439167",
+          "type": "ID_NUMBER",
+          "label": "ID:Caregiver"
+        },
+        {
+          "text": "Puurs-Sint-Amands",
+          "type": "LOCATION",
+          "label": "Address_Location:Caregiver"
+        },
+        {
+          "text": "Ziekenhuis aan de Stroom - PVT Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Kinesitherapiepraktijk Boeckaerts-De hont",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-02232",
+      "language": "nl",
+      "text": "Verslag\n\nDaud Drieskens, ± 53 jr, ° 09/09/1945.\n\nAanvrager / dienst: Erasmus Ziekenhuis - Dienst Psychiatrie.\n\nNa CPAP-uitlezing. Patiënt meldt nog persisterende slaperigheid. Snurken en apneus werden volgens partner bevraagd; rijveiligheid is expliciet besproken. Ploegwerk verstoort het dag-nachtritme.\n\nUitlezing toont redelijke therapietrouw, met CPAP-gebruik 5.5 u/nacht. Wakkere zuurstofsaturatie 100 %, HF 72/min. BMI 32.5 kg/m2. HbA1c 5.8 %. Lengte 173.3 cm. Pijnscore 3.0/10.\n\nConclusie: beeld passend bij obstructief slaapapneu syndroom met aanhoudende slaperigheid ondanks redelijke CPAP-adherentie. Rijden bij uitgesproken slaperigheid afraden. Herbeoordeling gepland na maskerwissel en nieuwe uitlezing in 1999.\n\nContact: partner Sezan Raeves, sezan.raeves47@azdelta.be.\nAdres pt.: Hofstadstraat 102, 7742 Hérinnes-lez-Pecq.",
+      "pii": [
+        {
+          "text": "Daud Drieskens",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "53 jr",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "09/09/1945",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Erasmus Ziekenhuis",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "1999",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "Sezan Raeves",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "sezan.raeves47@azdelta.be",
+          "type": "EMAIL",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Hofstadstraat 102, 7742 Hérinnes-lez-Pecq",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-02283",
+      "language": "nl",
+      "text": "Patiëntinstructies na contact\n\nPatiënt: e.r., ca. 58 jaar, man.\n\nBesproken bij spiegelcontrole / follow-up.\n- Aanvalscontrole nog gedeeltelijk, met gemiddeld 3 aanvallen/maand.\n- Slaaptekort door ploegwerk blijft een duidelijke uitlokkende factor.\n- Aanvalsdagboek nagekeken: tijdstip van aura en herstelduur apart laten noteren.\n- Rescueplan herhaald: wanneer noodmedicatie gebruiken en wanneer 112 bellen.\n- Slaapmanagement benadrukt als therapeutisch.\n- Paracetamol zo nodig behouden.\n- Natriumfluoride gel behouden.\n- Bij zwangerschapscontext foliumzuur en planning zo nodig bespreken.\n\nParameters / indruk\n- HF 82/min, BD 122/76 mmHg, T° 35.7 °C.\n- Gewicht 94.2 kg, lengte 179.3 cm, BMI 30.3 kg/m2.\n- Pijnscore 3.2/10.\n- HbA1c 5.9 %.\n- ALAT 27 U/L.\n- Reactietest 3 fouten, aanvaardbaar.\n\nAfspraken\n- Controle voorzien in 07 november.\n- Administratief / historiek: sinds 2005 in opvolging; herbeoordeling in 2010.\n\nBereikbaarheid\n- Bij vragen: +32 480 65 91 95.\n- Bij nood via familie: kavin omari, tel. +32 480 91 59 55.\n- Overleg: 7830.\n\nOpmerking\n- Opvolging verder via UHasselt.",
+      "pii": [
+        {
+          "text": "e.r.",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "ca. 58 jaar",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "07 november",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2005",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2010",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "+32 480 65 91 95",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "kavin omari",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "+32 480 91 59 55",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "7830",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "UHasselt",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-02691",
+      "language": "nl",
+      "text": "Genetisch verslag\nProband: tsekyi verkinderen (20-mei-2003), aanvraag CFDNA 32648.\nFamiliaal staal van Hornella Discart ontvangen op 17/12/2008 omstreeks 08.20.\nResultaat: WT1 c.1180C>T p.Arg394Trp (rs121907907), interpretatie pathogeen. Analyse gebeurde op panel NM_004333.6; deze codes zijn geen PII. Rapportnummer PA-2025-23011.\nAanvullende interpretatie: segregatieanalyse wordt aanbevolen bij relevante familieanamnese. HGVS-strings, rsIDs en transcriptcodes zoals NM_004333.6 worden bewust niet als PII geannoteerd.\nMedicatieschema\n- loratadine zo nodig - koorts melden dezelfde dag\n- adrenaline auto-injector; schema antibioticum afmaken indien verbetering\n- budesonide Inhalation Suspension: drukontlasting consequent gebruiken\n. Medicatienamen, merknamen, dosissen, routes en innameschema's blijven klinische inhoud.\nAllergiecheck geneesmiddelen: geen reactie op loratadine zo nodig / geen reactie op adrenaline auto-injector / geen reactie op budesonide Inhalation Suspension.\nGevalideerd door Clesse, Ivannah, Dr. op 27.12.1996 14:58",
+      "pii": [
+        {
+          "text": "tsekyi verkinderen",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "20-mei-2003",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "32648",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "Hornella Discart",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "17/12/2008",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "PA-2025-23011",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "Clesse, Ivannah, Dr.",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "27.12.1996",
+          "type": "DATE",
+          "label": "Date"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03112",
+      "language": "nl",
+      "text": "MDO cardiologie/genetica – consultatieverslag\n\nPatiënt Tudor Ungureanu, 15 jarig, geboren ° 25.9.1974. Studentenprofiel: student 5de middelbaar.\n\nAanmelding 23/10 om 9u35. Verwijscontext met familiale belasting en xanthelasmata, geen thoracale pijn. Genetische evaluatie bespreekt pathogene F8-variant (c.6046C>T, p.Arg2016Trp, rs28935206). Klinisch zijn er geen acute cardiale klachten.\n\nObjectieve gegevens: lengte 113.1 cm, gewicht 22.4 kg, BMI 17.0 kg/m2. Pijnscore 2.7/10. BD diastolisch 76 mmHg; elders in dossier stabiel met 126/74 mmHg. Belastbaarheid deels hersteld, ADL nog beperkt, slaapprofiel ongeveer 7 u/nacht. Werk-/activiteitsdraagkracht voorlopig beperkt; tilgrens functioneel als tijdelijk kader.\n\nHistoriek / tijdslijn:\n- 25/09/89: aanmelding in kader van familiale screening en verdere evaluatie.\n- 21-10-1989: staalname voor genetische analyse.\n- 23/10/1989: consultatie, bespreking klinische context en familie-anamnese.\n- maandag 6 nov. 1989: multidisciplinair overleg gepland/gerapporteerd.\n- oktober 1977: eerste relevante antecedenten in dossier.\n- 1955: vroegere voorgeschiedenis vermeld.\n- 20/11: vervolgactie of dagplanning.\n- 1990: verder beleid en opvolging voorzien.\n\nBespreking: beeld past bij erfelijke predispositie met nood aan verdere familiale counseling. Geen aanwijzingen voor acute ischemische klachten. Ergonomieadvies meegegeven; werkhoogte en tilhulpmiddelen besproken. Symptomatische pijnstilling met paracetamol kan behouden worden; overige medicatie volgens huidig schema.\n\nConclusie / beleid:\n1. Pathogene F8-variant bevestigt erfelijke context.\n2. Klinisch geen thoracale pijn of acute cardiale alarmsymptomen.\n3. Functionele belasting gradueel opbouwen, met aandacht voor tilgrens en ergonomie.\n4. Opvolging en herbeoordeling in 1990, met verdere familiebespreking indien nodig.",
+      "pii": [
+        {
+          "text": "Tudor Ungureanu",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "15 jarig",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "25.9.1974",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "student 5de middelbaar",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "23/10",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "25/09/89",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "21-10-1989",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "23/10/1989",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "maandag 6 nov. 1989",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "oktober 1977",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "1955",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "20/11",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "1990",
+          "type": "DATE",
+          "label": "Date"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03411",
+      "language": "nl",
+      "text": "Verslag genetica / opvolging\n\nLaurian, 9 j.; geboortegegevens: 05 april 1992. Adres: Heuvelsven 74, 6533 Biercée (Thuin). Beroep/context: leerling lagere school.\n\nBespreking in 2002 in het kader van actieve surveillance. Klinisch beeld met prikkelbaarheid, verhoogde spraakzaamheid en verminderde slaapnood. Pijnscore bekken 1/10, nycturie 5/nacht. PSA blijft stabiel; residu 33 mL, PSA-ratio 0.52, PSA 5.6 ng/mL. Beleid conservatief, trend belangrijker dan geïsoleerde waarde. Biopsie voorlopig voorwaardelijk.\n\nSomatisch: lengte 75.0 cm, gewicht 9.1 kg, gewicht-lengte percentiel 34.4 %, hoofdomtrek 44.9 cm, hoofdomtrek percentiel 40.7 %.\n\nVG: benigne prostaathyperplasie. Medicatie/advies zoals lopend schema: fluoridegel lokaal, ibuprofen, amoxicilline p.o., paracetamol zo nodig. Alarmsymptomen meegegeven: botpijn en hematurie.\n\nGenetische bevinding: COL1A1 c.769G>A, p.Gly257Arg, rs72658152, pathogeen.\n\nOpvolging\n- geschiedenis sinds 1992, herbeoordeling 2000\n- gepland vervolg in 2002; te doen 10/5\n- reeds uitgevoerd op 26/01\n\nAdministratief: dossier P3333787, HIS 922954902. Contact 4038. Verantwoordelijke context Engis, registratienr. DR-705237.\n\nContactpersoon: Nío Serdons.",
+      "pii": [
+        {
+          "text": "Laurian",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "9 j",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "05 april 1992",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Heuvelsven 74, 6533 Biercée (Thuin)",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "leerling lagere school",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "2002",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "1992",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2000",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "10/5",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "26/01",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "P3333787",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "922954902",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "4038",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Engis",
+          "type": "LOCATION",
+          "label": "Address_Location:Caregiver"
+        },
+        {
+          "text": "DR-705237",
+          "type": "ID_NUMBER",
+          "label": "ID:Caregiver"
+        },
+        {
+          "text": "Nío Serdons",
+          "type": "PERSON",
+          "label": "Name:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03669",
+      "language": "nl",
+      "text": "S: Pneumologie, voorbereiding ontslagplanning. Pt. NOALIE DE BEUKELEER, 77 j., met verhoogd delier risico op basis van cognitieve kwetsbaarheid vooraf en polyfarmacie met sedativa. Persisterende dyspneu, droge hoest en inspanningsbeperking in de voorgeschiedenis.\n\nO: Algemene toestand stabiel. RR 128/78 mmHg, T° 36.0 °C, sat. 95%. Gewicht 81.8 kg, lengte 170.3 cm, BMI 28.7 kg/m2. Pijnscore 4.1/10, nadien 3/10. Niet-medicamenteuze aanpak primeert; voorspelbare structuur en sensorische hulpmiddelen om oriëntatie te ondersteunen.\n\nA: Delierpreventie. Hoger risico door cognitieve kwetsbaarheid en sedativa. Geen acute alarmsignalen in deze observatie.\n\nP: Familie geïnformeerd, signalen van herval meegegeven. Dagstructuur vast ingepland met vaste maaltijden en rustmomenten. Paracetamol zo nodig; fluoridegel lokaal. Verder ontslag met nadruk op veiligheid en routine.\n\nVoorgeschiedenis / context:\n- Sinds 2015 gevolgd voor kwetsbaarheid; in 2022 opnieuw geherwaardeerd in kader van ontslag.\n- Zorgen rond inspanningsbeperking en droge hoest blijven vooral functioneel relevant.\n- Contact met familie via +32 498 22 23 66; Bereikbaar via 1204.\n\nAdministratief:\n- Schoolcontext: Stad Gent - UZ-School - Buitengewoon Secundair Onderwijs.\n- Huisartsen-/ambulante opvolging in verband met Vrije Universiteit Brussel.\n- Woonadres gekend als Jacques Hotonstraat 133, 7643 Fontenoy.\n\nUitgevoerd op: 2022 om 09:50 door Baraa bronckart.",
+      "pii": [
+        {
+          "text": "NOALIE DE BEUKELEER",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "77 j",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "2015",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2022",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "+32 498 22 23 66",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "1204",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Stad Gent - UZ-School - Buitengewoon Secundair Onderwijs",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        },
+        {
+          "text": "Vrije Universiteit Brussel",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        },
+        {
+          "text": "Jacques Hotonstraat 133, 7643 Fontenoy",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "Baraa bronckart",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03708",
+      "language": "nl",
+      "text": "Verslag ED / pijnkliniek\n\nPt. Ile Vanroelen, 87 jaar, presenteert zich in het kader van rechthoekige pijnrevalidatie na ICU-verloop, met focus op medicatiereconciliatie en mobilisatieplan. Overdracht van het ICU-herstel en de huidige aandachtspunten besproken. Evolutie klinisch herstellend, wel traag.\n\nKlinisch:\n- Uitstralende beenpijn met paresthesieën in VG, eerder positieve Lasegue.\n- Delier doorgemaakt.\n- Sondevoeding recent gestopt.\n- Pijn momenteel beperkt.\n- Mobilisatie nog af te bouwen/uit te bouwen volgens tolerantie.\n\nParameters:\n- BD 128/76 mmHg\n- gewicht 80.3 kg\n- lengte 164.1 cm\n- BMI 27.6 kg/m2\n- pijnscore 0.8/10\n- MRC-somscore 10/60\n- O2-debiet 4 L/min\n- vochtbalans -295 mL\n\nMedicatie:\n- paracetamol-hydrocodon\n- ibuprofen\n- paracetamol p.o.\n\nImpressie:\nHerstellende pt. na ICU-opname met resterende functionele deconditionering en voorgeschiedenis van delier. Pijncontrole momenteel goed. Verder opvolgen mobilisatie en afbouw ondersteunende zorgen.\n\nAandachtspunten / ontslagadvies:\n- alarmsymptomen uitgelegd: toenemende dyspneu of verwardheid.\n- familie geïnformeerd.\n- contact via +32 487 70 12 92 indien klachten.\n- referentie 43.08.18-727.89.\n\nBespreking mee met Edres Daelmans. Follow-up voorzien op 11-02-2031 om 7u15.",
+      "pii": [
+        {
+          "text": "Ile Vanroelen",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "87 jaar",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "+32 487 70 12 92",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "43.08.18-727.89",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "Edres Daelmans",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "11-02-2031",
+          "type": "DATE",
+          "label": "Date"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03753",
+      "language": "nl",
+      "text": "ED-nota / verpleegkundige instructies na contact\n\nPt. Shaïna dauwen, 82 jaren, geb. 01-1-1916.\n\nContactname met pt. en familie i.k.v. voedingsproblematiek bij smaakverandering. Klachten van smaakmetaal, droge mond, beperkte intake, koliekpijn met misselijkheid en pijn in de rechterbovenbuik. Voedingsrisico hoog; gewichtsbeloop dalend.\n\nObservatie\n- Gewicht 58.4 kg, duidelijk dalend.\n- Pijnscore 0/10 op moment van contact.\n- Temp. 35.4 °C, afebriel.\n- Voedingsscreening uitgevoerd: gewicht, eetlust en spierkracht samen beoordeeld.\n- Gewichtsverlies 8 %, PG-SGA 12, passend bij hoog risico.\n- Labo gekend: glucose 98.7 mg/dL, ureum 12.4 mg/dL, creatinine 1.8 mg/dL, calcium 10.0 mg/dL, natrium 142.7 mmol/L, kalium 4.1 mmol/L.\n\nBeleid / advies\n- Kleine, frequente porties; dranken en voeding spreiden over de dag.\n- Extra aandacht voor mondzorg en verlichting van droge mond.\n- Voedingsinname dagelijks opvolgen; bij verdere daling vroegtijdig herbeoordelen.\n- Spierkracht en ADL mee evalueren; bij achteruitgang overleg met arts en diëtetiek.\n- Medicatie: hydrochloorthiazide onderhoud, lisinopril en amLODIPine behouden volgens bestaand schema.\n\nAdministratief\n- Contact via +32 494 22 67 86.\n- Adres pt.: Egied De Jonghestraat 118, 6666 Wibrin.\n- Familie gecontacteerd: Megi Colman.\n\nContext\n- Opvolging in 1999; voorgeschiedenis van problematiek sinds 1989.\n- Opvolgcontact voorzien op 22 dec. 1998.\n- Registratie in zorgcontext van Ziekenhuis Oost-Limburg - Campus Sint-Jan - Dienst Geriatrie en samenwerking met Don Bosco Technisch Instituut.\n\nBij verergering van pijn, braken, verdere intake-daling of snelle gewichtsafname: arts contacteren.",
+      "pii": [
+        {
+          "text": "Shaïna dauwen",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "82 jaren",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "01-1-1916",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "+32 494 22 67 86",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Egied De Jonghestraat 118, 6666 Wibrin",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "Megi Colman",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "1999",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "1989",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "22 dec. 1998",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "Ziekenhuis Oost-Limburg - Campus Sint-Jan",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Don Bosco Technisch Instituut",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-03988",
+      "language": "nl",
+      "text": "Korte follow-up infectiologie / wondzorg\n\nPt. Monica Driesmans, 41 jaren, geb. 01 okt 1957.\nVerwijzing via CENTRE HOSPITALIER DE MOUSCRON; samenwerking met KSA Sint-Paulus en thuisverpleging besproken.\n\nKliniek:\n- Lokale wondcontrole: beperkte inflammatie, exsudaat aanwezig, verbandkeuze hieraan aangepast.\n- Systemische infectietekenen ontbreken.\n- Pijn gering: 2.9/10.\n- Parameters: T° 35.8 °C, gewicht 71.3 kg, lengte 154.0 cm, BMI 28.3 kg/m2, diastolische BD 84 mmHg.\n- Verminderde wondheling mede door roken.\n\nBeleid:\n- Absorberend verband aangepast aan exsudaat.\n- Thuisverpleging: foto en wondmaat in overdracht gevraagd.\n- Alarmsymptomen herhaald: koorts, toename pijn, snel uitbreidende roodheid.\n- Lokale zorg primeert momenteel; geen duidelijke indicatie voor systemische AB op dit moment.\n\nAdministratief:\nContact met familie via gaella werckx; verdere opvolgafspraken via verpleegkundige briefing.\nOpmerking: pt. is radiologisch technoloog.",
+      "pii": [
+        {
+          "text": "Monica Driesmans",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "41 jaren",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "01 okt 1957",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "CENTRE HOSPITALIER DE MOUSCRON",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "KSA Sint-Paulus",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        },
+        {
+          "text": "gaella werckx",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "radiologisch technoloog",
+          "type": "PROFESSION",
+          "label": "Profession"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-04163",
+      "language": "nl",
+      "text": "Medicatieschema / medicatieverificatie\n\nPatiënte Phedra Walgraeve, 73 jaren, lft. geboren 11 nov 1917. Adres: Albert Giraudlaan 4, 9406 Outer.\n\nContact: +32 497 80 84 72; r/via Lei Delafontaine via lei.delafontaine96@skynet.be. 16 30.\n\nAanmelding op ma 11/03/1991 voor medicatieverificatie i.k.v. opvolging. Relevante context: chronische bekkenpijn met vermoeden diepe endometriose, bekkenbodemhypertonie en kinderwens binnen twee jaar. Na bekkenkine verdere evaluatie; operatie niet meteen beslist, laparoscopie enkel oriënterend besproken. Effect van hormonale therapie te herbeoordelen na 3 cycli.\n\nHuidige medicatie volgens opgave:\n- 24 HR metoprolol succinate\n- Nitroglycerin Mucosal Spray\n- paracetamol/hydrocodon\n- Sertraline\n\nKlinische parameters in dossier: HbA1c 6.3 %, lengte 167.9 cm, gewicht 79.9 kg, BMI 26.7 kg/m2, BD 52 mmHg diastolisch. Pijnscore algemeen 0.9/10; bij menses 9/10. HF 80/min.\n\nPlan / afspraak:\n- medicatieschema verder te consolideren\n- effect hormonale therapie opvolgen na enkele cycli\n- FU voorzien op 31 mei\n- bij toename pijn of nieuwe klachten contact opnemen met behandelend team\n\nVerslag / communicatie door Dullier, Bernadeta, Dr.; zo nodig overleg via Bobbaers, Shingo, Dr..",
+      "pii": [
+        {
+          "text": "Phedra Walgraeve",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "73 jaren",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "11 nov 1917",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Albert Giraudlaan 4, 9406 Outer",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "+32 497 80 84 72",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Lei Delafontaine",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "lei.delafontaine96@skynet.be",
+          "type": "EMAIL",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "16 30",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "ma 11/03/1991",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "31 mei",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "Dullier, Bernadeta, Dr.",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Bobbaers, Shingo, Dr.",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-04632",
+      "language": "nl",
+      "text": "Verslag / attestaanvraag\n\nLou-Rose Bulckaert, 90 jr, non-binair. Adres: Grote Lijkstraat 52, 2340 Vlimmeren.\n\nAanvrager: Praktijk Roosendijk.\nContact relatieve: Saïfeddine; e-mail saïfeddine.villers85@voo.be.\n\nKlinisch beeld passend bij hypertensie en HF met verminderde ejectiefractie, met milde congestie. In de context van functiebepaling en voorbereiding op opstart van SGLT2-remmer werden BD 102/64 mmHg en sat. 99% genoteerd. Nierfunctie blijft gevoelig voor diuretica.\n\nLabo: glucose 93.1 mg/dL, ureumstikstof 8.0 mg/dL, creatinine 2.0 mg/dL, Na 138.8 mmol/L, K 3.9 mmol/L; aanvullend kalium 4.9 mmol/L vermeld als normaal. Creatinine verdient verdere opvolging.\n\nMedicatiebespreking: doxycycline hyclate, 24 HR metoprolol succinate, Nitroglycerin Mucosal Spray en insulin isophane human / insulin regular human Suspension. Advies: gewicht dagelijks opvolgen, duizeligheid melden bij metoprolol, zoutbeperking concreet aanhouden.\n\nBesproken: griep- en pneumokokkenstatus nagezien. Nierlabo na dosisstap ingepland.\n\nTijdslijn:\n- 2018: opvolging HF-problematiek opgestart.\n- 2022: herbeoordeling; persisterend wisselende zoutbeperking en diureticasensitieve nierfunctie.\n- 2025: planning verdere optimalisatie van HF-medicatie.\n- 6 oktober: vaccinatiecheck besproken.\n- Tegen 23-12: controle creatinine en kalium na dosisaanpassing.\n\nGegevensvermelding: 782937143.",
+      "pii": [
+        {
+          "text": "Lou-Rose Bulckaert",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "90 jr",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Grote Lijkstraat 52, 2340 Vlimmeren",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "Praktijk Roosendijk",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Saïfeddine",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "saïfeddine.villers85@voo.be",
+          "type": "EMAIL",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "2018",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2022",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2025",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "6 oktober",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "23-12",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "782937143",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-04799",
+      "language": "nl",
+      "text": "Verslag pathologie/overdracht\n\nPt. FAREDA JASPERS, +/- 75 j.  \nVG: arteriële hypertensie, pyrosis en zure oprispingen met nachtelijke hoest. Werkcontext met fysieke tilbelasting; angst voor werkhervatting. Beroep: winkelbediende.\n\nKlinische evolutie  \n30/10/2013: aanmelding wegens klachtencluster met pyrosis en zure oprispingen, in de differentiaal ook Essential hypertension (disorder).  \nTelefonische opvolging (6 nov. 2013): persisterende zure oprispingen en nachtelijke hoest.  \nOpname 13 november 13: verdere evaluatie, rotator-cufflijden mee in differentiaal, actuele problematiek blijft Essential hypertension (disorder).  \nControle 20/11/2013: pyrosis en zure oprispingen nog aanwezig.  \nConsultatie 27/11/2013: nachtelijke hoest en pyrosis, beleid besproken.  \nMDO (woensdag 11/12/2013): herevaluatie van klachten en verdere opvolging.  \nDagplan 25/12: nazorg en verder opvolgen van de refluxklachten.  \nLange termijn: opvolging voorzien in 2014.\n\nHistoriek/antecedenten  \n- 1979: antecedente arteriële hypertensie.  \n- 11/2001: eerdere episode GI-problematiek, later opnieuw klachten passend bij reflux.  \n- 2004: VG arteriële hypertensie, nadien verder beleid met amLODIPine en thiazidediureticum.  \n- 11/2010: angst voor werkhervatting, functionele belasting door fysiek werk blijft relevant.  \n\nObjectief/parameters  \nBD diastolisch 71 mmHg. HbA1c 6.2 %. Gewicht 94.5 kg, lengte 174.9 cm, BMI 28.7 kg/m2. Pijnscore 0.8/10. Rustpijn 0/10. Schouderabductie 135° beperkt. Werkbelasting: ca. 6215 stappen/dag, haalbaar werktempo ongeveer 3 u/dag.\n\nConclusie  \nBeeld van essentiële hypertensie met persisterende refluxklachten (pyrosis, zure oprispingen, nachtelijke hoest) en nood aan werkpostaanpassing gezien fysieke tilbelasting. Opvolging verder via huisarts/raadpleging.",
+      "pii": [
+        {
+          "text": "FAREDA JASPERS",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "+/- 75 j",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "winkelbediende",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "30/10/2013",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "6 nov. 2013",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "13 november 13",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "20/11/2013",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "27/11/2013",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "woensdag 11/12/2013",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "25/12",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2014",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "1979",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "11/2001",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "2004",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "11/2010",
+          "type": "DATE",
+          "label": "Date"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-05259",
+      "language": "nl",
+      "text": "Verpleegkundige overdracht / oogheelkundige evaluatie\n\nPt. Rislène deneut, 45 jaar, X.\nAnamnese via gezinsgesprek. Maaltijdspanning hoog, lichaambeeld sterk verstoord, restrictief eetpatroon. Ouders bewaken maaltijden. Taal rond eten verhoogt spanning; bewegingsdrang dient begrensd. Menstruatie-anamnese genoteerd, i.f.v. cyclus en botgezondheid.\n\nObservaties / metingen\n- Duizeligheid: 6/10, HF 50/min, BD liggend 100/58 mmHg.\n- T° 37.6 °C, pijnscore 1.3/10.\n- Gewicht 45.7 kg, lengte 182.3 cm, BMI 16.6 kg/m2.\n\nBeleid / acties\n- Medische check uitgevoerd: orthostase, hartfrequentie en temperatuur beoordeeld.\n- Fluoridegel lokaal in lopende zorg.\n- Schoolplan besproken: lunchbegeleiding en halve dagen afwegen.\n- Sport tijdelijk pauzeren.\n\nAdministratief\n- Adres: Place du Vieux Château 104, 1031 Christelijke Sociale Organisaties\n- Rijksregisternr.: 81.11.17-625.69\n- Tel. pt.: +32 495 41 68 76\n- Contact ouder/familie: Jenthen Talhaoui\n\nOpvolging\n- Verder opvolgen 2022-traject, herbeoordeling in functie van klinische evolutie.\n- Controle ten laatste over 10 dagen.\n- Verdere opvolging binnen 3 maanden, daarna na 3 maanden.\n- Contact via 47 56 indien nodig.\n\nUitgevoerd op: 28/11 om 12:30",
+      "pii": [
+        {
+          "text": "Rislène deneut",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "45 jaar",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Place du Vieux Château 104, 1031 Christelijke Sociale Organisaties",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "81.11.17-625.69",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "+32 495 41 68 76",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "Jenthen Talhaoui",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "2022",
+          "type": "DATE",
+          "label": "Date"
+        },
+        {
+          "text": "47 56",
+          "type": "PHONE",
+          "label": "Contactdetails"
+        },
+        {
+          "text": "28/11",
+          "type": "DATE",
+          "label": "Date"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_synthetic-06468",
+      "language": "nl",
+      "text": "Medicatiegerichte reconciliatie / overdracht\n\nPt. Shing Denoulet, 28 j.; ° 4.08.1989\nContact: Natalie Rahier\nDossier: 509099502 / CFDNA 95999\n\nKorte status:\n- Kwetsbaar maar aanspreekbaar, na valalarm.\n- Verminderde eetlust, sarcopenie.\n- Rectaal bloedverlies, gewichtsverlies en veranderd stoelgangspatroon blijven aandachtspunten.\n- Thuissituatie vraagt afstemming; extra hulp bij ochtendzorg besproken. Comfortzorg blijft prioriteit.\n\nMetingen:\n- Lengte 178.5 cm, gewicht 68.0 kg, BMI 21.3 kg/m2\n- BD 114/77 mmHg\n- pijnscore 3.0/10\n- albumine 3.5 g/dL\n- zuurstofsaturatie 92 %\n- pijnscore 7/10, vooral bij mobil. en ADL-momenten\n\nMedicatie/Rx:\n- diphenhydrAMINE Hydrochloride\n- adrenaline auto-injector\n- NDA020983 albuterol Metered Dose Inhaler\n- fluticasone propionate Metered Dose Inhaler\n- Ibumed tabl. 24x 200mg, CNK 449967\n- paracetamol zo nodig volgens pijnscore\n- diphenhydrAMINE Hydrochloride: laxans evalueren morgen\n\nOpvolg:\n- extra hulp thuis via thuisverpleging en mutualiteit afstemmen\n- controle binnen 2 weken\n- evaluatie na 3 maanden\n- jaarlijkse opvolging voorzien\n- periodiek nakijken i.k.v. zorgplan, met focus op mobil., intake en comfort\n- Voorbije 48 uur: observatie stabiel, geen acute decompensatie gemeld\n- Handgreep van Mauriceau vermeld in dossiercontext; geen nieuwe interventie\n- Genetische notatie: MPL c.1544G>T, p.Trp515Leu, rs121913615, klinisch relevant\n\nAdministratief:\n- adres: Boulevard d'Herseaux 20, 6860 Ébly\n- instellingscontext: Ziekenhuis Aan De Stroom - ZAS / Huisartsenpraktijk Pollare\n- extra context: verzorging i.o.m. TC en Maevy witvrouwen",
+      "pii": [
+        {
+          "text": "Shing Denoulet",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "28 j",
+          "type": "AGE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "4.08.1989",
+          "type": "DATE",
+          "label": "Age_Birthdate"
+        },
+        {
+          "text": "Natalie Rahier",
+          "type": "PERSON",
+          "label": "Name:Other"
+        },
+        {
+          "text": "509099502",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "95999",
+          "type": "ID_NUMBER",
+          "label": "ID:Patient"
+        },
+        {
+          "text": "Boulevard d'Herseaux 20, 6860 Ébly",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "Ziekenhuis Aan De Stroom - ZAS",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Huisartsenpraktijk Pollare",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "TC",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Maevy witvrouwen",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0002",
+      "language": "nl",
+      "text": "Auteurinitialen PJ/GL/SH\nAanvullende sociale en administratieve nota\nPatient Yusuf Celik wordt gebruikt voor een gerichte annotatieprobe. Patient werd gezien in UZA; logistiek vermeldt I4:BOX5 en OK 4. Kopie naar Universitair ziekenhuis Antwerpen. De plaatsnaam staat elders los van de ziekenhuisafkorting. Praktijkregio huisarts: Kloosterstraat 18, B-2880 Bornem, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Werkhervatting: patient was vroeger zelfstandige; daarnaast modelbouw bij Yoga Studio Lotus. De voorgeschiedenis helpt bij haalbare daginvulling. De medische inhoud vermeldt stabiele parameters en geen nieuwe alarmsymptomen. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "PJ",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "GL",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "SH",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Yusuf Celik",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "UZA",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "I4:BOX5",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "OK 4",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Universitair ziekenhuis Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Kloosterstraat 18, B-2880 Bornem, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Caregiver"
+        },
+        {
+          "text": "zelfstandige",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "modelbouw",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Yoga Studio Lotus",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0023",
+      "language": "nl",
+      "text": "Auteurinitialen EV/MD\nOverdrachtsnota met randgevallen\nPatient Mila Janssens wordt gebruikt voor een gerichte annotatieprobe. Overname vanuit MOLIS:LABO naar Pneumonie-UZA-richtlijn.pdf; route/OK-code Route 52 en box 3 blijven zorgorganisatiegegevens. Ziekenhuissoftware en richtlijnbestand worden als zorgorganisatie getest. Adres van tijdelijk verblijf bij familie: Kerkstraat 4, 8370 Blankenberge, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Ergotherapie noteert hervatten van amateurfotografie en harmonie bij Harmonie De Eendracht. Dit wordt gebruikt om fijne motoriek en uithouding op te volgen. Beleid blijft conservatief met opvolging door het vertrouwde team. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "EV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "MD",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Mila Janssens",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "MOLIS:LABO",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Pneumonie-UZA-richtlijn.pdf",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 52",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "box 3",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Kerkstraat 4, 8370 Blankenberge, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Other"
+        },
+        {
+          "text": "amateurfotografie",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "harmonie",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Harmonie De Eendracht",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0024",
+      "language": "nl",
+      "text": "KV/RT/AB - dagzaalnota\nControleverslag de-identificatieprobe\nPatient Raf de smet wordt gebruikt voor een gerichte annotatieprobe. Administratieve bron noemt Universitair ziekenhuis Antwerpen bovenaan en later UZA Antwerpen met locatiecode OK 2/G4:BOX9. Een OK-code en boxcode staan in dezelfde logistieke regel. Patient geeft als correspondentieadres: Langestraat 128, B-2000 Antwerpen 4, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Revalidatiedoel: patient is voorzitter van de plaatselijke duivenbond; daarnaast vrijwilliger bij Rode Kruis Vlaanderen. Dit helpt om inzetbaarheid tijdens revalidatie te beoordelen. De tekst combineert administratieve details met een gewone klinische samenvatting. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "KV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "RT",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "AB",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Raf de smet",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "Universitair ziekenhuis Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "UZA Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "OK 2",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "G4:BOX9",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Langestraat 128, B-2000 Antwerpen 4, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "voorzitter van de plaatselijke duivenbond",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "vrijwilliger",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Rode Kruis Vlaanderen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0044",
+      "language": "nl",
+      "text": "Auteurinitialen KV/RT/AB\nControleverslag de-identificatieprobe\nPatient Raf De Smet wordt gebruikt voor een gerichte annotatieprobe. Administratieve bron noemt ZAS Middelheim bovenaan en later UZA Antwerpen met locatiecode Route 28/OK 8. Transfer tussen campussen wordt administratief opgevolgd. Woonadres in het administratief blok: Gravenlaan 23 bus 4, B-2900 Schoten, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Revalidatiedoel: patient is voorzitter van de plaatselijke duivenbond; daarnaast vrijwilliger bij Rode Kruis Vlaanderen. Dit helpt om inzetbaarheid tijdens revalidatie te beoordelen. De tekst combineert administratieve details met een gewone klinische samenvatting. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "KV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "RT",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "AB",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Raf De Smet",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "ZAS Middelheim",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "UZA Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 28",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "OK 8",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Gravenlaan 23 bus 4, B-2900 Schoten, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "voorzitter van de plaatselijke duivenbond",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "vrijwilliger",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Rode Kruis Vlaanderen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0054",
+      "language": "nl",
+      "text": "KV/RT/AB - dagzaalnota\nControleverslag de-identificatieprobe\nPatient Koen martens wordt gebruikt voor een gerichte annotatieprobe. Patient werd gezien in Privepraktijk: WILRIJK; logistiek vermeldt B5:BOX12 en Route 44. Kopie naar UZA. De praktijknaam is zorgcontext, niet het vrije adres van de patient. Locatie van verwijzende groepspraktijk: Dokterstraat 5, B-3000 Leuven, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Revalidatiedoel: patient is voorzitter van de plaatselijke duivenbond; daarnaast vrijwilliger bij Rode Kruis Vlaanderen. Dit helpt om inzetbaarheid tijdens revalidatie te beoordelen. De tekst combineert administratieve details met een gewone klinische samenvatting. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "KV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "RT",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "AB",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Koen martens",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "Privepraktijk: WILRIJK",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "B5:BOX12",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 44",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "UZA",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Dokterstraat 5, B-3000 Leuven, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Caregiver"
+        },
+        {
+          "text": "voorzitter van de plaatselijke duivenbond",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "vrijwilliger",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Rode Kruis Vlaanderen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0057",
+      "language": "nl",
+      "text": "NB/WV - dagzaalnota\nAanvullende sociale en administratieve nota\nPatient Els De Ridder wordt gebruikt voor een gerichte annotatieprobe. Zorglocatie: UZA Antwerpen, nadien controle in Universitair Ziekenhuis Antwerpen via Route 11, kamer/zone D2. De afdelingscode staat in het bronsysteem naast de route. Domicilie volgens inschrijving: Veltwijcklaan 77, 2180 Ekeren, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Pediatrische context: patient zit in het 2de leerjaar en jeugdvoetbal U11 bij Voetbalclub U11 KFC Wilrijk. De combinatie bepaalt sportbelasting en schoolplanning. De medische inhoud vermeldt stabiele parameters en geen nieuwe alarmsymptomen. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "NB",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "WV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Els De Ridder",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "UZA Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Universitair Ziekenhuis Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 11",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "D2",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Veltwijcklaan 77, 2180 Ekeren, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "2de leerjaar",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "jeugdvoetbal U11",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Voetbalclub U11 KFC Wilrijk",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0083",
+      "language": "nl",
+      "text": "Auteurinitialen EV/MD\nOverdrachtsnota met randgevallen\nPatient Mila Janssens wordt gebruikt voor een gerichte annotatieprobe. Overname vanuit Universitair Ziekenhuis Antwerpen naar UZA; route/OK-code Route 31 en kamer D7:BOX2 blijven zorgorganisatiegegevens. Het verslag noemt zowel de volledige naam als de afkorting. Adres externe dagopvang: Schoolstraat 9, 9000 Gent, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Ergotherapie noteert hervatten van amateurfotografie en muziek bij Harmonie De Eendracht. Dit wordt gebruikt om fijne motoriek en uithouding op te volgen. Beleid blijft conservatief met opvolging door het vertrouwde team. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "EV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "MD",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "Mila Janssens",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "Universitair Ziekenhuis Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "UZA",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 31",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "D7:BOX2",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Schoolstraat 9, 9000 Gent, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Other"
+        },
+        {
+          "text": "amateurfotografie",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "muziek",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "Harmonie De Eendracht",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    },
+    {
+      "id": "meddeid_targeted-difficult-0089",
+      "language": "nl",
+      "text": "Auteurinitialen HV/SK\nControleverslag de-identificatieprobe\nPatient n.j. wordt gebruikt voor een gerichte annotatieprobe. Zorglocatie: UZA Antwerpen, nadien controle in Universitair Ziekenhuis Antwerpen via Route 11, kamer/zone D2. De afdelingscode staat in het bronsysteem naast de route. Domicilie volgens inschrijving: Veltwijcklaan 77, 2180 Ekeren, Belgie. De landnaam is hier onderdeel van de grotere adresregel. Sociaal statuut: patient is gepensioneerd en arbeidsongeschikt bij buurtcomite De Lindeboom. Dit is relevant voor terugkeer naar arbeid. De tekst combineert administratieve details met een gewone klinische samenvatting. Niet-identificerende klinische termen blijven ongemarkeerd.",
+      "pii": [
+        {
+          "text": "HV",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "SK",
+          "type": "PERSON",
+          "label": "Name:Caregiver"
+        },
+        {
+          "text": "n.j.",
+          "type": "PERSON",
+          "label": "Name:Patient"
+        },
+        {
+          "text": "UZA Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Universitair Ziekenhuis Antwerpen",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Route 11",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "D2",
+          "type": "ORGANIZATION",
+          "label": "Organization:Healthcare"
+        },
+        {
+          "text": "Veltwijcklaan 77, 2180 Ekeren, Belgie",
+          "type": "ADDRESS",
+          "label": "Address_Location:Patient"
+        },
+        {
+          "text": "gepensioneerd",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "arbeidsongeschikt",
+          "type": "PROFESSION",
+          "label": "Profession"
+        },
+        {
+          "text": "buurtcomite De Lindeboom",
+          "type": "ORGANIZATION",
+          "label": "Organization:Other"
+        }
+      ],
+      "allowed": []
+    }
+  ]
+}

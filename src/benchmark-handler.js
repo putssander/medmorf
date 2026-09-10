@@ -12,6 +12,8 @@ import { withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-down
 import { NER_MODEL_OPTIONS, initNERPipeline, disposeNERPipeline, getNERPipeline, getGLiNERInstance, isGLiNERModel, mapNEREntityType } from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
 import { TRANSLATION_MODEL, TRANSLATION_MODEL_SIZE_MB, initTranslationPipeline, disposeTranslationPipeline } from './translation-runtime.js?v=2026-08-31-simple-download-1';
 import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-09-10-review-1';
+import { chunkText, DEFAULT_MAX_CHUNK_CHARS, DEFAULT_CHUNK_OVERLAP_CHARS } from './text-chunking.js?v=2026-09-10-bench-1';
+import { filterLLMEntities } from './anonymize-filters.js?v=2026-09-10-bench-1';
 
 const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js';
 const ORT_WASM = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
@@ -32,6 +34,13 @@ const STT_MODELS = [
     { id: 'onnx-community/whisper-small', label: 'Whisper small', sizeMB: 500, appDefault: 'desktop' },
 ];
 
+// Anonymize fixture sets (tests/fixtures/<key>.json). Selected in the UI; NER and LLM
+// rows run on the chosen set, and the NER+LLM union table is computed per set.
+const ANON_SETS = {
+    'anonymize': 'App fixtures — 4 short notes, NL + EN',
+    'anonymize-interview': 'Oncology interview — 1 long NL transcript (34k chars, chunked)',
+    'anonymize-meddeid': 'MedDeID sample — 24 Belgian-Dutch clinical notes (CC BY 4.0)',
+};
 const fixtures = {};
 const results = [];   // flat list of result records, exported as JSON
 let snap = null, webllm = null, transformers = null;
@@ -110,6 +119,7 @@ async function runModelInner(spec) {
     await gc();
     const sampler = heapSampler();
     const rec = { section, model: id, label: spec.label, sizeMB: spec.sizeMB, docs: [] };
+    if (section === 'ner' || section === 'anonllm') rec.set = currentAnonSet();
     let handle = null;
     const t0 = performance.now();
     try {
@@ -118,7 +128,8 @@ async function runModelInner(spec) {
         const heapAfterLoad = sampler.stop(); // snapshot after load
         rec.heapAfterLoadMB = heapAfterLoad.deltaPeak;
         const sampler2 = heapSampler();
-        const docs = spec.docs.slice(0, Number($('#bmNumDocs').value) || 4);
+        const allDocs = typeof spec.docs === 'function' ? spec.docs() : spec.docs;
+        const docs = allDocs.slice(0, Number($('#bmNumDocs').value) || 4);
         const t1 = performance.now();
         for (let i = 0; i < docs.length; i++) {
             setRow(section, id, { load: rec.loadMs, detail: `Inference ${i + 1}/${docs.length}…` });
@@ -150,6 +161,7 @@ async function runModelInner(spec) {
         const after = performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null;
         rec.heapAfterDisposeMB = after != null && sampler.base != null ? after - sampler.base : null;
         record(rec);
+        if (section === 'ner' || section === 'anonllm') renderHybrid();
     }
 }
 
@@ -175,8 +187,24 @@ function translateSpecs() {
 }
 
 // ── Section: NER ─────────────────────────────────────────────────────────────
+function currentAnonSet() { return $('#bmAnonSet')?.value in ANON_SETS ? $('#bmAnonSet').value : 'anonymize'; }
+function anonDocs() { return fixtures[currentAnonSet()].documents; }
+// Documents are chunked exactly like the app (text-chunking.js defaults) and
+// predictions are merged across chunks, so long fixtures behave as in Anonymize.
+function docChunks(doc) { return chunkText(doc.text, DEFAULT_MAX_CHUNK_CHARS, DEFAULT_CHUNK_OVERLAP_CHARS); }
+function mergePreds(lists) {
+    const seen = new Set(); const out = [];
+    for (const list of lists) for (const p of list || []) {
+        const entity = String(p.entity ?? '').trim();
+        if (!entity) continue;
+        const key = `${entity.toLowerCase()}::${p.type}`;
+        if (seen.has(key)) continue;
+        seen.add(key); out.push({ entity, type: p.type });
+    }
+    return out;
+}
 function nerSpecs() {
-    const docs = fixtures.anonymize.documents;
+    const docs = anonDocs;
     return Object.values(NER_MODEL_OPTIONS).map(opt => ({
         section: 'ner', id: opt.id, label: opt.label, sizeMB: opt.sizeMB, webgpu: opt.device === 'webgpu' || opt.wasmSupported === false, docs,
         load: async (progress) => {
@@ -185,18 +213,23 @@ function nerSpecs() {
             return opt.id;
         },
         infer: async (modelId, doc) => {
-            let preds;
-            if (isGLiNERModel(modelId)) {
-                const g = getGLiNERInstance();
-                const res = await g.inference({ texts: [doc.text], entities: opt.piiLabels, flatNer: true, threshold: 0.3 });
-                preds = (res[0] || []).map(e => ({ entity: e.spanText ?? e.text ?? doc.text.slice(e.start, e.end), type: mapNEREntityType(e.label, modelId) }));
-            } else {
-                const pipe = getNERPipeline();
-                const toks = await pipe(doc.text, { ignore_labels: ['O'] });
-                preds = mergeTokens(toks, doc.text).map(e => ({ entity: e.word, type: mapNEREntityType(e.entity, modelId) }));
+            const chunks = docChunks(doc);
+            const perChunk = [];
+            for (const chunk of chunks) {
+                if (isGLiNERModel(modelId)) {
+                    const g = getGLiNERInstance();
+                    const res = await g.inference({ texts: [chunk], entities: opt.piiLabels, flatNer: true, threshold: 0.3 });
+                    perChunk.push((res[0] || []).map(e => ({ entity: e.spanText ?? e.text ?? chunk.slice(e.start, e.end), type: mapNEREntityType(e.label, modelId) })));
+                } else {
+                    const pipe = getNERPipeline();
+                    const toks = await pipe(chunk, { ignore_labels: ['O'] });
+                    perChunk.push(mergeTokens(toks, chunk).map(e => ({ entity: e.word, type: mapNEREntityType(e.entity, modelId) })));
+                }
+                await yieldUI();
             }
+            const preds = mergePreds(perChunk);
             const score = scorePII(doc.pii, preds, doc.allowed);
-            return { output: { predictions: preds, missed: score.missed, falsePositives: score.falsePositives }, score };
+            return { output: { chunks: chunks.length, predictions: preds, missed: score.missed, falsePositives: score.falsePositives }, score };
         },
         dispose: () => disposeNERPipeline(),
         aggregate: piiAggregate,
@@ -244,25 +277,78 @@ async function chat(engine, messages, opts) {
     return (r.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 function anonLlmSpecs() {
-    const docs = fixtures.anonymize.documents;
+    const docs = anonDocs;
     return LLM_MODELS.map(m => ({
         section: 'anonllm', ...m, webgpu: true, docs,
         load: llmLoad(m.id),
+        // Mirrors anonymize-handler.extractEntitiesLLM: same prompt per chunk, then the
+        // app's deterministic sanity filter (verbatim check, roles, non-identifier values).
         infer: async (engine, doc) => {
-            const raw = await chat(engine, [
-                { role: 'system', content: SYSTEM_PROMPT },
-                { role: 'user', content: `Extract all PII entities from this medical text:\n\n${doc.text}` },
-            ], { max_tokens: 2048, temperature: 0 });
-            let preds = [];
-            const j = raw.match(/\[[\s\S]*?\]/);
-            if (j) { try { preds = JSON.parse(j[0]).filter(e => e && typeof e.entity === 'string'); } catch { /* unparsable */ } }
+            const chunks = docChunks(doc);
+            const raws = []; const perChunk = []; let dropped = 0; let parsedChunks = 0;
+            for (const chunk of chunks) {
+                const raw = await chat(engine, [
+                    { role: 'system', content: SYSTEM_PROMPT },
+                    { role: 'user', content: `Extract all PII entities from this medical text:\n\n${chunk}` },
+                ], { max_tokens: 2048, temperature: 0 });
+                raws.push(raw);
+                let parsed = [];
+                const j = raw.match(/\[[\s\S]*?\]/);
+                if (j) { try { parsed = JSON.parse(j[0]); parsedChunks++; } catch { /* unparsable */ } }
+                const f = filterLLMEntities(Array.isArray(parsed) ? parsed : [], chunk);
+                dropped += f.dropped.length;
+                perChunk.push(f.kept);
+                await yieldUI();
+            }
+            const preds = mergePreds(perChunk);
             const score = scorePII(doc.pii, preds, doc.allowed);
-            score.parsed = !!j && preds.length > 0;
-            return { output: { raw, missed: score.missed, falsePositives: score.falsePositives }, score };
+            score.parsed = parsedChunks === chunks.length && preds.length > 0;
+            return { output: { chunks: chunks.length, predictions: preds, droppedByFilter: dropped, raw: raws.join('\n---\n').slice(0, 6000), missed: score.missed, falsePositives: score.falsePositives }, score };
         },
         dispose: async (engine) => { if (engine) await engine.unload(); },
         aggregate: (scores) => { const a = piiAggregate(scores); a.detail = `${a.detail} JSON parsed on ${scores.filter(s => s.parsed).length}/${scores.length} docs.`; return a; },
     }));
+}
+
+// ── NER + LLM union (computed) ───────────────────────────────────────────────
+// The app's hybrid pipeline = NER detections (validated by the LLM) ∪ LLM
+// detections. Its recall is the recall of the union, which we can compute from
+// the per-document predictions already stored above — no extra model runs, so
+// every NER × LLM combination is covered. Precision is the union's precision
+// without the app's LLM validation pass (which only removes NER false
+// positives), so it is a lower bound.
+function latestPassed(section, set) {
+    const seen = new Set(); const out = [];
+    for (let i = results.length - 1; i >= 0; i--) {
+        const r = results[i];
+        if (r.section !== section || r.set !== set || r.status !== 'pass' || seen.has(r.model)) continue;
+        seen.add(r.model); out.push(r);
+    }
+    return out.reverse();
+}
+function computeHybrid(set) {
+    const docsById = new Map(fixtures[set].documents.map(d => [d.id, d]));
+    const ners = latestPassed('ner', set), llms = latestPassed('anonllm', set);
+    const rows = [];
+    for (const n of ners) for (const l of llms) {
+        const ids = n.docs.map(d => d.id).filter(id => l.docs.some(d => d.id === id) && docsById.has(id));
+        if (!ids.length) continue;
+        const scores = ids.map(id => {
+            const doc = docsById.get(id);
+            const union = mergePreds([n.docs.find(d => d.id === id).output?.predictions, l.docs.find(d => d.id === id).output?.predictions]);
+            return scorePII(doc.pii, union, doc.allowed);
+        });
+        const q = piiAggregate(scores);
+        rows.push({ set, ner: n.label, nerModel: n.model, llm: l.label, llmModel: l.model, docs: ids.length, q });
+    }
+    return rows;
+}
+function renderHybrid() {
+    const tbl = $('#tbl-hybrid'); if (!tbl) return;
+    const rows = computeHybrid(currentAnonSet());
+    tbl.innerHTML = rows.length
+        ? `<thead><tr><th>NER detector</th><th>LLM</th><th>Docs</th><th>Union quality</th><th>Detail</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.ner}</td><td>${r.llm}</td><td>${r.docs}</td><td>${r.q.label}</td><td class="bm-detail">${r.q.detail}</td></tr>`).join('')}</tbody>`
+        : `<tbody><tr><td class="bm-detail">Run at least one NER detector and one LLM on the same anonymize set; every combination is then computed here from their stored predictions.</td></tr></tbody>`;
 }
 
 // ── Section: Summarize ───────────────────────────────────────────────────────
@@ -353,14 +439,16 @@ async function runSection(section, onlyId = null) {
 async function runAll() { for (const s of Object.keys(SECTIONS)) await runSection(s); log('All sections done.'); }
 
 function exportJson() {
-    const payload = { generated: new Date().toISOString(), env: envInfo(), results };
+    const hybrid = Object.keys(ANON_SETS).flatMap(set => fixtures[set] ? computeHybrid(set) : []).map(r => ({ set: r.set, ner: r.nerModel, llm: r.llmModel, docs: r.docs, quality: r.q }));
+    const payload = { generated: new Date().toISOString(), env: envInfo(), results, hybridUnion: hybrid };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `medmorf-benchmark-${Date.now()}.json`; a.click();
 }
 function exportMd() {
     const b = detectBrowser();
     const lines = [`### Medmorf benchmark — ${b.name} ${b.version} on ${b.os}, ${new Date().toISOString().slice(0, 10)}`, '', '| Section | Model | Declared | Load | Inference/doc | Peak heap Δ | Quality | Status |', '|---|---|---:|---:|---:|---:|---|---|'];
-    for (const r of results) lines.push(`| ${r.section} | ${r.model} | ${fmtMB(r.sizeMB)} | ${fmtMs(r.loadMs)} | ${fmtMs(r.inferMsPerDoc)} | ${r.heapSupported ? '+' + fmtMB(r.heapPeakDeltaMB) : 'n/a'} | ${r.quality?.label || '—'} | ${r.status}${r.error ? ' — ' + r.error : ''}${r.reason ? ' — ' + r.reason : ''} |`);
+    for (const r of results) lines.push(`| ${r.section}${r.set ? ' (' + r.set.replace('anonymize-', '') .replace(/^anonymize$/, 'app') + ')' : ''} | ${r.model} | ${fmtMB(r.sizeMB)} | ${fmtMs(r.loadMs)} | ${fmtMs(r.inferMsPerDoc)} | ${r.heapSupported ? '+' + fmtMB(r.heapPeakDeltaMB) : 'n/a'} | ${r.quality?.label || '—'} | ${r.status}${r.error ? ' — ' + r.error : ''}${r.reason ? ' — ' + r.reason : ''} |`);
+    for (const set of Object.keys(ANON_SETS)) for (const r of (fixtures[set] ? computeHybrid(set) : [])) lines.push(`| ner+llm union (${set.replace('anonymize-', '').replace(/^anonymize$/, 'app')}) | ${r.ner} + ${r.llm} | — | — | — | — | ${r.q.label} | computed on ${r.docs} docs |`);
     navigator.clipboard.writeText(lines.join('\n')).then(() => log('Markdown table copied to clipboard.'));
 }
 function envInfo() {
@@ -376,7 +464,8 @@ const MARKUP = `
     <div class="bm-row">
         <label class="bm-inline"><input type="checkbox" id="bmSkipBig" checked> Skip models above the device's safe ceiling</label>
         <label class="bm-inline"><input type="checkbox" id="bmSttGpu"> Whisper on WebGPU (fp16) instead of WASM</label>
-        <label class="bm-inline">Max docs per model <input type="number" id="bmNumDocs" value="4" min="1" max="10"></label>
+        <label class="bm-inline">Anonymize set <select id="bmAnonSet">${Object.entries(ANON_SETS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+        <label class="bm-inline">Max docs per model <input type="number" id="bmNumDocs" value="4" min="1" max="30"></label>
         <button class="btn btn-primary btn-small" id="bmRunAll">Run everything</button>
         <button class="btn btn-ghost btn-small" id="bmExportJson">Export JSON</button>
         <button class="btn btn-ghost btn-small" id="bmExportMd">Copy Markdown table</button>
@@ -390,7 +479,10 @@ const MARKUP = `
 </ul><p class="bm-sub">All models here are sized to run inside a browser tab. Larger self-hosted or cloud models score better on every task — the trade-off Medmorf makes is that data never leaves the device.</p></div>
 <div class="bm-panel"><h4>Translate <span class="bm-tag">Transformers.js v2 · WASM</span> <button class="btn btn-ghost btn-small" data-run="translate">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-translate"></table></div></div>
 <div class="bm-panel"><h4>Anonymize — NER detectors <span class="bm-tag">Transformers.js v4 / GLiNER</span> <button class="btn btn-ghost btn-small" data-run="ner">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-ner"></table></div></div>
-<div class="bm-panel"><h4>Anonymize — LLM extraction <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="anonllm">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-anonllm"></table></div></div>
+<div class="bm-panel"><h4>Anonymize — LLM extraction <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="anonllm">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-anonllm"></table></div>
+<p class="bm-sub" style="margin-top:0.6rem">Documents are chunked like the app (2400 chars, 240 overlap) and the app's sanity filter is applied to LLM output, so precision here matches what Anonymize keeps. Fixture sets include PROFESSION items the app does not detect yet; read that row as a known gap, not a model failure.</p></div>
+<div class="bm-panel"><h4>Anonymize — NER + LLM union <span class="bm-tag">computed, no extra runs</span></h4><div class="bm-wrap"><table class="bm-table" id="tbl-hybrid"></table></div>
+<p class="bm-sub" style="margin-top:0.6rem">Recall of the app's hybrid pipeline for every detector × LLM pair, computed from the predictions stored by the two sections above on the same set. Precision is a lower bound (the app's LLM validation pass, which removes NER false positives, is not simulated).</p></div>
 <div class="bm-panel"><h4>Summarize <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="summarize">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-summarize"></table></div></div>
 <div class="bm-panel"><h4>Speech <span class="bm-tag">Transformers.js v4 · Whisper</span> <button class="btn btn-ghost btn-small" data-run="stt">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-stt"></table></div>
 <p class="bm-sub" style="margin-top:0.6rem"><b>Reading the scores.</b> WER = words wrong ÷ words spoken (lower is better; 10% ≈ one word in ten). Reference points that do <em>not</em> fit in a browser (Whisper paper, FLEURS): medium — Dutch 10% / English 4%; large-v2 — Dutch 7% / English 4%; frontier cloud dictation services ≈ 4–6%. In-browser small: Dutch 16% / English 6% on the same benchmark. Clips here are synthetic TTS, so absolute numbers differ from FLEURS; compare models against each other, not against the reference.</p></div>
@@ -411,7 +503,7 @@ export function getBenchmarkResults() { return results; }
 
 async function init() {
     snap = await getCapabilities();
-    for (const k of ['anonymize', 'translate', 'summarize', 'speech']) fixtures[k] = await (await fetch(new URL(`../tests/fixtures/${k}.json`, import.meta.url))).json();
+    for (const k of [...Object.keys(ANON_SETS), 'translate', 'summarize', 'speech']) fixtures[k] = await (await fetch(new URL(`../tests/fixtures/${k}.json`, import.meta.url))).json();
     const e = envInfo();
     $('#bmEnv').innerHTML = Object.entries({
         'Browser': `${e.browser} · ${e.os}`,
@@ -419,7 +511,7 @@ async function init() {
         'JS heap limit': e.jsHeapLimitMB ? fmtMB(e.jsHeapLimitMB) : 'not exposed — heap columns will read n/a',
         'WebGPU': e.webgpu?.supported ? `yes · ${e.webgpu.adapterInfo?.vendor || ''} · max buffer ${fmtMB(e.webgpu.maxBufferSizeMB)}` : 'no — WebLLM sections will fail',
         'Safe model ceiling': fmtMB(e.safeCeilingMB),
-        'Fixtures': `${fixtures.anonymize.documents.length} PII docs · ${fixtures.translate.pairs.length} sentence pairs · ${fixtures.summarize.documents.length} notes · ${fixtures.speech.clips.length} audio clips`,
+        'Fixtures': `PII sets: ${Object.keys(ANON_SETS).map(k => `${k === 'anonymize' ? 'app' : k.replace('anonymize-', '')} ${fixtures[k].documents.length} docs / ${fixtures[k].documents.reduce((n, d) => n + d.pii.length, 0)} items`).join(' · ')} · ${fixtures.translate.pairs.length} sentence pairs · ${fixtures.summarize.documents.length} notes · ${fixtures.speech.clips.length} audio clips`,
     }).map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('');
     for (const [s, fn] of Object.entries(SECTIONS)) buildTable(s, fn());
     root.addEventListener('click', (ev) => {
@@ -428,6 +520,8 @@ async function init() {
         if (ev.target.closest('.btn-ghost.small')) ev.preventDefault();
     });
     $('#bmRunAll').onclick = runAll;
+    $('#bmAnonSet').onchange = () => { $('#bmNumDocs').value = String(Math.min(30, Math.max(1, fixtures[currentAnonSet()].documents.length))); renderHybrid(); };
+    renderHybrid();
     $('#bmExportJson').onclick = exportJson;
     $('#bmExportMd').onclick = exportMd;
     log('Ready.', e);
