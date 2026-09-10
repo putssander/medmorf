@@ -247,6 +247,8 @@ The app interface uses a narrow, iOS-inspired grouped layout with restrained sur
 
 ## Accuracy and WER
 
+An expandable banner below the app header keeps the warning **“Important: this is not frontier-model performance.”** visible on every tab. Expand it for the local-model limitations, a link to the benchmark numbers in this section, and a shortcut to run benchmarks on your device in the Benchmark tab.
+
 Speech-to-text accuracy is reported as **WER (word error rate)**: words wrong ÷ words spoken, lower is better; 10% means about one word in ten needs correcting. Because Medmorf runs entirely in the browser, the largest usable Whisper is *small*. The Speech tab has an expandable "Accuracy: what to expect" panel with this table; the same numbers guide the model descriptions:
 
 | Model | Runs | Dutch WER | English WER |

@@ -132,6 +132,26 @@
             </div>
         </header>
 
+        <details class="performance-banner">
+            <summary>
+                <span class="performance-banner-icon" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="12" rx="3"/><path d="M8 20h8M12 16v4M8 10h2l2-3 2 6 2-3"/></svg>
+                </span>
+                <span class="performance-banner-heading">
+                    <span class="performance-banner-eyebrow">Local AI · Know the limits</span>
+                    <strong>Important: this is not frontier-model performance.</strong>
+                </span>
+                <span class="performance-banner-toggle"><span>What to expect</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+            </summary>
+            <div class="performance-banner-body">
+                <p>MedMorf runs smaller models on your local hardware, not massive GPU clusters. Expect noticeably lower accuracy, reasoning depth, and consistency on complex tasks.</p>
+                <div class="performance-banner-actions">
+                    <a class="performance-banner-link" href="https://github.com/putssander/medmorf#accuracy-and-wer" target="_blank" rel="noopener noreferrer">View benchmark numbers <span aria-hidden="true">↗</span><span class="sr-only"> (opens in a new tab)</span></a>
+                    <a class="performance-banner-secondary" id="performanceBenchmarkLink" href="#tab-benchmark">Benchmark on your device <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+        </details>
+
         <!-- Live memory bar + browser advice (src/memory-monitor.js) -->
         <div id="memoryMonitor" class="memory-monitor" data-level="ok" aria-live="polite"></div>
 
@@ -2033,6 +2053,14 @@
                 document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
                 try { localStorage.setItem('medmod_active_tab', btn.dataset.tab); } catch (_) {}
             });
+        });
+
+        document.getElementById('performanceBenchmarkLink').addEventListener('click', event => {
+            event.preventDefault();
+            const benchmarkTab = document.querySelector('.tab-btn[data-tab="benchmark"]');
+            benchmarkTab.click();
+            benchmarkTab.focus({ preventScroll: true });
+            benchmarkTab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
         });
 
         // Restore last active tab
