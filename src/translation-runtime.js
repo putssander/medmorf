@@ -1,6 +1,6 @@
 const LEGACY_TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 export const TRANSLATION_MODEL = 'Xenova/nllb-200-distilled-600M';
@@ -42,7 +42,7 @@ export async function initTranslationPipeline({ progressCallback, skipPreflight 
     if (!skipPreflight) {
         const proceed = await preflightWarn({
             key: `translation:${TRANSLATION_MODEL}`,
-            title: 'Load translation model?',
+            title: 'Download translation model?',
             model: `NLLB-200 distilled 600M (${TRANSLATION_MODEL})`,
             sizeMB: TRANSLATION_MODEL_SIZE_MB,
             why: 'Multilingual translation model. Runs locally on CPU (WASM). On mobile or low-RAM devices the load can take a long time.',
@@ -74,7 +74,7 @@ export async function preloadTranslationModel({ progressCallback } = {}) {
 
     const proceed = await preflightWarn({
         key: `translation:${TRANSLATION_MODEL}`,
-        title: 'Pre-download translation model?',
+        title: 'Download translation model?',
         model: `NLLB-200 distilled 600M (${TRANSLATION_MODEL})`,
         sizeMB: TRANSLATION_MODEL_SIZE_MB,
         why: 'Pre-caches the translation model so it works offline next time.',

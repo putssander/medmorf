@@ -1,4 +1,4 @@
-import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-08-30-memory-bar-2';
+import { preloadTranslationModel, TRANSLATION_MODEL, TRANSLATION_RUNTIME_LABEL } from './translation-runtime.js?v=2026-08-31-simple-download-1';
 import {
     DEFAULT_NER_MODEL_ID,
     getNERModelOption,

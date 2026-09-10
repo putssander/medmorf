@@ -22,7 +22,7 @@ import {
     safeModelCeilingMB,
 } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { listLoadedModels, onLifecycleEvent } from './lifecycle-manager.js?v=2026-05-21-stability-1';
-import { getActiveHeavyLoadInfo, onHeavyLoadChange } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { getActiveHeavyLoadInfo, onHeavyLoadChange } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
 
 const POLL_MS = 1000;
 const IOS_TAB_GUARDRAIL_MB = 1500;   // WebKit kills tabs well below device RAM

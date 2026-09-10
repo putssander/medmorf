@@ -2,7 +2,7 @@
 // Uses whisper-small or whisper-tiny for browser-based transcription.
 // Zero data leaves the browser — all processing is local.
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 import { startSession, updateSession, appendChunk, findRecoverable, loadPCM, getSession, deleteSession, deleteAllSessions, pcmToWavBlob } from './stt-store.js?v=2026-08-30-crash-safe-1';
 
@@ -377,7 +377,7 @@ async function initSTTModel(externalProgressCb) {
 
     const proceed = await preflightWarn({
         key: `stt:${selectedModel}`,
-        title: 'Load speech-to-text model?',
+        title: 'Download speech model?',
         model: modelLabel,
         sizeMB,
         why: 'Whisper runs locally for transcription. Larger models give better accuracy but use more RAM. WebGPU is much faster on Apple Silicon and modern GPUs.',

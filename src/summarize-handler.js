@@ -3,7 +3,7 @@
 // Templates guide the LLM to fill in specific report sections.
 // Zero data leaves the browser — all processing is local.
 
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
 import { getCapabilities, recommendDefault } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
@@ -305,7 +305,7 @@ async function initSumModel() {
 
     const proceed = await preflightWarn({
         key: `llm:${selectedModel}`,
-        title: 'Load summarization model?',
+        title: 'Download summary model?',
         model: `${modelLabel} (${selectedModel})`,
         sizeMB,
         why: 'Large LLMs need WebGPU and several GB of RAM/VRAM. On low-RAM devices the tab may crash. Pick a smaller variant if unsure.',

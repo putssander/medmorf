@@ -7,11 +7,11 @@
 // and shown on the memory bar while a model is resident.
 import { wer, chrF, scorePII, scoreFacts, mean } from '../tests/metrics.js';
 import { getCapabilities, safeModelCeilingMB, getRuntimeMemorySnapshot } from './device-capabilities.js?v=2026-05-28-resource-1';
-import { detectBrowser } from './memory-monitor.js?v=2026-08-30-memory-bar-3';
-import { withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
+import { detectBrowser } from './memory-monitor.js?v=2026-08-31-simple-download-1';
+import { withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
 import { NER_MODEL_OPTIONS, initNERPipeline, disposeNERPipeline, getNERPipeline, getGLiNERInstance, isGLiNERModel, mapNEREntityType } from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
-import { TRANSLATION_MODEL, TRANSLATION_MODEL_SIZE_MB, initTranslationPipeline, disposeTranslationPipeline } from './translation-runtime.js?v=2026-08-30-memory-bar-2';
-import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-08-30-memory-bar-2';
+import { TRANSLATION_MODEL, TRANSLATION_MODEL_SIZE_MB, initTranslationPipeline, disposeTranslationPipeline } from './translation-runtime.js?v=2026-08-31-simple-download-1';
+import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-09-10-review-1';
 
 const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js';
 const ORT_WASM = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';

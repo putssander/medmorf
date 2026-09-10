@@ -1,7 +1,7 @@
 // pre-flight-warn.js
-// Shows a modal warning before loading a heavy model. The modal explains the
-// model's footprint, the device's reported capabilities, and offers a way
-// to bail out or proceed. Also exposes a global mutex so two heavy models
+// Shows a compact confirmation before loading a heavy model. Essential download
+// and privacy information stays visible; technical device data is optional.
+// Also exposes a global mutex so two heavy models
 // never start downloading / compiling at the same time (a frequent OOM
 // trigger on Safari + low-RAM Chrome).
 
@@ -12,12 +12,10 @@ import {
     getRuntimeMemorySnapshot,
 } from './device-capabilities.js?v=2026-05-28-resource-1';
 
-const RISK_LABELS = {
-    low:      { label: 'Low risk',      color: '#10b981' },
-    medium:   { label: 'Medium risk',   color: '#d97706' },
-    high:     { label: 'High risk',     color: '#dc2626' },
-    critical: { label: 'May crash tab', color: '#7f1d1d' },
-    unknown:  { label: 'Unknown size',  color: '#6b7280' },
+const RISK_MESSAGES = {
+    medium: 'This may take a while on this device.',
+    high: 'This model may be too large for this device. A smaller model is safer.',
+    critical: 'This model may close this tab. Choose a smaller model if available.',
 };
 
 const STORAGE_KEY = 'medmorf:preflight-acknowledged';
@@ -48,46 +46,42 @@ function fmtSize(mb) {
 }
 
 function buildModal({ title, model, sizeMB, risk, snap, why }) {
-    const tier = RISK_LABELS[risk] || RISK_LABELS.unknown;
     const runtime = getRuntimeMemorySnapshot();
     const ceiling = describeMemoryCeiling(snap, runtime);
-    const jsHeap = runtime.jsHeapSupported
-        ? `${fmtSize(runtime.jsHeapUsedMB)} / ${fmtSize(runtime.jsHeapLimitMB)}`
-        : 'Not exposed by this browser';
     const safeHeadroom = sizeMB > 0
         ? `${fmtSize(Math.max(0, ceiling.safeModelCeilingMB - sizeMB))} after this model`
         : 'Unknown';
     const wgpu = snap?.webgpu?.supported
-        ? `WebGPU ${snap.webgpu.adapterInfo?.vendor || ''} (max buffer ${fmtSize(snap.webgpu.maxBufferSizeMB)})`
-        : 'WebGPU not available — will fall back to WASM (much slower)';
-    const ios = snap?.isIosSafari ? '<div class="pf-warn">⚠️ iOS Safari has a strict ~1.5 GB per-tab memory cap. Tabs that exceed it crash.</div>' : '';
-    const visibilityNote = '<div class="pf-note">Browsers do not expose exact total tab memory or total VRAM. Reported values are shown when available; the model ceiling is a conservative estimate.</div>';
+        ? 'WebGPU available'
+        : 'Standard browser processing';
+    const riskMessage = RISK_MESSAGES[risk] || '';
 
     return `
         <div class="pf-overlay" data-action="cancel"></div>
         <div class="pf-card" role="dialog" aria-modal="true" aria-label="${title}">
             <div class="pf-head">
                 <h3>${title}</h3>
-                <span class="pf-tier" style="background:${tier.color}">${tier.label}</span>
+                <button class="pf-close" type="button" data-action="cancel" aria-label="Close">×</button>
             </div>
             <div class="pf-body">
-                <div class="pf-row"><span class="pf-k">Model</span><span class="pf-v">${model}</span></div>
-                <div class="pf-row"><span class="pf-k">Approx download</span><span class="pf-v">${fmtSize(sizeMB)}</span></div>
-                <div class="pf-row"><span class="pf-k">Device RAM</span><span class="pf-v">${snap?.deviceMemoryGB ?? '?'} GB (reported)</span></div>
-                <div class="pf-row"><span class="pf-k">CPU cores</span><span class="pf-v">${snap?.cores ?? '?'}</span></div>
-                <div class="pf-row"><span class="pf-k">Backend</span><span class="pf-v">${wgpu}</span></div>
-                <div class="pf-row"><span class="pf-k">JS heap now</span><span class="pf-v">${jsHeap}</span></div>
-                <div class="pf-row"><span class="pf-k">Main bottleneck</span><span class="pf-v">${ceiling.bottleneck.label}: ${fmtSize(ceiling.bottleneck.valueMB)}</span></div>
-                <div class="pf-row"><span class="pf-k">Model headroom</span><span class="pf-v">${safeHeadroom}</span></div>
-                ${snap?.storageQuotaGB ? `<div class="pf-row"><span class="pf-k">Cache quota</span><span class="pf-v">${snap.storageQuotaGB.toFixed(1)} GB</span></div>` : ''}
-                ${ios}
-                ${visibilityNote}
-                ${why ? `<p class="pf-why">${why}</p>` : ''}
-                <label class="pf-skip"><input type="checkbox" data-action="dont-show"> Don't show this warning again for this model</label>
+                <p class="pf-size"><strong>${fmtSize(sizeMB)}</strong> download</p>
+                <p class="pf-privacy">Stored in this browser. Your content stays on this device.</p>
+                ${riskMessage ? `<p class="pf-caution" data-risk="${risk}">${riskMessage}</p>` : ''}
+                <details class="pf-details">
+                    <summary>Details</summary>
+                    <div class="pf-details-body">
+                        <div class="pf-row"><span class="pf-k">Model</span><span class="pf-v">${model}</span></div>
+                        <div class="pf-row"><span class="pf-k">Device memory</span><span class="pf-v">${snap?.deviceMemoryGB ? `${snap.deviceMemoryGB} GB reported` : 'Not reported'}</span></div>
+                        <div class="pf-row"><span class="pf-k">Processing</span><span class="pf-v">${wgpu}</span></div>
+                        <div class="pf-row"><span class="pf-k">Estimated headroom</span><span class="pf-v">${safeHeadroom}</span></div>
+                        ${why ? `<p class="pf-why">${why}</p>` : ''}
+                    </div>
+                </details>
+                <label class="pf-skip"><input type="checkbox" data-action="dont-show"> Don't ask again for this model</label>
             </div>
             <div class="pf-foot">
-                <button class="pf-btn pf-btn-ghost" data-action="cancel">Cancel</button>
-                <button class="pf-btn" data-action="proceed">Continue</button>
+                <button class="pf-btn pf-btn-ghost" type="button" data-action="cancel">Not now</button>
+                <button class="pf-btn" type="button" data-action="proceed">Download model</button>
             </div>
         </div>
     `;
@@ -98,28 +92,41 @@ function injectStylesOnce() {
     const s = document.createElement('style');
     s.id = 'preflightStyles';
     s.textContent = `
-        #preflightRoot .pf-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.55); }
+        #preflightRoot .pf-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.38); backdrop-filter: blur(3px); }
         #preflightRoot .pf-card {
             position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-            width: min(520px, 92vw); background: #fff; border-radius: 12px; padding: 1.25rem 1.4rem;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.25); font-family: inherit;
+            width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+            background: #fff; border: 1px solid rgba(15,23,42,0.08); border-radius: 18px; padding: 1.25rem;
+            box-shadow: 0 24px 64px rgba(15,23,42,0.22); font-family: inherit; color: #102033;
         }
         #preflightRoot .pf-head { display: flex; justify-content: space-between; align-items: center; gap: 0.75rem; }
-        #preflightRoot .pf-head h3 { margin: 0; font-size: 1.1rem; }
-        #preflightRoot .pf-tier { color: #fff; padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.02em; }
-        #preflightRoot .pf-body { margin: 0.9rem 0; font-size: 0.9rem; color: #1f2937; }
-        #preflightRoot .pf-row { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.25rem 0; border-bottom: 1px solid #f1f5f9; }
-        #preflightRoot .pf-row:last-of-type { border-bottom: 0; }
-        #preflightRoot .pf-k { color: #6b7280; }
-        #preflightRoot .pf-v { font-weight: 600; text-align: right; }
-        #preflightRoot .pf-warn { margin-top: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 6px; background: #fef3c7; color: #92400e; font-size: 0.83rem; }
-        #preflightRoot .pf-note { margin-top: 0.6rem; padding: 0.5rem 0.6rem; border-radius: 6px; background: #eff6ff; color: #1e40af; font-size: 0.8rem; line-height: 1.35; }
-        #preflightRoot .pf-why { margin: 0.6rem 0 0; color: #475569; font-size: 0.85rem; }
-        #preflightRoot .pf-skip { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.7rem; font-size: 0.82rem; color: #6b7280; }
-        #preflightRoot .pf-foot { display: flex; justify-content: flex-end; gap: 0.5rem; }
-        #preflightRoot .pf-btn { background: #3b82f6; color: #fff; border: 0; padding: 0.5rem 1rem; border-radius: 6px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
-        #preflightRoot .pf-btn-ghost { background: #fff; color: #374151; border: 1px solid #e5e7eb; }
-        #preflightRoot .pf-btn:hover { filter: brightness(1.05); }
+        #preflightRoot .pf-head h3 { margin: 0; font-size: 1.15rem; line-height: 1.25; letter-spacing: -0.015em; }
+        #preflightRoot .pf-close { width: 30px; height: 30px; flex: 0 0 30px; border: 0; border-radius: 50%; background: #f1f5f9; color: #64748b; font: 500 1.25rem/1 inherit; cursor: pointer; }
+        #preflightRoot .pf-body { margin: 1rem 0 1.1rem; font-size: 0.9rem; }
+        #preflightRoot .pf-size { margin: 0; color: #64748b; }
+        #preflightRoot .pf-size strong { color: #102033; font-size: 1.15rem; }
+        #preflightRoot .pf-privacy { margin: 0.75rem 0 0; color: #137a50; line-height: 1.45; }
+        #preflightRoot .pf-caution { margin: 0.75rem 0 0; padding: 0.65rem 0.75rem; border-radius: 10px; background: #fff7ed; color: #9a3412; line-height: 1.4; }
+        #preflightRoot .pf-caution[data-risk="critical"] { background: #fef2f2; color: #b91c1c; }
+        #preflightRoot .pf-details { margin-top: 0.8rem; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+        #preflightRoot .pf-details summary { padding: 0.65rem 0; color: #64748b; font-size: 0.84rem; cursor: pointer; }
+        #preflightRoot .pf-details-body { padding: 0 0 0.7rem; }
+        #preflightRoot .pf-row { display: flex; justify-content: space-between; gap: 1rem; padding: 0.28rem 0; font-size: 0.8rem; }
+        #preflightRoot .pf-k { color: #64748b; }
+        #preflightRoot .pf-v { max-width: 62%; color: #334155; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+        #preflightRoot .pf-why { margin: 0.55rem 0 0; color: #64748b; font-size: 0.8rem; line-height: 1.4; }
+        #preflightRoot .pf-skip { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.8rem; font-size: 0.8rem; color: #64748b; }
+        #preflightRoot .pf-skip input { width: 16px; height: 16px; margin: 0; accent-color: #2563eb; }
+        #preflightRoot .pf-foot { display: flex; justify-content: flex-end; gap: 0.55rem; }
+        #preflightRoot .pf-btn { min-height: 42px; border: 0; border-radius: 10px; padding: 0.65rem 1rem; background: #2563eb; color: #fff; font: 650 0.9rem/1 inherit; cursor: pointer; }
+        #preflightRoot .pf-btn-ghost { background: transparent; color: #475569; }
+        #preflightRoot .pf-btn:hover { filter: brightness(0.97); }
+        #preflightRoot .pf-btn:focus-visible, #preflightRoot .pf-close:focus-visible, #preflightRoot summary:focus-visible { outline: 3px solid rgba(37,99,235,0.3); outline-offset: 2px; }
+        @media (max-width: 420px) {
+            #preflightRoot .pf-card { padding: 1rem; border-radius: 16px; }
+            #preflightRoot .pf-foot { display: grid; grid-template-columns: 1fr 1.4fr; }
+            #preflightRoot .pf-btn { width: 100%; padding-inline: 0.75rem; }
+        }
     `;
     document.head.appendChild(s);
 }

@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-08-30-flow-ui-2';
+        window.MEDMORF_BUILD_ID = '2026-09-10-review-1';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -79,7 +79,7 @@
     </script>
 
     <link rel="stylesheet" href="styles/styles.css?v=2026-08-30-wer-docs-1">
-    <link rel="stylesheet" href="styles/brand.css?v=2026-08-30-flow-ui-2">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-09-10-review-1">
     <script type="importmap">
     {
         "imports": {
@@ -831,6 +831,18 @@
                                 </table>
                             </div>
                         </div>
+                        <div class="mapping-table-container" id="llmFilteredSection" style="display:none">
+                            <details class="anon-filtered-details">
+                                <summary>LLM suggestions dropped by sanity filters <span id="llmFilteredCount" class="anon-preview-meta"></span></summary>
+                                <p class="storage-hint">Model output that is not a verbatim quote of the document, or that cannot be an identifier (roles, labels, dates without a number). Click a row to locate the text; select it in the preview to add it back.</p>
+                                <div class="mapping-table-scroll">
+                                    <table id="llmFilteredTable" class="mapping-table">
+                                        <thead><tr><th>Entity</th><th>Type</th><th>Reason</th></tr></thead>
+                                        <tbody></tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        </div>
                         <div class="mapping-table-container" id="llmAddedSection">
                             <h4>LLM Added Beyond NER</h4>
                             <div class="mapping-table-scroll">
@@ -843,6 +855,7 @@
                     </div>
                     <div class="mapping-table-container">
                         <h4>Entity Mapping</h4>
+                        <p class="storage-hint">Review before downloading. Untick a false positive to keep its original text (it stays in the list, greyed out in the preview). The quote under each entity shows its context; “Show in text” unfolds every occurrence and jumps to it in the preview. ✕ deletes an entry; Undo reverts any edit. “Not in text” means the model returned text that never occurs in the document.</p>
                         <div class="mapping-add-row">
                             <input type="text" id="mappingAddEntity" placeholder="Add missed entity (e.g. Jan Janssen)" class="mapping-add-input" />
                             <select id="mappingAddType" class="mapping-add-input mapping-add-type">
@@ -860,17 +873,38 @@
                             <button type="button" id="mappingAddBtn" class="btn btn-secondary mapping-add-btn">Add &amp; Re-apply</button>
                             <button type="button" id="mappingSmartBundleBtn" class="btn btn-secondary mapping-add-btn" title="Auto-merge entities that clearly refer to the same person (same surname, compatible first name/initials).">Smart bundle</button>
                             <button type="button" id="mappingRenumberBtn" class="btn btn-secondary mapping-add-btn" title="Compact replacement numbers so each type is contiguous (1, 2, 3, …).">Renumber</button>
+                            <button type="button" id="mappingUndoBtn" class="btn btn-secondary mapping-add-btn" disabled title="Undo the last mapping edit (remove, add, rename, merge, renumber).">Undo</button>
                         </div>
                         <div class="mapping-table-scroll">
                             <table id="mappingTable" class="mapping-table">
-                                <thead><tr><th>Original</th><th>Type</th><th>Replacement</th><th>Actions</th></tr></thead>
+                                <thead><tr><th class="mapping-toggle-head" title="Ticked = replaced in the output. Untick a false positive to keep the original text.">On</th><th>Original</th><th>Type</th><th>Replacement</th><th></th></tr></thead>
                                 <tbody></tbody>
                             </table>
                         </div>
                     </div>
                     <div class="anon-preview-container">
-                        <h4>Preview <span id="anonPreviewMeta" class="anon-preview-meta"></span></h4>
+                        <div class="anon-preview-toolbar">
+                            <h4>Preview <span id="anonPreviewMeta" class="anon-preview-meta"></span></h4>
+                            <div class="anon-preview-modes" role="group" aria-label="Preview mode">
+                                <button type="button" class="anon-preview-mode is-active" data-preview-mode="anonymized" aria-pressed="true">Anonymized</button>
+                                <button type="button" class="anon-preview-mode" data-preview-mode="original" aria-pressed="false">Original with highlights</button>
+                            </div>
+                        </div>
+                        <p class="storage-hint">Click a highlight to review it, step through its occurrences, or turn it off. Greyed highlights are switched off and stay as-is. Select any text to add a missed one.</p>
                         <pre id="anonPreviewText" class="anon-preview-text"></pre>
+                        <div id="anonEntityPopover" class="anon-selection-popover anon-entity-popover" hidden>
+                            <span class="anon-selection-label"><span id="anonEntityPopoverText"></span> → <code id="anonEntityPopoverReplacement"></code> <span id="anonEntityPopoverType" class="entity-tag"></span></span>
+                            <div class="anon-entity-popover-nav">
+                                <button type="button" data-entity-nav="-1" title="Previous occurrence" aria-label="Previous occurrence">‹</button>
+                                <span id="anonEntityPopoverCount"></span>
+                                <button type="button" data-entity-nav="1" title="Next occurrence" aria-label="Next occurrence">›</button>
+                            </div>
+                            <div class="anon-selection-buttons">
+                                <button type="button" data-entity-action="table">Show in table</button>
+                                <button type="button" data-entity-action="toggle">Turn off</button>
+                                <button type="button" data-entity-action="remove" class="anon-entity-remove">Delete</button>
+                            </div>
+                        </div>
                         <div id="anonSelectionPopover" class="anon-selection-popover" hidden>
                             <span class="anon-selection-label">Add "<span id="anonSelectionText"></span>" as:</span>
                             <div class="anon-selection-buttons">
@@ -1969,21 +2003,21 @@
     <script src="src/excel-handler.js?v=2026-03-23-cachefix-8"></script>
     <script src="src/word-handler.js?v=2026-03-23-cachefix-8"></script>
     <script type="module" src="src/try-example.js?v=2026-08-30-try-example-1"></script>
-    <script type="module" src="src/memory-monitor.js?v=2026-08-30-memory-bar-3"></script>
+    <script type="module" src="src/memory-monitor.js?v=2026-08-31-simple-download-1"></script>
     <script type="module">
         // Benchmark tab: load the harness only when the tab is first opened.
-        const mountBench = () => import('./src/benchmark-handler.js?v=2026-08-30-rep-pen-1')
+        const mountBench = () => import('./src/benchmark-handler.js?v=2026-09-10-review-1')
             .then(m => m.mountBenchmark(document.getElementById('benchmarkRoot')))
             .catch(err => { console.error(err); document.getElementById('benchmarkRoot').textContent = 'Benchmark failed to load: ' + err.message; });
         const benchBtn = document.querySelector('.tab-btn[data-tab="benchmark"]');
         benchBtn?.addEventListener('click', mountBench, { once: true });
         if (benchBtn?.classList.contains('active')) mountBench();
     </script>
-    <script type="module" src="src/app.js?v=2026-08-30-flow-ui-2"></script>
-    <script type="module" src="src/anonymize-handler.js?v=2026-08-30-ios-gate-1"></script>
-    <script type="module" src="src/summarize-handler.js?v=2026-08-30-rep-pen-1"></script>
-    <script type="module" src="src/stt-handler.js?v=2026-08-31-small-unlock-1"></script>
-    <script type="module" src="src/cache-manager.js?v=2026-08-30-qwen35-1"></script>
+    <script type="module" src="src/app.js?v=2026-08-31-simple-download-1"></script>
+    <script type="module" src="src/anonymize-handler.js?v=2026-09-10-review-1"></script>
+    <script type="module" src="src/summarize-handler.js?v=2026-08-31-simple-download-1"></script>
+    <script type="module" src="src/stt-handler.js?v=2026-08-31-simple-download-1"></script>
+    <script type="module" src="src/cache-manager.js?v=2026-08-31-simple-download-1"></script>
     <script src="src/dicom-handler.js?v=2026-08-30-flow-ui-2"></script>
     <script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
     <script src="src/pdf-handler.js?v=2026-03-23-cachefix-8"></script>

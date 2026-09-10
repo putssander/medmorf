@@ -21,8 +21,8 @@ import {
     getGLiNERInstance,
     mapNEREntityType,
 } from './privacy-runtime.js?v=2026-08-31-arena-fix-1';
-import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-30-memory-bar-2';
-import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-08-30-memory-bar-2';
+import { preflightWarn, withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
+import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-09-10-review-1';
 import {
     classifyModelRisk,
     describeMemoryCeiling,
@@ -82,7 +82,23 @@ let detectionSeen = {
     ner: new Set(),
     llm: new Set(),
     llmAdded: new Set(),
+    llmFiltered: new Set(),
 };
+
+// ── Review state (mapping table ↔ preview) ─────────────────────────────────
+let previewMode = 'anonymized';     // 'anonymized' | 'original'
+let previewSpans = [];              // non-overlapping entity occurrences in anonSourceText
+let previewOccurrences = new Map(); // entity → [index into previewSpans, …]
+let activeEntity = null;            // entity currently highlighted in table + preview
+let occurrenceCursor = new Map();   // entity → occurrence index last shown by jumpToEntity
+const unfoldedEntities = new Set(); // entities whose occurrence list is open in the table
+let anonExcelRunConfig = null;      // { sheetName, selectedCols } captured when an Excel run starts
+let showSelectionPopover = null;    // set by setupSelectionPopover(); used by jumpToRawText()
+// Undo stack of mapping snapshots (one per user edit) so a mis-click never
+// silently drops a real identifier before download.
+const undoStack = [];
+const MAX_UNDO = 50;
+const PREVIEW_MAX_CHARS = 1_000_000;
 
 // ── DOM Elements ───────────────────────────────────────────────────────────────
 const anonDocUpload = document.getElementById('anonDocUpload');
@@ -118,6 +134,12 @@ const mappingAddEntity = document.getElementById('mappingAddEntity');
 const mappingAddType = document.getElementById('mappingAddType');
 const mappingAddReplacement = document.getElementById('mappingAddReplacement');
 const mappingAddBtn = document.getElementById('mappingAddBtn');
+const mappingUndoBtn = document.getElementById('mappingUndoBtn');
+const llmFilteredTableBody = document.querySelector('#llmFilteredTable tbody');
+const llmFilteredSection = document.getElementById('llmFilteredSection');
+const llmFilteredCount = document.getElementById('llmFilteredCount');
+const anonPreviewModeButtons = document.querySelectorAll('[data-preview-mode]');
+const anonEntityPopover = document.getElementById('anonEntityPopover');
 const mappingReplacementList = document.getElementById('mappingReplacementList');
 const downloadAnonDocBtn = document.getElementById('downloadAnonDocBtn');
 const downloadMappingBtn = document.getElementById('downloadMappingBtn');
@@ -584,7 +606,7 @@ async function initAnonModel() {
 
     const proceed = await preflightWarn({
         key: `llm:${selectedModel}`,
-        title: 'Load language model?',
+        title: 'Download anonymization model?',
         model: `${modelLabel} (${selectedModel})`,
         sizeMB: modelOption.sizeMB || 0,
         why: 'Large LLMs need WebGPU and several GB of RAM/VRAM. On low-RAM devices the tab may crash. Pick a smaller variant if unsure.',
@@ -780,7 +802,7 @@ async function initNerModel({ executionMode = 'default' } = {}) {
     }
     const proceed = await preflightWarn({
         key: `ner:${selectedNerModelId}:${executionMode}`,
-        title: 'Load NER model?',
+        title: 'Download privacy model?',
         model: `${nerOption.label} — ${nerOption.model}`,
         sizeMB: nerOption.sizeMB || 0,
         why: `This NER model runs locally for PII detection. ${nerOption.qualityNote || ''}${lowMemoryNote}`,
@@ -984,7 +1006,7 @@ async function extractEntitiesGLiNER(text) {
 }
 
 // Pre-filter obvious GLiNER false positives that no LLM review is needed for
-function isObviousGarbage(entity, type) {
+function isObviousGarbage(entity, type, { requireCapitals = true } = {}) {
     const lower = entity.toLowerCase().replace(/\s+/g, ' ').trim();
 
     // Single words that are never PII regardless of type
@@ -999,6 +1021,23 @@ function isObviousGarbage(entity, type) {
         'contactpersoon', 'contactgegevens', 'rijbewijsnummer', 'telefoonnummer',
         'mijn vrouw', 'mijn man', 'mijn huisarts', 'mijn zoon', 'mijn dochter',
         'mijn iban', 'mijn bsn',
+        // Roles, titles and relationship words: never PII on their own
+        'interviewer', 'arts', 'huisarts', 'dokter', 'dr', 'dr.', 'drs', 'drs.',
+        'mevrouw', 'meneer', 'mevr', 'mevr.', 'mw', 'mw.', 'dhr', 'dhr.',
+        'cliënt', 'cliënte', 'client', 'bewoner', 'verpleegkundige', 'specialist',
+        'cardioloog', 'psychiater', 'psycholoog', 'therapeut', 'apotheker',
+        'zorgverzekeraar', 'werkgever', 'school', 'ziekenhuis', 'kliniek', 'praktijk', 'apotheek',
+        'het ziekenhuis', 'de huisarts', 'de school', 'de praktijk', 'de kliniek', 'de apotheek',
+        'de basisschool', 'basisschool', 'thuis', 'het werk', 'de arts', 'de dokter', 'de specialist',
+        'mijn moeder', 'mijn vader', 'mijn ouders', 'mijn partner', 'mijn broer', 'mijn zus',
+        'mijn kinderen', 'mijn werkgever', 'echtgenote', 'echtgenoot', 'partner',
+        'moeder', 'vader', 'zoon', 'dochter', 'broer', 'zus', 'kinderen', 'ouders',
+        'patient', 'doctor', 'nurse', 'gp', 'physician', 'hospital', 'clinic', 'employer', 'insurer',
+        'the hospital', 'the clinic', 'the doctor', 'my wife', 'my husband', 'my mother', 'my father',
+        'wife', 'husband', 'mother', 'father', 'son', 'daughter',
+        // Field labels the model sometimes returns instead of the value
+        'naam', 'adres', 'geboortedatum', 'telefoon', 'telefoonnummer', 'e-mail', 'email',
+        'bsn', 'iban', 'polisnummer', 'geboren', 'name', 'address', 'date of birth', 'phone',
     ]);
     if (commonWords.has(lower)) return true;
 
@@ -1012,7 +1051,7 @@ function isObviousGarbage(entity, type) {
     if (/^(kunt u|heeft u|ik ben|ik heb|wilt u|mag ik|kan ik)\b/i.test(lower)) return true;
 
     // Multi-word phrases that don't contain any capitalized word (likely not a name/place)
-    if ((type === 'PERSON' || type === 'ORGANIZATION') && entity.split(/\s+/).length > 1) {
+    if (requireCapitals && (type === 'PERSON' || type === 'ORGANIZATION') && entity.split(/\s+/).length > 1) {
         const hasCapital = entity.split(/\s+/).some(w => /^[A-Z\u00C0-\u024F]/.test(w));
         if (!hasCapital) return true;
     }
@@ -1150,6 +1189,121 @@ async function validateEntitiesWithLLM(entities, text) {
     return entities;
 }
 
+// ── LLM output sanity filters ─────────────────────────────────────────────────
+// Small LLMs return type labels in many spellings and, despite the prompt,
+// paraphrase spans or list roles/common words. Everything below is
+// deterministic and only drops values that cannot be identifiers or that do
+// not occur in the chunk (those could never be replaced anyway — they only
+// clutter the mapping). Dropped items are shown in the results panel.
+const LLM_TYPE_ALIASES = {
+    PERSON: 'PERSON', NAME: 'PERSON', PER: 'PERSON', PATIENT: 'PERSON', DOCTOR: 'PERSON', PERSON_NAME: 'PERSON',
+    LOCATION: 'LOCATION', LOC: 'LOCATION', CITY: 'LOCATION', COUNTRY: 'LOCATION', PLACE: 'LOCATION', GPE: 'LOCATION', REGION: 'LOCATION',
+    DATE: 'DATE', TIME: 'DATE', DATETIME: 'DATE', BIRTHDATE: 'DATE', BIRTH_DATE: 'DATE', DOB: 'DATE', DATE_OF_BIRTH: 'DATE',
+    PHONE: 'PHONE', PHONE_NUMBER: 'PHONE', TELEPHONE: 'PHONE', FAX: 'PHONE', MOBILE: 'PHONE', TEL: 'PHONE',
+    EMAIL: 'EMAIL', EMAIL_ADDRESS: 'EMAIL', MAIL: 'EMAIL',
+    ADDRESS: 'ADDRESS', STREET: 'ADDRESS', STREET_ADDRESS: 'ADDRESS', POSTAL_CODE: 'ADDRESS', POSTCODE: 'ADDRESS', ZIP: 'ADDRESS', ZIP_CODE: 'ADDRESS', ZIPCODE: 'ADDRESS',
+    ORGANIZATION: 'ORGANIZATION', ORGANISATION: 'ORGANIZATION', ORG: 'ORGANIZATION', COMPANY: 'ORGANIZATION', HOSPITAL: 'ORGANIZATION', EMPLOYER: 'ORGANIZATION', SCHOOL: 'ORGANIZATION', INSURER: 'ORGANIZATION', INSURANCE: 'ORGANIZATION',
+    ID_NUMBER: 'ID_NUMBER', ID: 'ID_NUMBER', IDENTIFIER: 'ID_NUMBER', BSN: 'ID_NUMBER', SSN: 'ID_NUMBER', IBAN: 'ID_NUMBER', PATIENT_ID: 'ID_NUMBER', MRN: 'ID_NUMBER', INSURANCE_NUMBER: 'ID_NUMBER', POLICY_NUMBER: 'ID_NUMBER', LICENSE: 'ID_NUMBER', LICENSE_NUMBER: 'ID_NUMBER', NUMBER: 'ID_NUMBER',
+    AGE: 'AGE',
+};
+
+function normalizeLLMType(raw) {
+    const key = String(raw || '').trim().toUpperCase().replace(/[\s-]+/g, '_');
+    return LLM_TYPE_ALIASES[key] || key || 'MISC';
+}
+
+function normalizeForMatch(s) {
+    return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Trim quotes/brackets and trailing sentence punctuation the model sometimes
+// copies along with the value. A trailing "." is kept after an initial or an
+// abbreviation ("J.P.", "B.V.") — only dropped after a lowercase letter.
+function cleanLLMEntityText(raw) {
+    let t = String(raw || '').replace(/\s+/g, ' ').trim();
+    t = t.replace(/^["'“”‘’«»(\[{]+/, '').replace(/["'“”‘’«»)\]},;:]+$/, '').trim();
+    if (t.length > 3 && /\p{Ll}\.$/u.test(t)) t = t.slice(0, -1);
+    return t.trim();
+}
+
+const MONTH_OR_DAY_WORD_RE = /\b(januari|februari|maart|april|mei|juni|juli|augustus|september|oktober|november|december|jan|feb|mrt|apr|jun|jul|aug|sep|sept|okt|nov|dec|january|february|march|may|june|july|august|october|maandag|dinsdag|woensdag|donderdag|vrijdag|zaterdag|zondag|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i;
+const STREET_WORD_RE = /(straat|laan|weg|plein|gracht|dijk|kade|singel|hof|pad|steeg|dreef|boulevard|drive|road|street|avenue|lane)\b/i;
+
+// Returns a short reason when an LLM entity cannot be PII of the given type,
+// or '' when it should be kept. `chunkText` lets the lowercase-name rule stand
+// down on all-lowercase input (e.g. some dictation transcripts).
+function llmFalsePositiveReason(entity, type, chunkText = '') {
+    const chunkIsCased = /\p{Lu}/u.test(chunkText);
+    if (isObviousGarbage(entity, type, { requireCapitals: chunkIsCased })) return 'role, label or common word';
+    const hasDigit = /\d/.test(entity);
+    const hasUpper = /\p{Lu}/u.test(entity);
+    switch (type) {
+        case 'DATE':
+            if (!hasDigit && !MONTH_OR_DAY_WORD_RE.test(entity)) return 'date without a number or month';
+            break;
+        case 'AGE':
+            if (!hasDigit) return 'age without a number';
+            break;
+        case 'PHONE':
+            if ((entity.match(/\d/g) || []).length < 6) return 'phone with fewer than 6 digits';
+            break;
+        case 'EMAIL':
+            if (!entity.includes('@')) return 'email without @';
+            break;
+        case 'PERSON':
+        case 'LOCATION':
+        case 'ORGANIZATION':
+            if (chunkIsCased && !hasUpper && !hasDigit && !entity.includes('@')) return 'lowercase common noun, not a proper name';
+            break;
+        case 'ADDRESS':
+            if (!hasDigit && !hasUpper && !STREET_WORD_RE.test(entity)) return 'address without number, capital or street word';
+            break;
+        default:
+            break;
+    }
+    return '';
+}
+
+// Normalise types, dedupe, and drop non-verbatim or non-PII output.
+function filterLLMEntities(rawEntities, chunkText) {
+    const kept = [];
+    const dropped = [];
+    const seen = new Set();
+    const haystack = normalizeForMatch(chunkText);
+    for (const raw of rawEntities) {
+        if (!raw || typeof raw.entity !== 'string') continue;
+        const type = normalizeLLMType(raw.type);
+        const entity = cleanLLMEntityText(raw.entity);
+        if (entity.length < 2) continue;
+        const key = createDetectionKey(entity, type);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        if (!haystack.includes(normalizeForMatch(entity))) {
+            dropped.push({ entity, type, reason: 'not a verbatim quote of the text' });
+            continue;
+        }
+        const reason = llmFalsePositiveReason(entity, type, chunkText);
+        if (reason) {
+            dropped.push({ entity, type, reason });
+            continue;
+        }
+        kept.push({ entity, type });
+    }
+    return { kept, dropped };
+}
+
+function recordFilteredLLMEntities(dropped) {
+    if (!dropped.length) return;
+    if (!Array.isArray(lastDetectionBreakdown.llmFiltered)) lastDetectionBreakdown.llmFiltered = [];
+    for (const item of dropped) {
+        const key = createDetectionKey(item.entity, item.type);
+        if (detectionSeen.llmFiltered.has(key)) continue;
+        detectionSeen.llmFiltered.add(key);
+        lastDetectionBreakdown.llmFiltered.push(item);
+    }
+    console.log('[LLM] Dropped by sanity filters:', dropped);
+}
+
 async function extractEntitiesLLM(text, systemPrompt) {
     const messages = [
         { role: 'system', content: systemPrompt || SYSTEM_PROMPT },
@@ -1164,12 +1318,10 @@ async function extractEntitiesLLM(text, systemPrompt) {
     try {
         const jsonMatch = response.match(/\[[\s\S]*?\]/);
         if (jsonMatch) {
-            const entities = JSON.parse(jsonMatch[0]);
-            return entities.filter(e =>
-                e && typeof e.entity === 'string' &&
-                typeof e.type === 'string' &&
-                e.entity.trim().length > 0
-            );
+            const parsed = JSON.parse(jsonMatch[0]);
+            const { kept, dropped } = filterLLMEntities(Array.isArray(parsed) ? parsed : [], text);
+            recordFilteredLLMEntities(dropped);
+            return kept;
         }
         return [];
     } catch (e) {
@@ -1198,11 +1350,12 @@ function createDetectionKey(entity, type) {
 }
 
 function resetDetectionBreakdown(pipeline) {
-    lastDetectionBreakdown = { pipeline, ner: [], llm: [], llmAdded: [], nerFiltered: [] };
+    lastDetectionBreakdown = { pipeline, ner: [], llm: [], llmAdded: [], nerFiltered: [], llmFiltered: [] };
     detectionSeen = {
         ner: new Set(),
         llm: new Set(),
         llmAdded: new Set(),
+        llmFiltered: new Set(),
     };
 }
 
@@ -1223,13 +1376,13 @@ function recordDetectedEntities(source, entities) {
     }
 }
 
-function renderDetectionTable(tableBody, entities, emptyMessage) {
+function renderDetectionTable(tableBody, entities, emptyMessage, { withReason = false } = {}) {
     if (!tableBody) return;
     tableBody.innerHTML = '';
 
     if (entities.length === 0) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td colspan="2">${escapeHTML(emptyMessage)}</td>`;
+        tr.innerHTML = `<td colspan="${withReason ? 3 : 2}">${escapeHTML(emptyMessage)}</td>`;
         tableBody.appendChild(tr);
         return;
     }
@@ -1237,29 +1390,89 @@ function renderDetectionTable(tableBody, entities, emptyMessage) {
     entities
         .slice()
         .sort((a, b) => a.type.localeCompare(b.type) || a.entity.localeCompare(b.entity))
-        .forEach(({ entity, type }) => {
+        .forEach(({ entity, type, reason }) => {
             const tr = document.createElement('tr');
+            tr.className = 'is-jumpable';
+            tr.dataset.entity = entity;
+            tr.title = 'Click to show in the preview';
             tr.innerHTML = `
                 <td>${escapeHTML(entity)}</td>
-                <td><span class="entity-tag entity-tag-${type.toLowerCase()}">${type}</span></td>
+                <td><span class="entity-tag entity-tag-${escapeHTML(String(type).toLowerCase())}">${escapeHTML(type)}</span></td>
+                ${withReason ? `<td class="mapping-reason-cell">${escapeHTML(reason || '')}</td>` : ''}
             `;
             tableBody.appendChild(tr);
         });
 }
 
-function anonymizeText(text) {
-    let result = text;
-    const entries = Object.entries(currentMapping.entities)
-        .sort((a, b) => b[0].length - a[0].length);
-    for (const [entity, info] of entries) {
-        const escaped = entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Add Unicode-aware word boundaries to prevent replacing substrings inside words
+// One compiled matcher per mapping entry: escaped literal, whitespace runs
+// flexible (PDF/dictation text breaks names across spaces and newlines), and
+// Unicode-aware word boundaries so substrings inside words are not replaced.
+const entityRegexCache = new Map();
+function getEntityRegex(entity) {
+    let regex = entityRegexCache.get(entity);
+    if (!regex) {
+        const escaped = entity.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
         const prefix = /[\p{L}\p{N}]/u.test(entity.charAt(0)) ? '(?<![\\p{L}\\p{N}])' : '';
         const suffix = /[\p{L}\p{N}]/u.test(entity.charAt(entity.length - 1)) ? '(?![\\p{L}\\p{N}])' : '';
-        const regex = new RegExp(prefix + escaped + suffix, 'giu');
-        result = result.replace(regex, info.replacement);
+        regex = new RegExp(prefix + escaped + suffix, 'giu');
+        entityRegexCache.set(entity, regex);
     }
-    return result;
+    regex.lastIndex = 0;
+    return regex;
+}
+
+// Every non-overlapping entity occurrence in `text`, sorted by position.
+// Longer entities claim their characters first (same precedence as the old
+// sequential replace), so "Pieter de Vries" wins over "Pieter". Working on
+// spans instead of successive string replaces also means a short numeric
+// entity can never match inside an already-inserted [TAG_1].
+// With `includeDisabled`, entities the user switched off are matched too —
+// but only in characters no enabled entity claimed, and flagged `disabled`
+// so the preview can show them greyed out. anonymizeText() never uses them.
+function isEntityEnabled(info) {
+    return !!info && info.disabled !== true;
+}
+
+function computeEntitySpans(text, { includeDisabled = false } = {}) {
+    const spans = [];
+    if (typeof text !== 'string' || !text) return spans;
+    const byLength = (a, b) => b[0].length - a[0].length;
+    const all = Object.entries(currentMapping.entities)
+        .filter(([entity, info]) => entity && info && info.replacement);
+    const entries = all.filter(([, info]) => isEntityEnabled(info)).sort(byLength);
+    if (includeDisabled) entries.push(...all.filter(([, info]) => !isEntityEnabled(info)).sort(byLength));
+    const taken = new Uint8Array(text.length);
+    for (const [entity, info] of entries) {
+        const regex = getEntityRegex(entity);
+        let m;
+        while ((m = regex.exec(text)) !== null) {
+            const start = m.index;
+            const end = start + m[0].length;
+            if (end === start) { regex.lastIndex++; continue; }
+            let free = true;
+            for (let i = start; i < end; i++) {
+                if (taken[i]) { free = false; break; }
+            }
+            if (!free) continue;
+            taken.fill(1, start, end);
+            spans.push({ start, end, entity, type: info.type, replacement: info.replacement, disabled: !isEntityEnabled(info) });
+        }
+    }
+    spans.sort((a, b) => a.start - b.start);
+    return spans;
+}
+
+function anonymizeText(text) {
+    if (typeof text !== 'string' || !text) return text;
+    const spans = computeEntitySpans(text);
+    if (spans.length === 0) return text;
+    let out = '';
+    let cursor = 0;
+    for (const s of spans) {
+        out += text.slice(cursor, s.start) + s.replacement;
+        cursor = s.end;
+    }
+    return out + text.slice(cursor);
 }
 
 function loadMappingFromJSON(jsonString) {
@@ -1813,6 +2026,7 @@ async function performAnonymization() {
     let effectivePipeline = pipeline;
     let failureMessage = '';
     resetDetectionBreakdown(pipeline);
+    resetReviewState();
 
     try {
         // Load models based on pipeline.
@@ -2046,6 +2260,10 @@ async function anonymizeExcel(pipeline) {
     }
 
     const allText = textCells.join('\n---\n');
+    // Keep the joined cell text so the review panel can quote each entity and
+    // mapping edits can be re-applied to the workbook without the models.
+    anonSourceText = allText;
+    anonExcelRunConfig = { sheetName, selectedCols: [...selectedCols] };
     const chunks = chunkText(allText, getChunkSizeForPipeline(pipeline), getChunkOverlapForPipeline(pipeline));
     const totalChunks = chunks.length;
 
@@ -2164,8 +2382,23 @@ async function anonymizeExcel(pipeline) {
     setResourceStage('Applying mapping', 0, 'No model should be resident; applying replacements to workbook cells.');
     anonProgressBar.style.width = '90%';
 
-    const newData = [jsonData[0]];
-    for (const row of dataRows) {
+    anonymizedResult = applyMappingToWorkbook();
+    anonProgressBar.style.width = '100%';
+    anonProgressText.textContent = 'Anonymization complete ✓';
+    return pipeline;
+}
+
+// Apply the current mapping to the sheet/columns captured at run start. Pure
+// string work — no model needed — so mapping edits (remove, merge, undo) can
+// rebuild the workbook instantly before download.
+function applyMappingToWorkbook() {
+    if (!anonWorkbook || !anonExcelRunConfig) return anonymizedResult;
+    const { sheetName, selectedCols } = anonExcelRunConfig;
+    const worksheet = anonWorkbook.Sheets[sheetName];
+    if (!worksheet) return anonymizedResult;
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+    const newData = [jsonData[0] || []];
+    for (const row of jsonData.slice(1)) {
         const newRow = [...row];
         for (const colIdx of selectedCols) {
             if (newRow[colIdx] && typeof newRow[colIdx] === 'string') {
@@ -2174,18 +2407,13 @@ async function anonymizeExcel(pipeline) {
         }
         newData.push(newRow);
     }
-
     const newWorksheet = XLSX.utils.aoa_to_sheet(newData);
     const newWorkbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(newWorkbook, newWorksheet, sheetName);
     anonWorkbook.SheetNames.forEach(sn => {
         if (sn !== sheetName) XLSX.utils.book_append_sheet(newWorkbook, anonWorkbook.Sheets[sn], sn);
     });
-
-    anonymizedResult = newWorkbook;
-    anonProgressBar.style.width = '100%';
-    anonProgressText.textContent = 'Anonymization complete ✓';
-    return pipeline;
+    return newWorkbook;
 }
 
 // ── Results Rendering ──────────────────────────────────────────────────────────
@@ -2214,24 +2442,37 @@ function renderResults() {
     renderDetectionTable(llmDetectionTableBody, lastDetectionBreakdown.llm, 'No LLM detections for this run.');
     renderDetectionTable(llmAddedTableBody, lastDetectionBreakdown.llmAdded, 'No extra LLM-only detections for this run.');
     renderDetectionTable(nerFilteredTableBody, lastDetectionBreakdown.nerFiltered, 'No false positives filtered.');
+    const llmFiltered = Array.isArray(lastDetectionBreakdown.llmFiltered) ? lastDetectionBreakdown.llmFiltered : [];
+    renderDetectionTable(llmFilteredTableBody, llmFiltered, 'Nothing dropped.', { withReason: true });
     if (llmAddedSection) {
         llmAddedSection.style.display = lastDetectionBreakdown.pipeline === 'ner+llm' ? 'block' : 'none';
     }
     if (nerFilteredSection) {
         nerFilteredSection.style.display = (lastDetectionBreakdown.pipeline === 'ner+llm' && lastDetectionBreakdown.nerFiltered.length > 0) ? 'block' : 'none';
     }
+    if (llmFilteredSection) {
+        llmFilteredSection.style.display = llmFiltered.length > 0 ? 'block' : 'none';
+        if (llmFilteredCount) llmFilteredCount.textContent = llmFiltered.length ? `(${llmFiltered.length})` : '';
+    }
+
+    // Occurrence index drives the quotes, counts, click-to-jump and the preview.
+    rebuildPreviewIndex();
 
     mappingTableBody.innerHTML = '';
     const entries = Object.entries(currentMapping.entities).sort((a, b) => a[1].type.localeCompare(b[1].type));
     for (const [entity, info] of entries) {
         const tr = document.createElement('tr');
         const isManual = manualEntities.has(entity);
-        if (isManual) tr.className = 'is-manual';
+        const enabled = isEntityEnabled(info);
+        tr.className = `${isManual ? 'is-manual' : ''}${entity === activeEntity ? ' is-active' : ''}${enabled ? '' : ' is-disabled'}`.trim();
+        tr.dataset.entity = entity;
+        const src = entitySourceLabel(entity, info);
         tr.innerHTML = `
-            <td>${escapeHTML(entity)}</td>
-            <td><span class="entity-tag entity-tag-${info.type.toLowerCase()}">${info.type}</span></td>
+            <td class="mapping-toggle-cell"><input type="checkbox" class="mapping-toggle" data-entity="${escapeHTML(entity)}" ${enabled ? 'checked' : ''} title="${enabled ? 'On: replaced in the output. Untick to keep the original text.' : 'Off: kept as-is in the output. Tick to replace it.'}" aria-label="Apply ${escapeHTML(entity)}"></td>
+            <td class="mapping-original-cell" data-entity="${escapeHTML(entity)}">${renderOriginalCellHTML(entity)}</td>
+            <td><span class="entity-tag entity-tag-${escapeHTML(String(info.type).toLowerCase())}">${escapeHTML(info.type)}</span>${src ? `<span class="mapping-src mapping-src-${src.toLowerCase()}" title="Detected by ${src}">${src}</span>` : ''}</td>
             <td class="mapping-replacement-cell" data-entity="${escapeHTML(entity)}" title="Click to edit. Set to an existing tag (e.g. [PERSON_1]) to merge."><code>${escapeHTML(info.replacement)}</code></td>
-            <td><button type="button" class="mapping-delete-btn" data-entity="${escapeHTML(entity)}" title="Remove and re-apply">✕</button></td>
+            <td><button type="button" class="mapping-delete-btn" data-entity="${escapeHTML(entity)}" title="Delete from the list (Undo restores it)">✕</button></td>
         `;
         mappingTableBody.appendChild(tr);
     }
@@ -2239,18 +2480,307 @@ function renderResults() {
     // Refresh autocomplete + popover alias picker with the unique replacements
     refreshReplacementChoices();
 
-    if (typeof anonymizedResult === 'string') {
-        // Show the FULL anonymized text — no truncation. Container is scrollable.
-        anonPreviewText.textContent = anonymizedResult;
-        if (anonPreviewMeta) {
-            anonPreviewMeta.textContent = `(${anonymizedResult.length.toLocaleString()} chars, ${entries.length} entities)`;
-        }
-    } else {
-        anonPreviewText.textContent = `Excel file anonymized. ${entries.length} entities replaced across selected columns.`;
-        if (anonPreviewMeta) anonPreviewMeta.textContent = '';
-    }
-
+    renderPreview();
+    updateUndoButton();
     updateMappingCount();
+}
+
+// ── Review helpers: quotes, occurrence index, highlighted preview ──────────────
+function rebuildPreviewIndex() {
+    previewSpans = typeof anonSourceText === 'string' ? computeEntitySpans(anonSourceText, { includeDisabled: true }) : [];
+    previewOccurrences = new Map();
+    previewSpans.forEach((span, i) => {
+        let list = previewOccurrences.get(span.entity);
+        if (!list) { list = []; previewOccurrences.set(span.entity, list); }
+        list.push(i);
+    });
+}
+
+// Short context window around one occurrence, snapped to word boundaries and
+// with whitespace collapsed so it fits on one table line.
+function buildQuote(text, start, end, radius = 56) {
+    let from = Math.max(0, start - radius);
+    let to = Math.min(text.length, end + radius);
+    if (from > 0) {
+        const ws = text.slice(from, start).search(/\s/);
+        if (ws >= 0 && ws < 20) from += ws + 1;
+    }
+    if (to < text.length) {
+        const tail = text.slice(end, to);
+        const m = tail.match(/\s\S*$/);
+        if (m && m.index > tail.length - 20) to = end + m.index;
+    }
+    const collapse = (str) => str.replace(/\s+/g, ' ');
+    return {
+        before: collapse(text.slice(from, start)),
+        hit: collapse(text.slice(start, end)),
+        after: collapse(text.slice(end, to)),
+        beforeTruncated: from > 0,
+        afterTruncated: to < text.length,
+    };
+}
+
+// Which detector produced an entity (for targeting the review at LLM-only
+// additions). Manual = added by the user in this session.
+function entitySourceLabel(entity, info) {
+    if (manualEntities.has(entity)) return 'manual';
+    const key = createDetectionKey(entity, info.type);
+    const inNer = detectionSeen.ner.has(key);
+    const inLlm = detectionSeen.llm.has(key);
+    if (inNer && inLlm) return 'NER+LLM';
+    if (inNer) return 'NER';
+    if (inLlm) return 'LLM';
+    return '';
+}
+
+function quoteHTML(span) {
+    const q = buildQuote(anonSourceText, span.start, span.end);
+    return `${q.beforeTruncated ? '…' : ''}${escapeHTML(q.before)}<mark>${escapeHTML(q.hit)}</mark>${escapeHTML(q.after)}${q.afterTruncated ? '…' : ''}`;
+}
+
+function renderOriginalCellHTML(entity) {
+    const idxs = previewOccurrences.get(entity) || [];
+    const hasText = typeof anonSourceText === 'string';
+    const unfolded = unfoldedEntities.has(entity) && idxs.length > 0;
+    let badge = '';
+    if (hasText && idxs.length === 0) {
+        badge = '<span class="mapping-occ mapping-occ-missing" title="This text does not occur in the document: it will not replace anything. Usually a paraphrase or a model false positive. Safe to switch off or delete.">not in text</span>';
+    } else if (idxs.length > 0) {
+        const k = occurrenceCursor.has(entity) ? occurrenceCursor.get(entity) : -1;
+        const label = k >= 0 ? `${k + 1}/${idxs.length}` : `${idxs.length}×`;
+        badge = `<span class="mapping-occ" title="Occurrences in the document">${label}</span>`;
+    }
+    const showBtn = (hasText && idxs.length > 0)
+        ? `<button type="button" class="mapping-show-btn" data-entity="${escapeHTML(entity)}" aria-expanded="${unfolded ? 'true' : 'false'}" title="Jump to it in the preview and ${unfolded ? 'fold' : 'unfold'} every occurrence with context">${unfolded ? 'Hide context ▴' : 'Show in text ▾'}</button>`
+        : '';
+    let body = '';
+    if (hasText && idxs.length > 0) {
+        if (unfolded) {
+            const k = occurrenceCursor.get(entity) ?? -1;
+            body = `<ol class="mapping-occ-list">${idxs.map((spanIndex, i) => `<li><button type="button" class="mapping-occ-item${i === k ? ' is-current' : ''}" data-entity="${escapeHTML(entity)}" data-occ="${i}" title="Show this occurrence in the preview">${quoteHTML(previewSpans[spanIndex])}</button></li>`).join('')}</ol>`;
+        } else {
+            const k = Math.max(0, Math.min(occurrenceCursor.get(entity) ?? 0, idxs.length - 1));
+            body = `<div class="mapping-quote">${quoteHTML(previewSpans[idxs[k]])}</div>`;
+        }
+    }
+    return `<div class="mapping-original-text"><span class="mapping-original-name" title="Click to show in the preview (click again for the next occurrence)">${escapeHTML(entity)}</span>${badge}${showBtn}</div>${body}`;
+}
+
+function findMappingRow(entity) {
+    if (!mappingTableBody) return null;
+    for (const tr of mappingTableBody.querySelectorAll('tr[data-entity]')) {
+        if (tr.dataset.entity === entity) return tr;
+    }
+    return null;
+}
+
+function refreshOriginalCell(entity) {
+    const row = findMappingRow(entity);
+    const cell = row ? row.querySelector('.mapping-original-cell') : null;
+    if (cell) cell.innerHTML = renderOriginalCellHTML(entity);
+}
+
+// Highlight one entity everywhere (table row + every preview mark) without a
+// full re-render.
+function setActiveEntity(entity) {
+    activeEntity = entity || null;
+    anonPreviewText?.querySelectorAll('mark.anon-hl.is-active').forEach((m) => m.classList.remove('is-active'));
+    mappingTableBody?.querySelectorAll('tr.is-active').forEach((r) => r.classList.remove('is-active'));
+    if (!activeEntity) return;
+    anonPreviewText?.querySelectorAll('mark.anon-hl').forEach((m) => {
+        if (m.dataset.entity === activeEntity) m.classList.add('is-active');
+    });
+    findMappingRow(activeEntity)?.classList.add('is-active');
+}
+
+function scrollPreviewToElement(el) {
+    if (!el || !anonPreviewText) return;
+    const target = el.offsetTop - anonPreviewText.clientHeight / 2 + el.offsetHeight / 2;
+    anonPreviewText.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+    const rect = anonPreviewText.getBoundingClientRect();
+    if (rect.top < 0 || rect.bottom > window.innerHeight) {
+        anonPreviewText.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+}
+
+function flashMark(mark) {
+    if (!mark) return;
+    mark.classList.remove('is-flash');
+    void mark.offsetWidth; // restart the animation
+    mark.classList.add('is-flash');
+    setTimeout(() => mark.classList.remove('is-flash'), 1200);
+}
+
+// Jump the preview to the next (step=1) or previous (step=-1) occurrence of
+// an entity. Entities without occurrences fall back to a raw text search so a
+// filtered / removed item can still be located (and re-added via selection).
+function jumpToEntity(entity, step = 1, { occurrence = null } = {}) {
+    if (!entity) return;
+    const idxs = previewOccurrences.get(entity) || [];
+    if (idxs.length === 0) {
+        setActiveEntity(currentMapping.entities[entity] ? entity : null);
+        jumpToRawText(entity);
+        return;
+    }
+    setActiveEntity(entity);
+    const prev = occurrenceCursor.has(entity) ? occurrenceCursor.get(entity) : -1;
+    const k = occurrence !== null
+        ? Math.max(0, Math.min(occurrence, idxs.length - 1))
+        : (((prev + step) % idxs.length) + idxs.length) % idxs.length;
+    occurrenceCursor.set(entity, k);
+    const mark = anonPreviewText?.querySelector(`mark[data-span="${idxs[k]}"]`);
+    scrollPreviewToElement(mark);
+    flashMark(mark);
+    refreshOriginalCell(entity);
+}
+
+// Select the first raw occurrence of `needle` inside the preview text nodes.
+// Selecting it triggers the quick-tag popover, which is exactly the right
+// affordance for a dropped suggestion the user wants back.
+function jumpToRawText(needle) {
+    if (!anonPreviewText || !needle) return false;
+    const target = normalizeForMatch(needle);
+    if (!target) return false;
+    const walker = document.createTreeWalker(anonPreviewText, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    let full = '';
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        nodes.push({ node: n, start: full.length });
+        full += n.nodeValue;
+    }
+    const idx = full.toLowerCase().indexOf(target);
+    if (idx < 0) return false;
+    const locate = (offset) => {
+        for (let i = nodes.length - 1; i >= 0; i--) {
+            if (nodes[i].start <= offset) return { node: nodes[i].node, offset: offset - nodes[i].start };
+        }
+        return { node: nodes[0].node, offset: 0 };
+    };
+    const range = document.createRange();
+    const a = locate(idx);
+    const b = locate(idx + target.length);
+    range.setStart(a.node, Math.min(a.offset, a.node.length));
+    range.setEnd(b.node, Math.min(b.offset, b.node.length));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    const rect = range.getBoundingClientRect();
+    const preRect = anonPreviewText.getBoundingClientRect();
+    anonPreviewText.scrollTo({ top: Math.max(0, anonPreviewText.scrollTop + (rect.top - preRect.top) - anonPreviewText.clientHeight / 2), behavior: 'smooth' });
+    if (preRect.top < 0 || preRect.bottom > window.innerHeight) {
+        anonPreviewText.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+    if (typeof showSelectionPopover === 'function') setTimeout(showSelectionPopover, 400);
+    return true;
+}
+
+// Preview = source text with every entity occurrence wrapped in a clickable
+// <mark>. In 'anonymized' mode the mark shows the replacement tag (identical
+// to the downloaded text); in 'original' mode it shows the detected text.
+function renderPreview() {
+    if (!anonPreviewText) return;
+    const entryCount = Object.keys(currentMapping.entities).length;
+    if (typeof anonSourceText !== 'string') {
+        anonPreviewText.textContent = anonDocType === 'excel'
+            ? `Excel file anonymized. ${entryCount} entities replaced across selected columns.`
+            : '';
+        anonPreviewText.classList.remove('is-original');
+        if (anonPreviewMeta) anonPreviewMeta.textContent = '';
+        return;
+    }
+    const truncated = anonSourceText.length > PREVIEW_MAX_CHARS;
+    const text = truncated ? anonSourceText.slice(0, PREVIEW_MAX_CHARS) : anonSourceText;
+    const frag = document.createDocumentFragment();
+    let cursor = 0;
+    for (let i = 0; i < previewSpans.length; i++) {
+        const span = previewSpans[i];
+        if (span.start >= text.length) break;
+        if (span.start > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, span.start)));
+        const mark = document.createElement('mark');
+        mark.className = `anon-hl entity-hl-${String(span.type).toLowerCase()}${span.entity === activeEntity ? ' is-active' : ''}${span.disabled ? ' is-disabled' : ''}`;
+        mark.dataset.span = String(i);
+        mark.dataset.entity = span.entity;
+        mark.title = span.disabled
+            ? `${span.entity} (${span.type}) is switched off: it stays in the output as-is. Click to review.`
+            : `${span.entity} → ${span.replacement} (${span.type}). Click to review.`;
+        mark.textContent = (previewMode === 'original' || span.disabled) ? text.slice(span.start, span.end) : span.replacement;
+        frag.appendChild(mark);
+        cursor = Math.min(span.end, text.length);
+    }
+    if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+    if (truncated) {
+        const note = document.createElement('div');
+        note.className = 'anon-preview-truncated';
+        note.textContent = `Preview shows the first ${PREVIEW_MAX_CHARS.toLocaleString()} characters; the download contains the full document.`;
+        frag.appendChild(note);
+    }
+    anonPreviewText.replaceChildren(frag);
+    anonPreviewText.classList.toggle('is-original', previewMode === 'original');
+    if (anonPreviewMeta) {
+        const chars = typeof anonymizedResult === 'string' ? anonymizedResult.length : anonSourceText.length;
+        const scope = anonDocType === 'excel' ? ' · selected cells' : '';
+        const replaced = previewSpans.filter((sp) => !sp.disabled).length;
+        const off = Object.values(currentMapping.entities).filter((info) => !isEntityEnabled(info)).length;
+        anonPreviewMeta.textContent = `(${chars.toLocaleString()} chars · ${entryCount} entities${off ? `, ${off} off` : ''} · ${replaced} occurrences replaced${scope})`;
+    }
+}
+
+// ── Undo ─────────────────────────────────────────────────────────────────────
+function snapshotMapping() {
+    return {
+        entities: JSON.parse(JSON.stringify(currentMapping.entities)),
+        counters: { ...currentMapping.counters },
+        manual: [...manualEntities],
+    };
+}
+
+function pushUndo() {
+    undoStack.push(snapshotMapping());
+    if (undoStack.length > MAX_UNDO) undoStack.shift();
+    updateUndoButton();
+}
+
+function undoLastMappingChange() {
+    const snap = undoStack.pop();
+    if (!snap) return;
+    currentMapping.entities = snap.entities;
+    currentMapping.counters = snap.counters;
+    manualEntities = new Set(snap.manual);
+    updateUndoButton();
+    reapplyMapping({ renumber: false });
+}
+
+function updateUndoButton() {
+    if (!mappingUndoBtn) return;
+    mappingUndoBtn.disabled = undoStack.length === 0;
+    mappingUndoBtn.textContent = undoStack.length ? `Undo (${undoStack.length})` : 'Undo';
+}
+
+function resetReviewState() {
+    undoStack.length = 0;
+    activeEntity = null;
+    occurrenceCursor = new Map();
+    unfoldedEntities.clear();
+    updateUndoButton();
+    if (anonEntityPopover) anonEntityPopover.hidden = true;
+}
+
+function setEntityEnabled(entity, enabled) {
+    const info = currentMapping.entities[entity];
+    if (!info || isEntityEnabled(info) === !!enabled) return;
+    pushUndo();
+    if (enabled) delete info.disabled; else info.disabled = true;
+    reapplyMapping();
+}
+
+function removeEntityFromMapping(entity) {
+    if (!entity || !currentMapping.entities[entity]) return;
+    pushUndo();
+    delete currentMapping.entities[entity];
+    manualEntities.delete(entity);
+    occurrenceCursor.delete(entity);
+    if (activeEntity === entity) activeEntity = null;
+    reapplyMapping();
 }
 
 function escapeHTML(str) {
@@ -2259,18 +2789,20 @@ function escapeHTML(str) {
     return div.innerHTML;
 }
 
-// ── Live mapping edits (add / remove → re-apply on source text) ──────────
-// Re-runs `anonymizeText()` on the saved original source so the preview and
-// downloaded output instantly reflect mapping edits. Excel docs are skipped
-// here — they require a full re-pass through cells (use the Anonymize button
-// again after editing the mapping if you need an updated workbook).
-function recomputeAnonymizedFromSource() {
-    if (anonDocType === 'excel') return;
-    if (typeof anonSourceText !== 'string') return;
+// ── Live mapping edits (add / remove / undo → re-apply) ───────────────────
+// Re-applies the mapping to the saved source (text) or to the captured
+// sheet/columns (Excel) so the preview and the downloaded output instantly
+// reflect every mapping edit. No model is involved.
+function reapplyMapping({ renumber = true } = {}) {
     // Compact replacement numbers so the user never sees gaps like
     // [PERSON_1], [PERSON_3], [PERSON_5] after deletions / merges.
-    renumberMapping();
-    anonymizedResult = anonymizeText(anonSourceText);
+    // Undo skips this so the restored snapshot is exact.
+    if (renumber) renumberMapping();
+    if (anonDocType === 'excel') {
+        if (anonWorkbook && anonExcelRunConfig) anonymizedResult = applyMappingToWorkbook();
+    } else if (typeof anonSourceText === 'string') {
+        anonymizedResult = anonymizeText(anonSourceText);
+    }
     renderResults();
 }
 
@@ -2280,7 +2812,7 @@ function recomputeAnonymizedFromSource() {
 function refreshReplacementChoices() {
     const seen = new Map(); // replacement → type (for display hint)
     for (const info of Object.values(currentMapping.entities)) {
-        if (info && info.replacement && !seen.has(info.replacement)) {
+        if (isEntityEnabled(info) && info.replacement && !seen.has(info.replacement)) {
             seen.set(info.replacement, info.type);
         }
     }
@@ -2313,12 +2845,13 @@ function typeForReplacement(replacement) {
 function renumberMapping() {
     const entities = currentMapping.entities;
     // Group entities by current replacement (preserving aliases)
-    const groups = new Map(); // oldReplacement → { type, originals: [entity, ...] }
+    const groups = new Map(); // oldReplacement → { type, originals: [entity, ...], enabled }
     for (const [entity, info] of Object.entries(entities)) {
         if (!info || !info.replacement) continue;
         let g = groups.get(info.replacement);
-        if (!g) { g = { type: info.type, originals: [] }; groups.set(info.replacement, g); }
+        if (!g) { g = { type: info.type, originals: [], enabled: false }; groups.set(info.replacement, g); }
         g.originals.push(entity);
+        if (isEntityEnabled(info)) g.enabled = true;
     }
     // Determine first-occurrence index in source text for ordering
     const src = typeof anonSourceText === 'string' ? anonSourceText : '';
@@ -2340,7 +2873,9 @@ function renumberMapping() {
     const remap = new Map();
     currentMapping.counters = {};
     for (const [type, list] of byType.entries()) {
-        list.sort((a, b) => a.firstAt - b.firstAt);
+        // Live groups get the low numbers (contiguous in the output); groups
+        // that are entirely switched off follow, so they never collide.
+        list.sort((a, b) => (Number(b.enabled) - Number(a.enabled)) || (a.firstAt - b.firstAt));
         currentMapping.counters[type] = list.length;
         list.forEach((g, i) => {
             const newRep = `[${type}_${i + 1}]`;
@@ -2412,7 +2947,7 @@ function namesCompatible(a, b) {
 }
 function smartBundlePersons() {
     const persons = Object.entries(currentMapping.entities)
-        .filter(([, info]) => info && info.type === 'PERSON')
+        .filter(([, info]) => isEntityEnabled(info) && info.type === 'PERSON')
         .map(([entity, info]) => ({ entity, info, parts: splitName(entity) }))
         .filter(p => p.parts.surname);
     if (persons.length < 2) return 0;
@@ -2473,12 +3008,12 @@ if (mappingAddBtn) {
             currentMapping.counters[type]++;
             replacement = `[${type}_${currentMapping.counters[type]}]`;
         }
+        pushUndo();
         currentMapping.entities[entityRaw] = { type, replacement };
         manualEntities.add(entityRaw);
         if (mappingAddEntity) mappingAddEntity.value = '';
         if (mappingAddReplacement) mappingAddReplacement.value = '';
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        reapplyMapping();
     });
 
     mappingAddEntity?.addEventListener('keydown', (e) => {
@@ -2490,16 +3025,18 @@ if (mappingAddBtn) {
 const mappingSmartBundleBtn = document.getElementById('mappingSmartBundleBtn');
 if (mappingSmartBundleBtn) {
     mappingSmartBundleBtn.addEventListener('click', () => {
+        pushUndo();
         const merged = smartBundlePersons();
         if (merged === 0) {
+            undoStack.pop();
+            updateUndoButton();
             // Still renumber in case there are gaps to close.
-            recomputeAnonymizedFromSource();
+            reapplyMapping();
             mappingSmartBundleBtn.textContent = 'Smart bundle (no merges)';
             setTimeout(() => { mappingSmartBundleBtn.textContent = 'Smart bundle'; }, 1500);
             return;
         }
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        reapplyMapping();
         mappingSmartBundleBtn.textContent = `Smart bundle (−${merged})`;
         setTimeout(() => { mappingSmartBundleBtn.textContent = 'Smart bundle'; }, 1500);
     });
@@ -2509,8 +3046,8 @@ if (mappingSmartBundleBtn) {
 const mappingRenumberBtn = document.getElementById('mappingRenumberBtn');
 if (mappingRenumberBtn) {
     mappingRenumberBtn.addEventListener('click', () => {
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        pushUndo();
+        reapplyMapping();
     });
 }
 
@@ -2518,12 +3055,32 @@ if (mappingTableBody) {
     mappingTableBody.addEventListener('click', (e) => {
         const delBtn = e.target.closest('.mapping-delete-btn');
         if (delBtn) {
-            const entity = delBtn.getAttribute('data-entity');
-            if (!entity || !currentMapping.entities[entity]) return;
-            delete currentMapping.entities[entity];
-            manualEntities.delete(entity);
-            recomputeAnonymizedFromSource();
-            if (anonDocType === 'excel') renderResults();
+            removeEntityFromMapping(delBtn.getAttribute('data-entity'));
+            return;
+        }
+        // "Show in text" → unfold every occurrence and jump to the first
+        const showBtn = e.target.closest('.mapping-show-btn');
+        if (showBtn) {
+            const entity = showBtn.getAttribute('data-entity');
+            if (unfoldedEntities.has(entity)) {
+                unfoldedEntities.delete(entity);
+                refreshOriginalCell(entity);
+            } else {
+                unfoldedEntities.add(entity);
+                jumpToEntity(entity, 1, { occurrence: occurrenceCursor.get(entity) ?? 0 });
+            }
+            return;
+        }
+        // One quote in the unfolded list → that occurrence
+        const occItem = e.target.closest('.mapping-occ-item');
+        if (occItem) {
+            jumpToEntity(occItem.getAttribute('data-entity'), 1, { occurrence: Number(occItem.getAttribute('data-occ')) || 0 });
+            return;
+        }
+        // Click the entity name → show it in the preview (cycles occurrences)
+        if (e.target.closest('.mapping-original-name') || e.target.closest('.mapping-occ')) {
+            const cell = e.target.closest('.mapping-original-cell');
+            if (cell) jumpToEntity(cell.getAttribute('data-entity'));
             return;
         }
         // Click the replacement cell → make it inline-editable
@@ -2541,6 +3098,13 @@ if (mappingTableBody) {
             sel.removeAllRanges();
             sel.addRange(range);
         }
+    });
+
+    // Checkbox → switch the entity on/off in the output (kept in the list)
+    mappingTableBody.addEventListener('change', (e) => {
+        const box = e.target.closest('.mapping-toggle');
+        if (!box) return;
+        setEntityEnabled(box.getAttribute('data-entity'), box.checked);
     });
 
     mappingTableBody.addEventListener('keydown', (e) => {
@@ -2563,12 +3127,13 @@ if (mappingTableBody) {
         }
         const newRep = (cell.textContent || '').trim();
         if (!newRep) { renderResults(); return; }
+        if (newRep === currentMapping.entities[entity].replacement) { renderResults(); return; }
         // If the new replacement matches an existing group, adopt that group's type.
         const aliasedType = typeForReplacement(newRep);
+        pushUndo();
         currentMapping.entities[entity].replacement = newRep;
         if (aliasedType) currentMapping.entities[entity].type = aliasedType;
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        reapplyMapping();
     }, true);
 }
 
@@ -2582,6 +3147,7 @@ if (mappingTableBody) {
     if (!popover || !anonPreviewText) return;
 
     function hidePopover() { popover.hidden = true; }
+    showSelectionPopover = () => showPopoverForSelection();
 
     function showPopoverForSelection() {
         const sel = window.getSelection();
@@ -2640,6 +3206,7 @@ if (mappingTableBody) {
         const entity = popover.dataset.entity || '';
         if (entity.length < 2) { hidePopover(); return; }
         const type = btn.getAttribute('data-type').toUpperCase();
+        pushUndo();
         if (!currentMapping.counters[type]) currentMapping.counters[type] = 0;
         // Only mint a fresh replacement if this entity is brand new
         if (!currentMapping.entities[entity]) {
@@ -2653,8 +3220,7 @@ if (mappingTableBody) {
         }
         hidePopover();
         window.getSelection()?.removeAllRanges();
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        reapplyMapping();
     });
 
     // Alias picker: choosing an existing replacement maps the selection to
@@ -2666,15 +3232,159 @@ if (mappingTableBody) {
         const entity = popover.dataset.entity || '';
         if (entity.length < 2) { hidePopover(); return; }
         const type = typeForReplacement(replacement) || 'MISC';
+        pushUndo();
         currentMapping.entities[entity] = { type, replacement };
         manualEntities.add(entity);
         aliasSelect.value = '';
         hidePopover();
         window.getSelection()?.removeAllRanges();
-        recomputeAnonymizedFromSource();
-        if (anonDocType === 'excel') renderResults();
+        reapplyMapping();
     });
 })();
+
+// ── Review interactions: highlight popover, preview mode, undo, table jumps ──
+(function setupEntityPopover() {
+    const popover = anonEntityPopover;
+    if (!popover || !anonPreviewText) return;
+    const textEl = document.getElementById('anonEntityPopoverText');
+    const repEl = document.getElementById('anonEntityPopoverReplacement');
+    const typeEl = document.getElementById('anonEntityPopoverType');
+    const countEl = document.getElementById('anonEntityPopoverCount');
+    let current = null; // entity string shown in the popover
+
+    function hide() { popover.hidden = true; current = null; }
+
+    function positionNear(rect) {
+        popover.hidden = false;
+        const pw = popover.offsetWidth;
+        const ph = popover.offsetHeight;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        let left = rect.left + (rect.width / 2) - (pw / 2);
+        let top = rect.bottom + 8;
+        if (left + pw > vw - 8) left = vw - pw - 8;
+        if (left < 8) left = 8;
+        if (top + ph > vh - 8) top = rect.top - ph - 8;
+        popover.style.left = left + 'px';
+        popover.style.top = top + 'px';
+    }
+
+    function currentMark() {
+        if (!current) return null;
+        const idxs = previewOccurrences.get(current) || [];
+        const k = occurrenceCursor.get(current) ?? 0;
+        return anonPreviewText.querySelector(`mark[data-span="${idxs[k]}"]`);
+    }
+
+    function updateCount() {
+        const idxs = previewOccurrences.get(current) || [];
+        const k = occurrenceCursor.get(current) ?? 0;
+        if (countEl) countEl.textContent = idxs.length ? `${k + 1} / ${idxs.length}` : '';
+    }
+
+    function show(mark) {
+        const entity = mark.dataset.entity;
+        const info = currentMapping.entities[entity];
+        if (!info) return;
+        const idxs = previewOccurrences.get(entity) || [];
+        const k = Math.max(0, idxs.indexOf(Number(mark.dataset.span)));
+        occurrenceCursor.set(entity, k);
+        current = entity;
+        if (textEl) textEl.textContent = entity;
+        if (repEl) repEl.textContent = isEntityEnabled(info) ? info.replacement : 'kept as-is (off)';
+        const toggleBtn = popover.querySelector('[data-entity-action="toggle"]');
+        if (toggleBtn) toggleBtn.textContent = isEntityEnabled(info) ? 'Turn off' : 'Turn on';
+        if (typeEl) {
+            typeEl.textContent = info.type;
+            typeEl.className = `entity-tag entity-tag-${String(info.type).toLowerCase()}`;
+        }
+        updateCount();
+        setActiveEntity(entity);
+        refreshOriginalCell(entity);
+        positionNear(mark.getBoundingClientRect());
+    }
+
+    anonPreviewText.addEventListener('click', (e) => {
+        const mark = e.target.closest('mark.anon-hl');
+        if (!mark) return;
+        // A drag-selection that ends on a mark belongs to the quick-tag popover.
+        const sel = window.getSelection();
+        if (sel && !sel.isCollapsed) return;
+        e.preventDefault();
+        show(mark);
+    });
+
+    popover.addEventListener('click', (e) => {
+        const nav = e.target.closest('[data-entity-nav]');
+        if (nav && current) {
+            const entity = current;
+            jumpToEntity(entity, Number(nav.getAttribute('data-entity-nav')) || 1);
+            updateCount();
+            // Re-anchor to the new occurrence once the smooth scroll settles.
+            setTimeout(() => {
+                if (popover.hidden || current !== entity) return;
+                const m = currentMark();
+                if (m) positionNear(m.getBoundingClientRect());
+            }, 350);
+            return;
+        }
+        const action = e.target.closest('[data-entity-action]');
+        if (!action || !current) return;
+        const entity = current;
+        const kind = action.getAttribute('data-entity-action');
+        if (kind === 'table') {
+            hide();
+            setActiveEntity(entity);
+            findMappingRow(entity)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        } else if (kind === 'toggle') {
+            hide();
+            setEntityEnabled(entity, !isEntityEnabled(currentMapping.entities[entity]));
+        } else if (kind === 'remove') {
+            hide();
+            removeEntityFromMapping(entity);
+        }
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (popover.hidden || popover.contains(e.target)) return;
+        hide();
+    });
+    // Follow the mark while the preview scrolls; hide on any other scroll.
+    window.addEventListener('scroll', (e) => {
+        if (popover.hidden) return;
+        if (e.target !== anonPreviewText) { hide(); return; }
+        const m = currentMark();
+        const preRect = anonPreviewText.getBoundingClientRect();
+        const r = m ? m.getBoundingClientRect() : null;
+        if (!r || r.bottom < preRect.top || r.top > preRect.bottom) { hide(); return; }
+        positionNear(r);
+    }, true);
+    window.addEventListener('resize', hide);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !popover.hidden) hide(); });
+})();
+
+anonPreviewModeButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+        previewMode = btn.getAttribute('data-preview-mode') === 'original' ? 'original' : 'anonymized';
+        anonPreviewModeButtons.forEach((b) => {
+            const active = b === btn;
+            b.classList.toggle('is-active', active);
+            b.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        if (anonEntityPopover) anonEntityPopover.hidden = true;
+        renderPreview();
+    });
+});
+
+mappingUndoBtn?.addEventListener('click', undoLastMappingChange);
+
+// Detection breakdown rows → show that entity in the preview.
+for (const body of [nerDetectionTableBody, llmDetectionTableBody, llmAddedTableBody, nerFilteredTableBody, llmFilteredTableBody]) {
+    body?.addEventListener('click', (e) => {
+        const tr = e.target.closest('tr[data-entity]');
+        if (tr) jumpToEntity(tr.dataset.entity);
+    });
+}
 
 // ── Downloads ──────────────────────────────────────────────────────────────────
 downloadAnonDocBtn.addEventListener('click', async () => {
@@ -2690,7 +3400,9 @@ downloadAnonDocBtn.addEventListener('click', async () => {
                 alert('PDF burn-in library not loaded yet. Please reload the page and try again.');
                 return;
             }
-            const detected = Object.keys(currentMapping.entities || {});
+            const detected = Object.entries(currentMapping.entities || {})
+                .filter(([, info]) => isEntityEnabled(info))
+                .map(([entity]) => entity);
             if (detected.length === 0) {
                 alert('No entities detected to redact. Run anonymization first.');
                 return;
@@ -2750,7 +3462,10 @@ downloadMappingBtn.addEventListener('click', () => {
 
     if (format === 'xlsx') {
         const rows = [['Entity', 'Type', 'Replacement']];
-        const entries = Object.entries(currentMapping.entities).sort((a, b) => a[1].type.localeCompare(b[1].type));
+        // Only entities that are switched on: the sheet documents what was replaced.
+        const entries = Object.entries(currentMapping.entities)
+            .filter(([, info]) => isEntityEnabled(info))
+            .sort((a, b) => a[1].type.localeCompare(b[1].type));
         for (const [entity, info] of entries) {
             rows.push([entity, info.type, info.replacement]);
         }
@@ -2829,6 +3544,7 @@ setupDropArea(anonMappingUpload, anonMappingInput, async (file) => {
         }
         anonMappingName.textContent = file.name;
         anonMappingInfo.style.display = 'block';
+        resetReviewState();
     } catch (e) {
         alert('Invalid mapping file: ' + e.message);
     }
@@ -2958,13 +3674,37 @@ window.medmorfAnonymizeData = {
     hasResult: () => anonymizedResult !== null,
     hasMapping: () => Object.keys(currentMapping.entities).length > 0,
     mappingCount: () => Object.keys(currentMapping.entities).length,
+    // ?anon-debug=1 only: render a result panel from given text + entities so the
+    // review UI (quotes, highlights, toggles, undo) can be tested without loading
+    // any model. Never used in normal operation.
+    debugSeed: (!new URLSearchParams(location.search).has('anon-debug')) ? undefined : ({ text, entities = [], source = 'llm' }) => {
+        anonDocument = new File([text], 'debug-seed.txt', { type: 'text/plain' });
+        anonDocType = 'text';
+        anonWorkbook = null;
+        anonSourceText = String(text);
+        currentMapping = { version: 1, entities: {}, counters: {} };
+        manualEntities = new Set();
+        resetDetectionBreakdown(source);
+        resetReviewState();
+        recordDetectedEntities(source === 'ner' ? 'ner' : 'llm', entities);
+        for (const { entity, type } of entities) getOrCreateReplacement(entity, type);
+        anonymizedResult = anonymizeText(anonSourceText);
+        if (anonDocInfo) anonDocInfo.style.display = 'block';
+        if (anonDocName) anonDocName.textContent = anonDocument.name;
+        renderResults();
+        return { entities: Object.keys(currentMapping.entities).length, spans: previewSpans.length };
+    },
     clearAll: async () => {
         anonDocument = null;
         anonDocType = null;
         anonWorkbook = null;
         anonymizedResult = null;
         currentMapping = { version: 1, entities: {}, counters: {} };
+        anonSourceText = null;
+        anonExcelRunConfig = null;
+        manualEntities = new Set();
         resetDetectionBreakdown(getSelectedPipeline());
+        resetReviewState();
         await disposeNERPipeline();
         await disposeAnonModel();
         if (anonDocInput) anonDocInput.value = '';

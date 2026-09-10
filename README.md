@@ -21,7 +21,7 @@ After the first visit and model download, the service worker and browser caches 
 | Area | Current capability |
 | --- | --- |
 | Translate | Text translation plus `.xlsx` and `.docx` upload workflows using NLLB-200. Excel translation preserves sheets/columns and writes translated columns to a new workbook. |
-| Anonymize | PII detection and replacement for pasted text or `.pdf`, `.xlsx`, `.docx`, and `.txt` uploads. The Advanced settings use two model panels: NER / detector on the left and LLM on the right. When feasible, the default is OpenAI Privacy Filter + Qwen3 1.7B; constrained devices fall back to a CPU NER-only default. Hybrid validation is conservative: real PII is kept even when the detector type is imperfect. Detection chunks use overlap to preserve context across boundaries. PDF read failures are shown as plain user-facing messages with retry guidance. |
+| Anonymize | PII detection and replacement for pasted text or `.pdf`, `.xlsx`, `.docx`, and `.txt` uploads. The Advanced settings use two model panels: NER / detector on the left and LLM on the right. When feasible, the default is OpenAI Privacy Filter + Qwen3.5 2B; constrained devices fall back to a CPU NER-only default. Hybrid validation is conservative: real PII is kept even when the detector type is imperfect. LLM output passes deterministic sanity filters (must be a verbatim quote of the chunk; roles, labels and non-identifier values are dropped and listed in a collapsible "dropped by sanity filters" table). Detection chunks use overlap to preserve context across boundaries. The result panel is a review surface: every mapping row has an on/off checkbox (off = original text kept, row greyed, still listed), a source badge (NER / LLM / manual), a context quote and occurrence count ("not in text" flags phantom entities), and a "Show in text" control that unfolds every occurrence and jumps to it in the preview. The preview can show the original text with colour-coded highlights; clicking a highlight opens prev/next, turn-off and delete controls. A multi-level Undo covers every mapping edit, and edits re-apply instantly to text and Excel output before download. `?anon-debug=1` exposes `window.medmorfAnonymizeData.debugSeed({ text, entities })` to exercise this panel without loading a model. PDF read failures are shown as plain user-facing messages with retry guidance. |
 | PDF redaction | Integrated into Anonymize. Exports burn-in redaction PDFs by default, plus anonymized text (`.txt`) or PDF text rebuilds. Burn-in output rasterizes pages and removes original glyph/image text. Scanned pages can use OCR. |
 | Summarize | WebGPU clinical summarization from pasted text or `.xlsx`, `.docx`, and `.txt` files. Templates include Dutch psychological report, SOAP note, and free-form summary. |
 | Speech | Whisper transcription for microphone recordings or uploaded audio (`.mp3`, `.wav`, `.ogg`, `.webm`, `.m4a`, `.flac`, `.mp4`). Includes a dictaphone mode that can export `.xlsx` logs. |
@@ -103,7 +103,7 @@ Medmorf is intentionally a static vanilla-JS app:
 - `index.html`, `manifest.webmanifest`, and `sw.js` stay at the repo root for PWA scope.
 - Client-side JavaScript lives in a flat `src/` directory and uses sibling-relative module imports.
 - CSS is split between `styles/styles.css` for older component styles and `styles/brand.css` for brand tokens/overrides.
-- `sw.js` uses `CACHE_NAME = 'medmorf-app-v55'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
+- `sw.js` uses `CACHE_NAME = 'medmorf-app-v67'` for the app shell and CDN dependency cache. Model weights are kept separately by WebLLM, Transformers.js, IndexedDB, and the Cache API.
 
 Main browser dependencies:
 
@@ -235,7 +235,7 @@ medmorf/
 
 The brand guide lives at [docs/brand/medmorf-brand-guide.md](docs/brand/medmorf-brand-guide.md), with an HTML preview at [docs/brand/medmorf-brand-guide.html](docs/brand/medmorf-brand-guide.html). App icons and logos live in `assets/brand/` and are referenced by `index.html`, `manifest.webmanifest`, and the service worker app shell.
 
-The app interface uses a narrow, iOS-inspired grouped layout with restrained surfaces, touch-sized controls, and horizontally scrollable tool navigation on small screens. Each tool follows a numbered input → options → action → result path; optional document modes, mapping files, model controls, and technical guidance stay in expandable disclosures so the primary workflow remains concise without weakening privacy or healthcare-safety information.
+The app interface uses a narrow, iOS-inspired grouped layout with restrained surfaces, touch-sized controls, and horizontally scrollable tool navigation on small screens. Each tool follows a numbered input → options → action → result path; optional document modes, mapping files, model controls, and technical guidance stay in expandable disclosures so the primary workflow remains concise without weakening privacy or healthcare-safety information. Model downloads use a compact confirmation showing only download size, local-processing privacy, and any essential device warning; technical estimates remain available under Details.
 
 ## Accuracy and WER
 

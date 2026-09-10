@@ -4,7 +4,7 @@ import {
     initTranslationPipeline,
     TRANSLATION_MODEL,
     TRANSLATION_RUNTIME_LABEL,
-} from './translation-runtime.js?v=2026-08-30-memory-bar-2';
+} from './translation-runtime.js?v=2026-08-31-simple-download-1';
 
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] app.js build', BUILD_ID, 'module url', import.meta.url);
