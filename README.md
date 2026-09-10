@@ -158,6 +158,7 @@ medmorf/
 |-- _headers
 |-- sw.js
 |-- tools/
+|   |-- benchmark-report.mjs
 |   |-- build-interview-fixture.mjs
 |   |-- convert-meddeid.mjs
 |   |-- deploy-pages.sh
@@ -182,6 +183,7 @@ medmorf/
 |       |-- logo-horizontal.svg
 |       `-- safari-pinned-tab.svg
 |-- docs/
+|   |-- BENCHMARKS.md
 |   |-- DEPLOYMENT.md
 |   |-- HEALTHCARE_SAFETY.md
 |   |-- PRIVACY.md
@@ -194,6 +196,7 @@ medmorf/
 |   |-- anonymize-handler.js
 |   |-- anonymize-prompts.js
 |   |-- anonymize-filters.js
+|   |-- llm-extract.js
 |   |-- text-chunking.js
 |   |-- benchmark-handler.js
 |   |-- app.js
@@ -228,6 +231,7 @@ medmorf/
     |   |-- anonymize-interview.json
     |   |-- anonymize-meddeid.json
     |   |-- interview-gold/ (gold_phi_annotations.json, gold_reidentification_risks.json)
+    |-- benchmark-results/ (raw Benchmark-tab exports + notes per run, e.g. 2026-09-10-anonymize.json)
     |   |-- summarize.json
     |   |-- translate.json
     |   |-- speech.json
@@ -266,7 +270,7 @@ The same "in-browser vs larger/frontier" explainer exists on every model tab (ex
 
 | Task | Metric | In-browser (Medmorf) | Larger / frontier (not in-browser) |
 | --- | --- | --- | --- |
-| Anonymize | recall (share of identifiers found; a miss is a leak) | NER ≈ 75–85%, Qwen3.5 2B ≈ 83%, NER + LLM highest | GPT-4-class ≈ 90–95%; specialised clinical de-id 96–99% on i2b2 |
+| Anonymize | recall (share of identifiers found; a miss is a leak) | measured 2026-09-10 (short notes / oncology interview / MedDeID sample): GLiNER + Qwen3.5 2B **96% / 94% / 84%**, Qwen3.5 2B alone 84% / 75% / 64%, GLiNER alone 79% / 58% / 67% — see [docs/BENCHMARKS.md](docs/BENCHMARKS.md) | GPT-4-class ≈ 90–95%; specialised clinical de-id 96–99% on i2b2 |
 | Summarize | fact coverage / hallucination probes | ≈ 85% coverage, 0 hallucinations on synthetic notes | adapted GPT-4 judged ≥ physician quality in 81% of cases (Nature Medicine 2024) |
 | Translate | chrF (character overlap with reference) | NLLB-200 600M ≈ 72% on short clinical sentences | NLLB 1.3B/3.3B/54B, DeepL, GPT-4-class: higher fluency and terminology |
 | Speech | WER | Whisper small: Dutch 16%, English 6% (FLEURS) | Whisper large-v2 7% / 4%; frontier cloud ≈ 4–6% |
@@ -306,6 +310,8 @@ Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a 
 Note: Safari's support for `credentialless` should be verified on target iOS versions before shipping the headers; with `require-corp` the Tailwind/Inter tags would need `crossorigin` attributes and CORS-enabled hosts instead.
 
 ## Model Benchmark
+
+**Latest measured results:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (anonymize, 2026-09-10, all detectors × Qwen3.5 2B on three fixture sets, with conclusions). Raw export and notes in `tests/benchmark-results/`; regenerate the page with `node tools/benchmark-report.mjs tests/benchmark-results/2026-09-10-anonymize.json --intro tests/benchmark-results/2026-09-10-anonymize.notes.md > docs/BENCHMARKS.md`.
 
 The **Benchmark** tab in the app (also standalone at `http://localhost:8000/tests/test-models.html`; logic in `src/benchmark-handler.js`) loads every model option per tab — NLLB translation, the four NER detectors, Whisper tiny/base/small, and the WebLLM LLMs for Anonymize and Summarize (the app's Qwen3.5 0.8B/2B/4B plus Qwen3 0.6B/1.7B/4B as reference baselines, all from the pinned WebLLM 0.2.83; anything larger — Qwen3 8B, Qwen3.5 9B, Qwen3.6/3.8 at 27B+ — is excluded as not browser-viable) — and runs each on synthetic fixtures in `tests/fixtures/` (fictional patients, no real data). For every model it records load time, inference time per document, peak JS heap delta (Chromium only) and a task quality score computed by `tests/metrics.js`:
 

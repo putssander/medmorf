@@ -592,16 +592,19 @@
                     <summary>Accuracy and required review</summary>
                     <div class="stt-accuracy-body">
 <p><strong>Recall</strong> is the share of real identifiers (names, dates, addresses, IDs…) that were found. <strong>Every missed identifier is a leak</strong>, so recall is the number that matters; <em>precision</em> only says how many flagged items were false alarms (harmless, just over-redaction). 90% recall on a letter with 20 identifiers means 2 are still in the output.</p>
-<p><strong>Why Medmorf's numbers are lower than cloud tools.</strong> Everything runs in your browser, so the models are small: a 46–800 MB NER detector and a 2–4B-parameter LLM. On Medmorf's synthetic clinical letters (Dutch + English, Benchmark tab): GLiNER PII ≈ 79% recall (weak on dates), Qwen3.5 2B ≈ 83%, and NER + LLM combined higher because each catches what the other misses. Purpose-built de-identification systems trained on clinical corpora reach 96–99% recall on the i2b2 benchmark, and frontier LLMs (GPT‑4-class) ≈ 92% — but those need a server or send your text to a vendor.</p>
+<p><strong>Measured, not estimated.</strong> The numbers below were measured on 2026-09-10 with the Benchmark tab on three synthetic sets: 4 short clinical notes (Dutch + English), a 34,000-character Dutch oncology patient interview with a physician-style gold standard, and 24 notes from the MedDeID Dutch de-identification benchmark. Everything runs in your browser, so the models are small: a 50–800 MB detector and a 2B-parameter LLM. Full tables, per-type breakdowns and the raw export: <a href="docs/BENCHMARKS.md" target="_blank" rel="noopener noreferrer">docs/BENCHMARKS.md</a>.</p>
 <div class="stt-accuracy-table-wrap"><table class="stt-accuracy-table">
-<thead><tr><th>Approach</th><th>Where it runs</th><th>Typical recall</th><th>Notes</th></tr></thead><tbody>
-<tr><td>NER only (GLiNER / XLM‑R)</td><td>In browser, CPU</td><td>≈ 75–85%</td><td>Fast; misses dates, IDs, organisations</td></tr>
-<tr><td>LLM only (Qwen3.5 2B)</td><td>In browser, WebGPU</td><td>≈ 80–85%</td><td>Better on dates/organisations; slower</td></tr>
-<tr><td><strong>NER + LLM (recommended)</strong></td><td>In browser</td><td>highest available here</td><td>Two passes; still proofread</td></tr>
-<tr><td>Frontier LLM (GPT‑4-class)</td><td>Vendor cloud</td><td>≈ 90–95%</td><td>Text leaves your device</td></tr>
-<tr><td>Specialised clinical de-id (RoBERTa-large, Philter…)</td><td>Server</td><td>≈ 96–99% (i2b2)</td><td>English-centric; not in-browser</td></tr>
+<thead><tr><th>Approach</th><th>Where it runs</th><th>Recall: notes / interview / MedDeID</th><th>Notes</th></tr></thead><tbody>
+<tr><td><strong>GLiNER PII Edge + Qwen3.5 2B (recommended)</strong></td><td>In browser, CPU + WebGPU</td><td><strong>96% / 94% / 84%</strong></td><td>Best on every set; GLiNER also flags some clinical terms, which the review panel lets you switch off</td></tr>
+<tr><td>Qwen3.5 2B only</td><td>In browser, WebGPU</td><td>84% / 75% / 64%</td><td>Most precise (98% / 94% / 86%), never removed a clinical term; misses partial dates, streets, ages in words</td></tr>
+<tr><td>GLiNER PII Edge only</td><td>In browser, CPU</td><td>79% / 58% / 67%</td><td>Fastest and lightest (≈ 50 MB); weak on dates</td></tr>
+<tr><td>Multilingual BERT NER only</td><td>In browser, CPU</td><td>53% / 50% / 30%</td><td>Names and places only; no dates, IDs or phone numbers</td></tr>
+<tr><td>OpenAI Privacy Filter only</td><td>In browser, WebGPU</td><td>20% / 14% / 18%</td><td>Not suitable for Dutch clinical text</td></tr>
+<tr><td>Frontier LLM (GPT‑4-class)</td><td>Vendor cloud</td><td>≈ 90–95% (literature)</td><td>Text leaves your device</td></tr>
+<tr><td>Specialised clinical de-id (RoBERTa-large, Philter…)</td><td>Server</td><td>≈ 96–99% (i2b2, literature)</td><td>English-centric; not in-browser</td></tr>
 </tbody></table></div>
-<p class="stt-accuracy-foot">Reference points: i2b2 2014 de-identification benchmark and published GPT‑4 evaluations (Scientific Reports 2025; iScience 2025). <strong>Use Medmorf as a first pass, then review the highlighted mapping and search the output for anything the models missed — never treat the output as fully de-identified without a human check.</strong></p></div>
+<p><strong>Re-identification is a separate question.</strong> On the interview, the best pipeline neutralised 62% of the quasi-identifier elements and 15 of 18 risk groups from the gold standard; what remains are combinations of profession, employment history and clinical detail with age and place. Removing names and numbers does not make a text anonymous — read the mapping and the highlighted preview with that in mind.</p>
+<p class="stt-accuracy-foot">Medmorf rows: own measurements (whole-word overlap scoring on synthetic data; Qwen3.5 4B not yet measured). Reference rows: i2b2 2014 de-identification benchmark and published GPT‑4 evaluations (Scientific Reports 2025; iScience 2025). <strong>Use Medmorf as a first pass, then review the highlighted mapping and search the output for anything the models missed — never treat the output as fully de-identified without a human check.</strong></p></div>
                 </details>
 
                     <details class="workflow-disclosure method-disclosure">

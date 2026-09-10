@@ -31,6 +31,7 @@ import {
     LOW_MEMORY_CHUNK_OVERLAP_CHARS,
 } from './text-chunking.js?v=2026-09-10-bench-1';
 import { createDetectionKey, isObviousGarbage, filterLLMEntities, normalizeForMatch } from './anonymize-filters.js?v=2026-09-10-bench-1';
+import { parseEntityArray, streamEntityExtraction } from './llm-extract.js?v=2026-09-10-bench-1';
 import {
     classifyModelRisk,
     describeMemoryCeiling,
@@ -1096,14 +1097,13 @@ async function validateEntitiesWithLLM(entities, text) {
         { role: 'user', content: `Original text:\n${text}\n\nEntities detected by NER:\n${entityList}\n\nReturn ONLY the false positives to REMOVE as a JSON array.` },
     ];
 
-    let response = await llmChat(messages, { max_tokens: 2048, temperature: 0 });
-    response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    console.log('[LLM Validate] Raw response:', response);
+    markModelUsed('anon-llm');
+    const { raw: response, looped } = await streamEntityExtraction(engine, messages, { max_tokens: 2048, temperature: 0 });
+    console.log('[LLM Validate] Raw response:', response, looped ? '(loop interrupted)' : '');
 
     try {
-        const jsonMatch = response.match(/\[[\s\S]*?\]/);
-        if (jsonMatch) {
-            const rejects = JSON.parse(jsonMatch[0]);
+        const { entities: rejects } = parseEntityArray(response);
+        {
             console.log('[LLM Validate] Entities to reject:', rejects);
 
             const normalize = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -1154,29 +1154,21 @@ function recordFilteredLLMEntities(dropped) {
 }
 
 async function extractEntitiesLLM(text, systemPrompt) {
+    if (!engine) throw new Error('LLM engine not loaded');
+    markModelUsed('anon-llm');
     const messages = [
         { role: 'system', content: systemPrompt || SYSTEM_PROMPT },
         { role: 'user', content: `Extract all PII entities from this medical text:\n\n${text}` },
     ];
-
-    let response = await llmChat(messages, { max_tokens: 2048, temperature: 0 });
-
-    // Strip thinking tags if present
-    response = response.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-
-    try {
-        const jsonMatch = response.match(/\[[\s\S]*?\]/);
-        if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            const { kept, dropped } = filterLLMEntities(Array.isArray(parsed) ? parsed : [], text);
-            recordFilteredLLMEntities(dropped);
-            return kept;
-        }
-        return [];
-    } catch (e) {
-        console.warn('Entity extraction parse error:', e, 'Raw response:', response);
-        return [];
-    }
+    // Streamed with a repetition guard: small Qwen models can loop on
+    // dialogue-style text; the guard interrupts at the first repeated objects.
+    // Whatever was complete when output stopped is kept by parseEntityArray.
+    const { raw, looped } = await streamEntityExtraction(engine, messages, { max_tokens: 2048, temperature: 0 });
+    const { entities: parsed, truncated } = parseEntityArray(raw);
+    if (looped || truncated) console.warn(`[LLM] extraction ${looped ? 'loop interrupted' : 'output truncated'}; salvaged ${parsed.length} entities`);
+    const { kept, dropped } = filterLLMEntities(parsed, text);
+    recordFilteredLLMEntities(dropped);
+    return kept;
 }
 
 // ── Mapping Management ─────────────────────────────────────────────────────────

@@ -5,6 +5,9 @@ const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.2
 // cannot handle ModernBERT's byte-level tokenizer format (causes t.split error).
 // v3's AutoTokenizer handles it correctly.
 const GLINER_URL = 'https://esm.sh/gliner@0.0.19?external=@xenova/transformers';
+// gliner's esm.sh bundle imports its own onnxruntime-web (1.19.2, absolute esm.sh
+// URL, so the import map does not apply). Same module instance as this URL.
+const GLINER_ORT_URL = 'https://esm.sh/onnxruntime-web@1.19.2';
 import { unregisterLoadedModel } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
 export const PRIVACY_RUNTIME_LABEL = 'Hugging Face Transformers.js';
@@ -325,6 +328,22 @@ async function initGLiNERInstance(option, progressCallback) {
 
     const { Gliner } = await loadGLiNERModule();
     console.log('[GLiNER] Module loaded, initializing model...');
+
+    // When SharedArrayBuffer exists (cross-origin isolated hosting, e.g. the
+    // Cloudflare deployment) ORT 1.19 defaults to multi-threading and spawns a
+    // worker from its esm.sh script URL, which browsers refuse cross-origin →
+    // "no available backend found" and GLiNER never loads (measured 2026-09-10).
+    // Force single-thread, no proxy, on that instance; GLiNER ran single-threaded
+    // on non-isolated hosts anyway.
+    try {
+        const ort = await import(GLINER_ORT_URL);
+        if (ort?.env?.wasm) {
+            ort.env.wasm.numThreads = 1;
+            ort.env.wasm.proxy = false;
+        }
+    } catch (e) {
+        console.warn('[GLiNER] Could not configure its ONNX runtime env:', e);
+    }
 
     if (progressCallback) {
         progressCallback({ status: 'progress', loaded: 30, total: 100 });

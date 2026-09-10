@@ -3,7 +3,7 @@
 // tables published in docs/BENCHMARKS.md. Recomputes every NER × LLM union from
 // the stored per-document predictions with tests/metrics.js, so the report is
 // reproducible from the raw export.
-// Usage: node tools/benchmark-report.mjs <export.json> [--title "…"] > docs/BENCHMARKS.md
+// Usage: node tools/benchmark-report.mjs <export.json> [--title "…"] [--intro notes.md] > docs/BENCHMARKS.md
 import fs from 'node:fs';
 import path from 'node:path';
 import { scoreAnonDoc, mean } from '../tests/metrics.js';
@@ -11,6 +11,7 @@ import { scoreAnonDoc, mean } from '../tests/metrics.js';
 const [,, file, ...rest] = process.argv;
 if (!file) { console.error('usage: node tools/benchmark-report.mjs <export.json> [--title "…"]'); process.exit(1); }
 const title = rest.includes('--title') ? rest[rest.indexOf('--title') + 1] : 'Anonymize benchmark';
+const intro = rest.includes('--intro') ? fs.readFileSync(rest[rest.indexOf('--intro') + 1], 'utf8').trim() : '';
 const root = path.join(path.dirname(new URL(import.meta.url).pathname), '..');
 const data = JSON.parse(fs.readFileSync(file, 'utf8'));
 const results = data.results || [];
@@ -43,6 +44,7 @@ const typeCols = ['PERSON', 'DATE', 'ADDRESS', 'LOCATION', 'PHONE', 'EMAIL', 'ID
 const perTypeCell = (pt) => typeCols.filter(t => pt[t]).map(t => `${t.replace('ORGANIZATION', 'ORG').replace('ID_NUMBER', 'ID').replace('LOCATION', 'LOC').replace('ADDRESS', 'ADDR').replace('PROFESSION', 'PROF')} ${pt[t].detected}/${pt[t].total}`).join(', ');
 
 const lines = [`# ${title}`, '', `Generated ${new Date(data.generated || Date.now()).toISOString().slice(0, 10)} with \`tools/benchmark-report.mjs\` from a Benchmark-tab export.`, ''];
+if (intro) lines.push(intro, '');
 if (data.env) lines.push(`Environment: ${typeof data.env === 'string' ? data.env : JSON.stringify(data.env)}`, '');
 lines.push('Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output passed through the app\'s sanity filter; entity scoring = whole-word text overlap (recall per document, averaged; "micro" = pooled over all identifiers); quasi-ID / risk groups / over-redaction only for sets with gold risk groups (see README → Model Benchmark). NER + LLM rows are computed unions of the stored predictions (the app\'s hybrid pipeline; precision is a lower bound because the LLM validation pass is not simulated).', '');
 

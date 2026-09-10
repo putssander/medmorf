@@ -14,6 +14,7 @@ import { TRANSLATION_MODEL, TRANSLATION_MODEL_SIZE_MB, initTranslationPipeline, 
 import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-09-10-review-1';
 import { chunkText, DEFAULT_MAX_CHUNK_CHARS, DEFAULT_CHUNK_OVERLAP_CHARS } from './text-chunking.js?v=2026-09-10-bench-1';
 import { filterLLMEntities } from './anonymize-filters.js?v=2026-09-10-bench-1';
+import { parseEntityArray, streamEntityExtraction } from './llm-extract.js?v=2026-09-10-bench-1';
 
 const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js';
 const ORT_WASM = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
@@ -299,28 +300,32 @@ function anonLlmSpecs() {
         // app's deterministic sanity filter (verbatim check, roles, non-identifier values).
         infer: async (engine, doc) => {
             const chunks = docChunks(doc);
-            const raws = []; const perChunk = []; let dropped = 0; let parsedChunks = 0;
+            const raws = []; const perChunk = []; let dropped = 0; let cleanChunks = 0; let loops = 0; let truncatedChunks = 0;
             for (const chunk of chunks) {
-                const raw = await chat(engine, [
+                // Same streaming call + repetition guard + salvage parser as the app.
+                const { raw, looped } = await streamEntityExtraction(engine, [
                     { role: 'system', content: SYSTEM_PROMPT },
                     { role: 'user', content: `Extract all PII entities from this medical text:\n\n${chunk}` },
                 ], { max_tokens: 2048, temperature: 0 });
                 raws.push(raw);
-                let parsed = [];
-                const j = raw.match(/\[[\s\S]*?\]/);
-                if (j) { try { parsed = JSON.parse(j[0]); parsedChunks++; } catch { /* unparsable */ } }
-                const f = filterLLMEntities(Array.isArray(parsed) ? parsed : [], chunk);
+                const { entities: parsed, truncated } = parseEntityArray(raw);
+                if (looped) loops++;
+                if (truncated) truncatedChunks++;
+                if (!looped && !truncated) cleanChunks++;
+                log(`${m.label} chunk ${perChunk.length + 1}/${chunks.length}: ${parsed.length} entities${looped ? ' (loop interrupted)' : ''}${truncated ? ' (truncated, salvaged)' : ''}`);
+                const f = filterLLMEntities(parsed, chunk);
                 dropped += f.dropped.length;
                 perChunk.push(f.kept);
                 await yieldUI();
             }
             const preds = mergePreds(perChunk);
             const score = scoreAnonDoc(doc, preds);
-            score.parsed = parsedChunks === chunks.length && preds.length > 0;
-            return { output: { chunks: chunks.length, predictions: preds, droppedByFilter: dropped, raw: raws.join('\n---\n').slice(0, 6000), missed: score.missed, falsePositives: score.falsePositives }, score };
+            score.parsed = cleanChunks === chunks.length && preds.length > 0;
+            score.loops = loops;
+            return { output: { chunks: chunks.length, cleanChunks, loopsInterrupted: loops, truncatedChunks, predictions: preds, droppedByFilter: dropped, raw: raws.join('\n---\n').slice(0, 6000), missed: score.missed, falsePositives: score.falsePositives, reid: score.reid }, score };
         },
         dispose: async (engine) => { if (engine) await engine.unload(); },
-        aggregate: (scores) => { const a = piiAggregate(scores); a.detail = `${a.detail} JSON parsed on ${scores.filter(s => s.parsed).length}/${scores.length} docs.`; return a; },
+        aggregate: (scores) => { const a = piiAggregate(scores); const loops = scores.reduce((n, s) => n + (s.loops || 0), 0); a.detail = `${a.detail} Clean JSON on ${scores.filter(s => s.parsed).length}/${scores.length} docs${loops ? `; ${loops} repetition loop(s) interrupted and salvaged` : ''}.`; return a; },
     }));
 }
 
