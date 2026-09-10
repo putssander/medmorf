@@ -54,7 +54,7 @@ const LLM_MODEL_OPTIONS = {
         label: 'Qwen3.5 2B',
         size: '~2.2 GB',
         sizeMB: 2250,
-        note: 'Best PII recall under 3 GB in benchmarks (83% vs 52% for Qwen3 1.7B). Requires WebGPU.',
+        note: 'Compact model for identifier extraction. Requires WebGPU.',
         engine: 'webllm',
     },
     'Qwen3.5-4B-q4f16_1-MLC': {
@@ -67,6 +67,13 @@ const LLM_MODEL_OPTIONS = {
 };
 
 const WEBLLM_CACHE_MATCHERS = ['webllm', 'mlc', 'tvmjs'];
+
+// Verbose detector/LLM logging prints document content (entities, raw model
+// output) to the console. Off by default so identifiers never land in
+// DevTools logs or screenshots; enable with ?anon-debug=1.
+const ANON_DEBUG = typeof location !== 'undefined' && new URLSearchParams(location.search).has('anon-debug');
+const debugLog = (...args) => { if (ANON_DEBUG) console.log(...args); };
+const debugWarn = (...args) => { if (ANON_DEBUG) console.warn(...args); };
 
 // ── State ──────────────────────────────────────────────────────────────────────
 let engine = null;       // WebLLM engine
@@ -870,7 +877,7 @@ async function extractEntitiesNER(text) {
     if (!pipeline) {
         throw new Error('NER model is not loaded');
     }
-    console.log('[NER] Running chunk', {
+    debugLog('[NER] Running chunk', {
         modelId: getActiveNERModelId(),
         load: getActiveNERLoadLabel(),
         length: text.length,
@@ -881,7 +888,7 @@ async function extractEntitiesNER(text) {
         ignore_labels: ['O'],
     });
 
-    console.log('[NER] Aggregated output for chunk:', aggregated);
+    debugLog('[NER] Aggregated output for chunk:', aggregated);
     console.log('[NER] Aggregated sample:', aggregated.slice(0, 5).map(item => ({
         entity_group: item.entity_group || item.entity,
         word: item.word,
@@ -955,7 +962,7 @@ async function extractEntitiesNER(text) {
         entities.push({ entity, type });
     }
 
-    console.log('[NER] Mapped entities:', entities);
+    debugLog('[NER] Mapped entities:', entities);
     return entities;
 }
 
@@ -985,7 +992,7 @@ async function extractEntitiesGLiNER(text) {
         threshold,
     });
 
-    console.log('[GLiNER] Raw results:', results[0]);
+    debugLog('[GLiNER] Raw results:', results[0]);
 
     const entities = [];
     const seen = new Set();
@@ -998,7 +1005,7 @@ async function extractEntitiesGLiNER(text) {
         }
         // Pre-filter obvious garbage before it reaches the LLM
         if (isObviousGarbage(entity, type)) {
-            console.log(`[GLiNER] Pre-filtered garbage: "${entity}" → ${type}`);
+            debugLog(`[GLiNER] Pre-filtered garbage: "${entity}" → ${type}`);
             continue;
         }
         const key = `${entity.toLowerCase()}::${type}`;
@@ -1007,7 +1014,7 @@ async function extractEntitiesGLiNER(text) {
         entities.push({ entity, type, score: item.score });
     }
 
-    console.log('[GLiNER] Mapped entities:', entities);
+    debugLog('[GLiNER] Mapped entities:', entities);
     return entities;
 }
 
@@ -1100,12 +1107,12 @@ async function validateEntitiesWithLLM(entities, text) {
 
     markModelUsed('anon-llm');
     const { raw: response, looped } = await streamEntityExtraction(engine, messages, { max_tokens: 2048, temperature: 0 });
-    console.log('[LLM Validate] Raw response:', response, looped ? '(loop interrupted)' : '');
+    debugLog('[LLM Validate] Raw response:', response, looped ? '(loop interrupted)' : '');
 
     try {
         const { entities: rejects } = parseEntityArray(response);
         {
-            console.log('[LLM Validate] Entities to reject:', rejects);
+            debugLog('[LLM Validate] Entities to reject:', rejects);
 
             const normalize = s => s.trim().toLowerCase().replace(/\s+/g, ' ');
             const entityByKey = new Map(entities.map(e => [normalize(e.entity), e]));
@@ -1117,7 +1124,7 @@ async function validateEntitiesWithLLM(entities, text) {
                     const key = normalize(txt);
                     const original = entityByKey.get(key);
                     if (original && hasStrongPiiSignal(original.entity, original.type)) {
-                        console.warn('[LLM Validate] Keeping rejected entity because it still looks like PII:', original);
+                        debugWarn('[LLM Validate] Keeping rejected entity because it still looks like PII:', original);
                         continue;
                     }
                     rejectSet.add(key);
@@ -1129,13 +1136,13 @@ async function validateEntitiesWithLLM(entities, text) {
 
             console.log('[LLM Validate] Kept:', kept.length, 'Removed:', removed.length);
             if (removed.length > 0) {
-                console.log('[LLM Validate] Removed false positives:', removed);
+                debugLog('[LLM Validate] Removed false positives:', removed);
                 lastDetectionBreakdown.nerFiltered.push(...removed);
             }
             return kept;
         }
     } catch (e) {
-        console.warn('[LLM Validate] Parse error, keeping all entities:', e);
+        console.warn('[LLM Validate] Parse error, keeping all entities:', e?.message || e);
     }
     // On failure, keep all entities (safer for privacy)
     return entities;
@@ -1151,7 +1158,7 @@ function recordFilteredLLMEntities(dropped) {
         detectionSeen.llmFiltered.add(key);
         lastDetectionBreakdown.llmFiltered.push(item);
     }
-    console.log('[LLM] Dropped by sanity filters:', dropped);
+    debugLog('[LLM] Dropped by sanity filters:', dropped);
 }
 
 async function extractEntitiesLLM(text, systemPrompt) {
@@ -1641,52 +1648,41 @@ function createModelCard(family, option) {
     status.className = 'anon-model-card-status';
     status.textContent = 'Off';
 
-    const bench = publishedBenchLine(family, option.id);
     button.innerHTML = `
         <span class="anon-model-card-main">
             <span class="anon-model-card-title">${escapeHTML(option.label)}</span>
             <span class="anon-model-card-meta">${escapeHTML(meta)}</span>
         </span>
         <span class="anon-model-card-detail">${escapeHTML(detail)}</span>
-        ${bench ? `<span class="anon-model-card-bench ${bench.cls}" title="${escapeHTML(bench.title)}">${escapeHTML(bench.text)}</span>` : ''}
     `;
     button.appendChild(status);
     return button;
 }
 
 // ── Published benchmark numbers (src/benchmark-published.js, generated) ──────
-// Recall per fixture set in the order of PUBLISHED_BENCHMARK.sets
-// (short notes · oncology interview · MedDeID sample), plus the union with the
-// best-measured partner model so each card shows what it does in the hybrid pipeline.
+// Results are presented separately from model-selection controls.
 const BENCH = PUBLISHED_BENCHMARK || null;
-const benchSetKeys = () => (BENCH?.sets || []).map((s) => s.key);
 const benchPct = (r) => (r && r.status !== 'skipped' && r.status !== 'fail' && typeof r.recall === 'number') ? `${Math.round(r.recall * 100)}%` : '—';
-function benchSeries(results) { return benchSetKeys().map((k) => benchPct(results?.[k])).join(' · '); }
-function publishedBenchLine(family, modelId) {
-    if (!BENCH || !BENCH.models) return null;
-    const m = BENCH.models[modelId];
-    const title = `Measured ${BENCH.date} on ${benchSetKeys().length} synthetic sets (${(BENCH.sets || []).map((s) => s.label).join('; ')}). Source: ${BENCH.sourceFile}. Full report: ${BENCH.reportFile}.`;
-    if (!m) return { text: `Not measured yet (benchmark ${BENCH.date})`, cls: 'is-unmeasured', title };
-    const keys = benchSetKeys();
-    const measured = keys.filter((k) => typeof m.results?.[k]?.recall === 'number');
-    if (!measured.length) {
-        const reason = keys.map((k) => m.results?.[k]?.reason).find(Boolean) || '';
-        return { text: `Not measured yet (${BENCH.date})${reason ? ': ' + reason : ''}`, cls: 'is-unmeasured', title };
-    }
-    let text = `Measured recall ${benchSeries(m.results)}`;
-    const partnerId = family === 'ner' ? BENCH.best?.llm : BENCH.best?.ner;
-    const union = (BENCH.unions || []).find((u) => family === 'ner' ? (u.ner === modelId && u.llm === partnerId) : (u.llm === modelId && u.ner === partnerId));
-    if (union && BENCH.models[partnerId]) text += ` · with ${BENCH.models[partnerId].label}: ${benchSeries(union.results)}`;
-    const poor = measured.every((k) => m.results[k].recall < 0.3);
-    return { text, cls: poor ? 'is-poor' : '', title };
-}
 function renderPublishedBenchNote() {
     const el = document.getElementById('anonBenchNote');
     if (!el) return;
-    if (!BENCH || !BENCH.best) { el.textContent = ''; return; }
-    const best = (BENCH.unions || []).find((u) => u.ner === BENCH.best.ner && u.llm === BENCH.best.llm);
-    const setsLabel = (BENCH.sets || []).map((s) => `${s.label.split(' (')[0].replace(/ — .*$/, '')} (${s.docs} doc${s.docs === 1 ? '' : 's'}, ${s.items} identifiers)`).join(' · ');
-    el.innerHTML = `Numbers on the cards are measured recall (share of identifiers found) on ${escapeHTML(setsLabel)}, benchmark of ${escapeHTML(BENCH.date)}. Best measured combination: <strong>${escapeHTML(BENCH.best.label)}</strong>${best ? ` — ${escapeHTML(benchSeries(best.results))}` : ''}. Produced by <code>${escapeHTML(BENCH.sourceFile)}</code>; full tables in <a href="${escapeHTML(BENCH.reportFile)}" target="_blank" rel="noopener noreferrer">${escapeHTML(BENCH.reportFile)}</a>. Synthetic data; always review the output.`;
+    if (!BENCH?.models || !BENCH?.best) { el.hidden = true; return; }
+    el.hidden = false;
+    const sets = BENCH.sets || [];
+    const best = (BENCH.unions || []).find(u => u.ner === BENCH.best.ner && u.llm === BENCH.best.llm);
+    const label = s => s.label.split(' (')[0].replace(/ — .*$/, '');
+    const rows = [
+        ...(BENCH.unions || []).map(u => ({ label: u.label, kind: 'Detector + LLM', results: u.results, best: u === best })),
+        ...Object.values(BENCH.models).map(m => ({ ...m, kind: m.kind === 'ner' ? 'Detector only' : 'LLM only' }))
+    ];
+    rows.sort((a, b) => Number(Boolean(b.best)) - Number(Boolean(a.best)));
+    el.innerHTML = `
+        <div class="anon-bench-heading"><div><span class="anon-bench-kicker">Measured performance</span><h3 id="anonBenchTitle">How many identifiers were found?</h3></div><span class="anon-bench-date">${escapeHTML(BENCH.date)}</span></div>
+        <p class="anon-bench-intro"><strong>Recall</strong> is the share of real identifiers detected. Higher is better. A score of 90% means roughly 10 in every 100 identifiers were missed.</p>
+        ${best ? `<div class="anon-bench-best"><span class="anon-bench-kicker">Best measured combination</span><h4>${escapeHTML(BENCH.best.label)}</h4><dl class="anon-bench-scores">${sets.map(s => `<div><dt>${escapeHTML(label(s))}</dt><dd>${benchPct(best.results?.[s.key])}<span>recall</span></dd><small>${s.docs} document${s.docs === 1 ? '' : 's'} · ${s.items} identifiers</small></div>`).join('')}</dl></div>` : ''}
+        <div class="anon-bench-table-wrap" role="region" aria-label="Anonymization recall comparison" tabindex="0"><table class="anon-bench-table"><caption>Recall by model and dataset</caption><thead><tr><th scope="col">Model / combination</th>${sets.map(s => `<th scope="col">${escapeHTML(label(s))}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr${r.best ? ' class="is-best"' : ''}><th scope="row">${escapeHTML(r.label)}<small>${escapeHTML(r.kind)}${r.best ? ' · Best measured' : ''}</small></th>${sets.map(s => `<td>${benchPct(r.results?.[s.key])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+        <p class="anon-bench-review"><strong>Review is still required.</strong> These are synthetic test results, not a guarantee of anonymization. Missed identifiers and combinations of personal details can still identify someone.</p>
+        <p class="anon-bench-source">— = not measured or unavailable. <a href="${escapeHTML(BENCH.reportFile)}" target="_blank" rel="noopener noreferrer">Full results, precision &amp; missed identifiers ↗</a><br>Source: <code>${escapeHTML(BENCH.sourceFile)}</code></p>`;
 }
 
 function renderModelPicker() {

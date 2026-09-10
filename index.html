@@ -23,6 +23,8 @@
     <link rel="apple-touch-icon" href="assets/brand/apple-touch-icon.svg">
     <link rel="mask-icon" href="assets/brand/safari-pinned-tab.svg" color="#2563EB">
     <link rel="manifest" href="manifest.webmanifest">
+    <!-- Never send the page URL as Referer to CDNs/model hosts (the _headers Referrer-Policy only applies on Cloudflare Pages). -->
+    <meta name="referrer" content="no-referrer">
 
     <!-- Inter + JetBrains Mono -->
     <link rel="preconnect" href="https://rsms.me/">
@@ -669,7 +671,7 @@
                                 </section>
                             </div>
                             <div id="anonModelSelectionError" class="anon-selection-error" role="status" aria-live="polite"></div>
-                            <p id="anonBenchNote" class="storage-hint anon-bench-note"></p>
+                            <section id="anonBenchNote" class="anon-bench-panel" aria-labelledby="anonBenchTitle" hidden></section>
                         </div>
                         <div class="anon-settings-row" id="glinerThresholdRow" style="display:none">
                             <div class="setting-group compact" style="flex:1">

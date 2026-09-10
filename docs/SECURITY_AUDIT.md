@@ -241,10 +241,67 @@ Drawbacks:
 
 ---
 
+## Outbound data audit — 2026-09-10
+
+**Question audited:** can any user data (documents, pasted text, audio, transcripts, detected identifiers, mappings) leave the browser? **Answer: no.** Every remote request the app makes is a `GET` for code, fonts or model files whose URL contains nothing but a library or model name.
+
+**Scope and method.** All first-party code (`src/*.js`, `sw.js`, `index.html`, `manifest.webmanifest`) was searched for every network and navigation primitive (`fetch`, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, `navigator.share`, `postMessage`, `window.open`, `location`/history writes, `<form>`, dynamic `import()`, `.src =`). Each request was classified by host and payload. The third-party bundles as delivered by the CDNs on 2026-09-10 (WebLLM 0.2.83, Transformers.js 4.2.0 and 2.17.2, gliner 0.0.19, onnxruntime-web 1.19.2 and 1.26, tesseract.js 5, Tailwind Play CDN) were downloaded and searched for hostnames and telemetry keywords. The service worker was read in full. The anonymize and benchmark paths were exercised in headless Chrome.
+
+### Every remote host, and what is sent to it
+
+| Host | When | What leaves the browser |
+| --- | --- | --- |
+| `cdn.jsdelivr.net` | page load / first use of a feature | `GET` of pinned library versions (Transformers.js, ONNX runtime, WebLLM, pdf.js, pdf-lib, tesseract.js) |
+| `cdnjs.cloudflare.com` | page load | `GET` of xlsx, FileSaver, mammoth |
+| `cdn.tailwindcss.com` | page load | `GET` of the Tailwind Play script (it runs in the page and makes no requests of its own) |
+| `esm.sh` | GLiNER detector selected | `GET` of the gliner package and its onnxruntime-web 1.19.2 |
+| `huggingface.co` (redirects to its LFS/CDN hosts) | model download | `GET` of model weights, configs and tokenizers; the URL names the model only. One extra `GET` of `mlc-chat-config.json` checks reachability before a multi-GB download |
+| `raw.githubusercontent.com` | WebLLM model load | `GET` of the model's WebGPU WASM library (mlc-ai/binary-mlc-llm-libs) |
+| `tessdata.projectnaptha.com` | OCR of scanned PDFs | `GET` of language data |
+| `rsms.me`, `fonts.googleapis.com`, `fonts.gstatic.com` | page load | `GET` of fonts |
+| same origin | page load, examples, Benchmark tab | app shell, example documents, synthetic fixtures |
+
+Like any CDN, these hosts observe the visitor's IP address and user agent. They do not receive the page URL: `index.html` now carries `<meta name="referrer" content="no-referrer">` (the `Referrer-Policy` header in `_headers` only applies on Cloudflare Pages, not GitHub Pages).
+
+**Not present anywhere:** `POST`/`PUT` requests, `XMLHttpRequest`, `sendBeacon`, `WebSocket`, `EventSource`, form submissions, `navigator.share`, cross-origin `postMessage`, share targets in the manifest, remote pdf.js font/cMap fetches. URL query strings are read-only feature flags (`?anon-debug=1`, `?stt-*=1`); the app never writes user data into the URL or the history. `postMessage` is used only towards the app's own service worker (`SKIP_WAITING`) and an in-page AudioWorklet.
+
+### Third-party bundles
+
+Hostnames referenced inside the delivered code: WebLLM → `huggingface.co`, `raw.githubusercontent.com`; Transformers.js → `huggingface.co`, `cdn.jsdelivr.net`; gliner → `cdn.jsdelivr.net`; onnxruntime-web → none; tesseract.js → `cdn.jsdelivr.net`; Tailwind Play → none at runtime (documentation links only). No bundle contains `sendBeacon`, analytics, telemetry, PostHog, Sentry, Mixpanel or Segment code.
+
+### Service worker
+
+`sw.js` handles `GET` only and has three branches: CDN hosts cache-first, `huggingface.co` network-first with cache fallback, same-origin network-first with cache fallback. It never rewrites a destination, adds a request, or contacts another host; all caches are local to the browser.
+
+### Local persistence (stays on the device; listed for completeness)
+
+- `localStorage`: model choices, "don't ask again" per model, an STT crash-stage breadcrumb (stage name and model id, no content).
+- IndexedDB `medmorf-stt-recovery`: raw audio chunks and partial transcripts while recording/transcribing, so a killed tab loses nothing; deleted after a successful transcription, by *Discard*, and by Storage → *Delete all*.
+- Cache API / IndexedDB model caches: weights only.
+- In-memory user data is cleared on tab close, refresh, navigation and after 30 minutes of inactivity.
+
+### Logging
+
+Detector and LLM debugging used to print detected entities and raw model output to the browser console. Since 2026-09-10 those lines are gated behind `?anon-debug=1`, so identifiers do not end up in DevTools logs or screenshots. Remaining console output is status and error text without document content. The Benchmark tab's log shows model output for the synthetic fixtures only.
+
+### Findings
+
+1. **No path sends user data off the device.** ✅
+2. Hardening applied with this audit: `no-referrer` meta tag; identifier-bearing console output gated behind the debug flag.
+3. Residual risks, unchanged and outside "data going out":
+   - **CDN-hosted code without SRI** (existing high-priority item): a compromised CDN could serve altered code. URLs are version-pinned; the ES-module builds (WebLLM, Transformers.js) load further files dynamically, which SRI cannot cover, so self-hosting is the robust fix.
+   - **Fonts from Google and rsms.me** expose visitor IPs to those hosts; self-hosting the two fonts removes them.
+   - **Tailwind Play CDN** executes a remote script at load; a built stylesheet would remove one remote code source.
+   - **No Content-Security-Policy.** A `connect-src` allowlist naming the hosts above would make this guarantee browser-enforced rather than review-based. Note that Hugging Face downloads redirect to its LFS/CDN hosts, which must be included or model downloads break; test on both deployments before enabling.
+
+### How to re-verify yourself
+
+Open DevTools → Network before loading a document, tick *Preserve log*, run Anonymize / Speech / Summarize, then filter by method: there must be no request other than `GET`, and every `GET` must go to a host in the table above with a URL that contains no part of your document. `docs/PRIVACY_VERIFICATION.md` has the full checklist.
+
 ## Summary
 
-**Total External Dependencies**: 4 JavaScript libraries + 3 CDN providers
-**Privacy Status**: ✅ Excellent - all processing is local
+**Total External Dependencies**: 9 JavaScript libraries / runtimes + 5 CDN or model hosts (see the 2026-09-10 outbound data audit above)
+**Privacy Status**: ✅ Excellent - all processing is local; outbound traffic is `GET` of code and model files only (audited 2026-09-10)
 **Security Status**: ⚠️ Good, but SRI hashes recommended
 **GDPR Compliance**: ✅ Compliant (no data collection)
 **Medical Data Safety**: ✅ Safe for client-side processing
@@ -257,5 +314,5 @@ Drawbacks:
 
 ---
 
-**Last Updated**: October 28, 2025
+**Last Updated**: September 10, 2026 (outbound data audit added; library list of the 2025 sections is historical)
 **Review Frequency**: Quarterly or when libraries are updated

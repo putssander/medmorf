@@ -36,6 +36,7 @@ After the first visit and model download, the service worker and browser caches 
 - Runtime privacy guards clear sensitive state on tab close, refresh, navigation, and after 30 minutes of inactivity.
 - Models and libraries are fetched from public CDNs/model hosts and then cached by the browser.
 - You can inspect the runtime privacy report in DevTools with `window.medmorfSecurity.getPrivacyReport()`.
+- Outbound-data audit of 2026-09-10 ([docs/SECURITY_AUDIT.md](docs/SECURITY_AUDIT.md)): every remote request is a `GET` of code, fonts or model files; no request carries document text, audio, identifiers or mappings; third-party bundles contain no telemetry. The page sends no referrer, and identifier-level console logging is off unless `?anon-debug=1`.
 
 Read the supporting docs:
 
@@ -312,7 +313,7 @@ Note: Safari's support for `credentialless` should be verified on target iOS ver
 
 ## Model Benchmark
 
-**Latest measured results:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (anonymize, 2026-09-10, all detectors × Qwen3.5 2B on three fixture sets, with conclusions). Raw export and notes in `tests/benchmark-results/`; regenerate the page **and** the in-app summary (`src/benchmark-published.js`, read by the Anonymize model cards and the Benchmark tab's "Published results" panel) with `node tools/benchmark-report.mjs tests/benchmark-results/2026-09-10-anonymize.json --intro tests/benchmark-results/2026-09-10-anonymize.notes.md --summary-js src/benchmark-published.js > docs/BENCHMARKS.md`. Every place that shows the numbers names the export file they came from.
+**Latest measured results:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (anonymize, 2026-09-10, all detectors × Qwen3.5 2B on three fixture sets, with conclusions). Raw export and notes in `tests/benchmark-results/`; regenerate the page **and** the in-app summary (`src/benchmark-published.js`, read by the Anonymize benchmark comparison panel and the Benchmark tab's "Published results" panel) with `node tools/benchmark-report.mjs tests/benchmark-results/2026-09-10-anonymize.json --intro tests/benchmark-results/2026-09-10-anonymize.notes.md --summary-js src/benchmark-published.js > docs/BENCHMARKS.md`. Every place that shows the numbers names the export file they came from. In Anonymize’s detection settings, benchmark scores appear in a separate read-only panel below the model picker: the best measured combination has a labeled recall score for each dataset, followed by a comparison table, review guidance, and a full-report link. Model-selection buttons do not contain benchmark scores.
 
 The **Benchmark** tab in the app (also standalone at `http://localhost:8000/tests/test-models.html`; logic in `src/benchmark-handler.js`) loads every model option per tab — NLLB translation, the four NER detectors, Whisper tiny/base/small, and the WebLLM LLMs for Anonymize and Summarize (the app's Qwen3.5 0.8B/2B/4B plus Qwen3 0.6B/1.7B/4B as reference baselines, all from the pinned WebLLM 0.2.83; anything larger — Qwen3 8B, Qwen3.5 9B, Qwen3.6/3.8 at 27B+ — is excluded as not browser-viable) — and runs each on synthetic fixtures in `tests/fixtures/` (fictional patients, no real data). For every model it records load time, inference time per document, peak JS heap delta (Chromium only) and a task quality score computed by `tests/metrics.js`:
 
