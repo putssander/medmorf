@@ -1,5 +1,14 @@
 {
-  "_comment": "Synthetic Dutch oncology patient interview (fictional; ~34k chars, transcript style with timestamps and speaker labels), written by Sander Puts on 2026-09-10 as de-identification test material: full and alternative names, birth date, ages, birthplace, home town and street, family members and their towns, a child's school, profession and specialised work, employer and manager, GP and practice, hospital and clinicians, pharmacy, rehab centre, insurer, partial patient and policy numbers, exact treatment dates, and quasi-identifiers that only identify in combination. Scoring as in anonymize.json (case-insensitive substring overlap either way; `allowed` lists role words and clinical terms that are acceptable to over-redact). PROFESSION is included because it is a quasi-identifier here; the app does not detect it yet, so expect 0/2 on that row. Ages written as words are included on purpose. The document is long, so the benchmark chunks it exactly like the app (2400 chars, 240 overlap).",
+  "_comment": "Synthetic Dutch oncology patient interview (fictional; ~34k chars, transcript style) written by Sander Puts as de-identification test material, with two gold layers (tests/fixtures/interview-gold/): (1) 64 direct and standard identifiers with the gold label and recommended action kept per item (entity-level recall / precision, scored by tests/metrics.js scorePII with whole-word overlap); (2) 18 re-identification risk groups of quasi-identifiers (23 clinical concepts to retain) scored by scoreReidentification: quasi-identifier recall, risk-group coverage (≥ half of a group's elements neutralised) and over-redaction of clinical content. Rebuild with tools/build-interview-fixture.mjs. Professions and clinical details appear only in the risk groups, not as entities: the app does not detect professions yet, and clinical terms must be kept.",
+  "source": {
+    "transcript": "Synthetisch Nederlands oncologie-interview voor de-identificatietest.md",
+    "gold": [
+      "interview-gold/gold_phi_annotations.json",
+      "interview-gold/gold_reidentification_risks.json"
+    ],
+    "document_id": "synthetic_nl_oncology_interview_001",
+    "synthetic": true
+  },
   "types": [
     "PERSON",
     "DATE",
@@ -9,9 +18,15 @@
     "EMAIL",
     "ID_NUMBER",
     "ORGANIZATION",
-    "AGE",
-    "PROFESSION"
+    "AGE"
   ],
+  "metrics": {
+    "direct_identifier_recall": "Number of correctly detected direct identifiers divided by total gold direct identifiers.",
+    "quasi_identifier_recall": "Number of correctly detected quasi-identifier elements divided by total gold quasi-identifier elements.",
+    "risk_group_coverage": "Proportion of gold risk groups for which the system neutralizes enough components to substantially reduce linkage risk.",
+    "over_redaction_rate": "Proportion of clinically useful non-identifying information unnecessarily removed.",
+    "clinical_information_retention": "Proportion of designated clinical concepts preserved after de-identification."
+  },
   "documents": [
     {
       "id": "nl_oncologie_interview",
@@ -20,255 +35,387 @@
       "pii": [
         {
           "text": "Sanne de Wit",
-          "type": "PERSON"
+          "type": "PERSON",
+          "label": "INTERVIEWER_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Marieke van Dalen-Visser",
-          "type": "PERSON"
+          "type": "PERSON",
+          "label": "PATIENT_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Marieke van Dalen",
-          "type": "PERSON"
+          "type": "PERSON",
+          "label": "PATIENT_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Marieke Johanna Visser-van Dalen",
-          "type": "PERSON"
+          "type": "PERSON",
+          "label": "PATIENT_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Van Dalen-Visser",
-          "type": "PERSON"
+          "type": "PERSON",
+          "label": "PATIENT_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Marieke",
-          "type": "PERSON"
-        },
-        {
-          "text": "Pieter",
-          "type": "PERSON"
-        },
-        {
-          "text": "Noor",
-          "type": "PERSON"
-        },
-        {
-          "text": "Emma",
-          "type": "PERSON"
-        },
-        {
-          "text": "Judith Vermeer",
-          "type": "PERSON"
-        },
-        {
-          "text": "N. van Loon",
-          "type": "PERSON"
-        },
-        {
-          "text": "Anneke Smit",
-          "type": "PERSON"
-        },
-        {
-          "text": "Anneke",
-          "type": "PERSON"
-        },
-        {
-          "text": "Bas van Leeuwen",
-          "type": "PERSON"
-        },
-        {
-          "text": "Laura",
-          "type": "PERSON"
-        },
-        {
-          "text": "Ingrid",
-          "type": "PERSON"
-        },
-        {
-          "text": "17 maart 2026",
-          "type": "DATE"
+          "type": "PERSON",
+          "label": "PATIENT_FIRST_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "3 november 1978",
-          "type": "DATE"
+          "type": "DATE",
+          "label": "DATE_OF_BIRTH",
+          "action": "GENERALIZE_OR_SHIFT"
         },
         {
-          "text": "zomer 2012",
-          "type": "DATE"
-        },
-        {
-          "text": "februari 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "maandag 11 maart 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "19 maart",
-          "type": "DATE"
-        },
-        {
-          "text": "26 maart",
-          "type": "DATE"
-        },
-        {
-          "text": "22 april 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "8 mei",
-          "type": "DATE"
-        },
-        {
-          "text": "27 september 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "november 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "12 februari",
-          "type": "DATE"
-        },
-        {
-          "text": "4 juni",
-          "type": "DATE"
-        },
-        {
-          "text": "18 december 2024",
-          "type": "DATE"
-        },
-        {
-          "text": "Ik ben 47",
-          "type": "AGE"
-        },
-        {
-          "text": "Hij is 79",
-          "type": "AGE"
-        },
-        {
-          "text": "Noor was toen zestien",
-          "type": "AGE"
-        },
-        {
-          "text": "was toen twintig",
-          "type": "AGE"
-        },
-        {
-          "text": "Driebergen-Rijsenburg",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Driebergen",
-          "type": "LOCATION"
+          "text": "47",
+          "type": "AGE",
+          "label": "AGE",
+          "action": "GENERALIZE"
         },
         {
           "text": "Gouda",
-          "type": "LOCATION"
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
         },
         {
-          "text": "Groningen",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Utrecht",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Culemborg",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Woerden",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Amersfoort",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Hilversum",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Tiel",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Zeist",
-          "type": "LOCATION"
-        },
-        {
-          "text": "Denemarken",
-          "type": "LOCATION"
+          "text": "Driebergen-Rijsenburg",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
         },
         {
           "text": "Lijsterlaan",
-          "type": "ADDRESS"
+          "type": "ADDRESS",
+          "label": "STREET",
+          "action": "REMOVE_OR_PSEUDONYMIZE"
         },
         {
-          "text": "Korreweg",
-          "type": "ADDRESS"
+          "text": "Pieter",
+          "type": "PERSON",
+          "label": "RELATIVE_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
-          "text": "Karnemelksloot",
-          "type": "ADDRESS"
+          "text": "Noor",
+          "type": "PERSON",
+          "label": "RELATIVE_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Emma",
+          "type": "PERSON",
+          "label": "RELATIVE_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Laura",
+          "type": "PERSON",
+          "label": "RELATIVE_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Judith Vermeer",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "dokter Judith Vermeer",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "N. van Loon",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "dokter N. van Loon",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Anneke",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Anneke Smit",
+          "type": "PERSON",
+          "label": "HEALTHCARE_PROVIDER_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Bas van Leeuwen",
+          "type": "PERSON",
+          "label": "OTHER_PERSON_NAME",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Ingrid",
+          "type": "PERSON",
+          "label": "OTHER_PERSON_NAME",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "nummer 18",
-          "type": "ADDRESS"
-        },
-        {
-          "text": "de Traay",
-          "type": "ADDRESS"
-        },
-        {
-          "text": "Van Rijn Erfgoedrestauratie",
-          "type": "ORGANIZATION"
+          "type": "ADDRESS",
+          "label": "HOUSE_NUMBER_REFERENCE",
+          "action": "REMOVE_OR_GENERALIZE"
         },
         {
           "text": "Huisartsenpraktijk De Eiken",
-          "type": "ORGANIZATION"
+          "type": "ORGANIZATION",
+          "label": "HEALTHCARE_ORGANIZATION",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Stadshaven Medisch Centrum",
-          "type": "ORGANIZATION"
+          "type": "ORGANIZATION",
+          "label": "HOSPITAL",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Van Rijn Erfgoedrestauratie",
+          "type": "ORGANIZATION",
+          "label": "EMPLOYER",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Revius Lyceum",
-          "type": "ORGANIZATION"
-        },
-        {
-          "text": "praktijk Vitaal",
-          "type": "ORGANIZATION"
+          "type": "ORGANIZATION",
+          "label": "EDUCATIONAL_INSTITUTION",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "Apotheek De Bosrand",
-          "type": "ORGANIZATION"
-        },
-        {
-          "text": "Noorderlicht Zorgverzekeringen",
-          "type": "ORGANIZATION"
+          "type": "ORGANIZATION",
+          "label": "HEALTHCARE_ORGANIZATION",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "RevaPlus",
-          "type": "ORGANIZATION"
+          "type": "ORGANIZATION",
+          "label": "HEALTHCARE_ORGANIZATION",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Vitaal",
+          "type": "ORGANIZATION",
+          "label": "HEALTHCARE_ORGANIZATION",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "praktijk Vitaal",
+          "type": "ORGANIZATION",
+          "label": "HEALTHCARE_ORGANIZATION",
+          "action": "PSEUDONYMIZE"
+        },
+        {
+          "text": "Traay",
+          "type": "ADDRESS",
+          "label": "STREET_OR_LOCATION",
+          "action": "REMOVE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Noorderlicht Zorgverzekeringen",
+          "type": "ORGANIZATION",
+          "label": "INSURER",
+          "action": "PSEUDONYMIZE"
         },
         {
           "text": "ONC-24-771",
-          "type": "ID_NUMBER"
+          "type": "ID_NUMBER",
+          "label": "PATIENT_ID",
+          "action": "REMOVE_OR_REPLACE"
         },
         {
           "text": "NZ-8842",
-          "type": "ID_NUMBER"
+          "type": "ID_NUMBER",
+          "label": "INSURANCE_ID",
+          "action": "REMOVE_OR_REPLACE"
         },
         {
-          "text": "restauratiearchitect",
-          "type": "PROFESSION"
+          "text": "17 maart 2026",
+          "type": "DATE",
+          "label": "INTERVIEW_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
         },
         {
-          "text": "geluidstechnicus",
-          "type": "PROFESSION"
+          "text": "februari 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "11 maart 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "19 maart",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "26 maart",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "22 april 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "8 mei",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "27 september 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "november 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "12 februari",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "18 december 2024",
+          "type": "DATE",
+          "label": "MEDICAL_DATE",
+          "action": "SHIFT_OR_GENERALIZE"
+        },
+        {
+          "text": "zomer 2012",
+          "type": "DATE",
+          "label": "RESIDENCE_DATE",
+          "action": "GENERALIZE"
+        },
+        {
+          "text": "mei",
+          "type": "DATE",
+          "label": "EMPLOYMENT_DATE",
+          "action": "GENERALIZE"
+        },
+        {
+          "text": "november",
+          "type": "DATE",
+          "label": "EMPLOYMENT_DATE",
+          "action": "GENERALIZE"
+        },
+        {
+          "text": "Groningen",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Korreweg",
+          "type": "ADDRESS",
+          "label": "STREET",
+          "action": "REMOVE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Woerden",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Karnemelksloot",
+          "type": "ADDRESS",
+          "label": "STREET_OR_NEIGHBORHOOD",
+          "action": "REMOVE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Utrecht",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Culemborg",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Amersfoort",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Hilversum",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Tiel",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Zeist",
+          "type": "LOCATION",
+          "label": "CITY",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE"
+        },
+        {
+          "text": "Denemarken",
+          "type": "LOCATION",
+          "label": "TRAVEL_LOCATION",
+          "action": "GENERALIZE_OR_RETAIN_DEPENDING_ON_POLICY"
+        },
+        {
+          "text": "79",
+          "type": "AGE",
+          "label": "RELATIVE_AGE",
+          "action": "GENERALIZE"
+        },
+        {
+          "text": "twintig",
+          "type": "AGE",
+          "label": "RELATIVE_AGE",
+          "action": "GENERALIZE"
+        },
+        {
+          "text": "zestien",
+          "type": "AGE",
+          "label": "RELATIVE_AGE",
+          "action": "GENERALIZE"
         }
       ],
       "allowed": [
@@ -291,17 +438,276 @@
         "leidinggevende",
         "werkgever",
         "buurvrouw",
-        "paclitaxel",
-        "tamoxifen",
-        "dexamethason",
-        "aromataseremmer",
-        "HER2",
-        "BI-RADS",
-        "mammografie",
         "havo",
         "Google",
         "Nederland",
         "Nederlandse"
+      ],
+      "retain": [
+        "invasief ductaal mammacarcinoom",
+        "hormoonreceptorpositief",
+        "HER2-negatief",
+        "tumor van ongeveer 3,8 centimeter",
+        "lymfeklier betrokken",
+        "chemotherapie",
+        "AC",
+        "paclitaxel",
+        "tamoxifen",
+        "aromataseremmer",
+        "radiotherapie",
+        "borstsparende operatie",
+        "okselklierdissectie",
+        "neuropathie",
+        "lymfoedeem",
+        "vaginale droogheid",
+        "gewrichtspijn",
+        "opvliegers",
+        "slaapproblemen",
+        "BI-RADS",
+        "partiële respons",
+        "axillaire adenopathie",
+        "pulmonale nodulus van vier millimeter"
+      ],
+      "riskGroups": [
+        {
+          "id": "QID-001",
+          "level": "HIGH",
+          "category": "demographic_professional_geographic_combination",
+          "elements": [
+            "47 jaar",
+            "restauratiearchitect",
+            "Driebergen-Rijsenburg",
+            "werkt in Utrecht"
+          ],
+          "reason": "The combination of exact age, uncommon profession and relatively specific residence/work locations could substantially narrow the population.",
+          "action": "GENERALIZE_MULTIPLE_ELEMENTS"
+        },
+        {
+          "id": "QID-002",
+          "level": "VERY_HIGH",
+          "category": "unique_professional_project",
+          "elements": [
+            "restauratiearchitect",
+            "Van Rijn Erfgoedrestauratie",
+            "restauratie van een negentiende-eeuwse watertoren",
+            "in de buurt van Culemborg"
+          ],
+          "reason": "A specialist occupation combined with employer and a distinctive project could allow identification through public professional information.",
+          "action": "REMOVE_EMPLOYER_AND_GENERALIZE_PROJECT"
+        },
+        {
+          "id": "QID-003",
+          "level": "HIGH",
+          "category": "family_household_structure",
+          "elements": [
+            "echtgenoot Pieter",
+            "dochter Noor woont thuis",
+            "oudste dochter Emma studeert in Groningen",
+            "vader van 79 woont in Gouda"
+          ],
+          "reason": "Household composition plus relatives' ages and locations creates a distinctive family profile.",
+          "action": "PSEUDONYMIZE_NAMES_AND_GENERALIZE_LOCATIONS_AGES"
+        },
+        {
+          "id": "QID-004",
+          "level": "HIGH",
+          "category": "relative_education_location",
+          "elements": [
+            "Noor",
+            "zestien jaar",
+            "eindexamenjaar havo",
+            "Revius Lyceum"
+          ],
+          "reason": "Name, approximate age, school and educational year could identify both the patient and the relative.",
+          "action": "REMOVE_SCHOOL_AND_PSEUDONYMIZE_RELATIVE"
+        },
+        {
+          "id": "QID-005",
+          "level": "HIGH",
+          "category": "relative_study_location",
+          "elements": [
+            "Emma",
+            "twintig jaar",
+            "studeert in Groningen",
+            "woont aan de Korreweg"
+          ],
+          "reason": "A relative's name, age, city and street form a strong linkage set.",
+          "action": "PSEUDONYMIZE_NAME_AND_REMOVE_STREET"
+        },
+        {
+          "id": "QID-006",
+          "level": "HIGH",
+          "category": "medical_timeline",
+          "elements": [
+            "11 maart 2024 huisarts",
+            "19 maart mammografie en echo",
+            "26 maart bioptuitslag",
+            "22 april 2024 start chemotherapie",
+            "27 september 2024 operatie",
+            "18 december 2024 laatste bestraling"
+          ],
+          "reason": "A dense sequence of exact treatment dates can function as a patient fingerprint when linked with hospital records or appointment data.",
+          "action": "DATE_SHIFT_OR_MONTH_LEVEL_GENERALIZATION"
+        },
+        {
+          "id": "QID-007",
+          "level": "VERY_HIGH",
+          "category": "medical_demographic_geographic_combination",
+          "elements": [
+            "47 jaar",
+            "vrouw",
+            "Driebergen-Rijsenburg",
+            "invasief ductaal mammacarcinoom",
+            "HER2-negatief",
+            "hormoonreceptorpositief",
+            "tumor ongeveer 3,8 cm",
+            "één betrokken lymfeklier"
+          ],
+          "reason": "Rare clinical detail combined with exact age and location may permit linkage even after names are removed.",
+          "action": "GENERALIZE_AGE_LOCATION_AND_SELECTED_CLINICAL_DETAIL"
+        },
+        {
+          "id": "QID-008",
+          "level": "HIGH",
+          "category": "provider_care_pathway",
+          "elements": [
+            "Huisartsenpraktijk De Eiken",
+            "Judith Vermeer",
+            "Stadshaven Medisch Centrum",
+            "N. van Loon",
+            "Anneke Smit"
+          ],
+          "reason": "Multiple named providers across one care pathway can strongly identify a patient through local or institutional linkage.",
+          "action": "PSEUDONYMIZE_ALL_PROVIDER_AND_ORGANIZATION_NAMES"
+        },
+        {
+          "id": "QID-009",
+          "level": "MEDIUM",
+          "category": "employment_pattern",
+          "elements": [
+            "32 uur per week voor ziekte",
+            "volledig ziekgemeld vanaf mei",
+            "re-integratie vanaf november",
+            "werkt nu 24 uur per week"
+          ],
+          "reason": "Employment trajectory can become identifying when combined with employer, profession and diagnosis dates.",
+          "action": "RETAIN_ONLY_IF_EMPLOYER_AND_EXACT_DATES_ARE_REMOVED"
+        },
+        {
+          "id": "QID-010",
+          "level": "HIGH",
+          "category": "spouse_profession_locations",
+          "elements": [
+            "Pieter",
+            "zelfstandig geluidstechnicus",
+            "werkt voor theaters",
+            "Amersfoort",
+            "Hilversum"
+          ],
+          "reason": "A relative's specialist occupation and work locations could permit indirect identification of the patient.",
+          "action": "PSEUDONYMIZE_NAME_AND_GENERALIZE_OCCUPATION_AND_LOCATIONS"
+        },
+        {
+          "id": "QID-011",
+          "level": "HIGH",
+          "category": "residence_duration_and_location",
+          "elements": [
+            "woont sinds zomer 2012",
+            "Driebergen-Rijsenburg",
+            "wijk bij het oude station",
+            "Lijsterlaan"
+          ],
+          "reason": "Street, neighborhood landmark and residence duration can narrow identification to a very small number of households.",
+          "action": "REMOVE_STREET_AND_NEIGHBORHOOD_DETAIL"
+        },
+        {
+          "id": "QID-012",
+          "level": "VERY_HIGH",
+          "category": "administrative_identifier",
+          "elements": [
+            "ONC-24-771",
+            "oncologie",
+            "Stadshaven Medisch Centrum"
+          ],
+          "reason": "A patient number is a direct linkage identifier and should never remain in a de-identified release.",
+          "action": "REMOVE_IDENTIFIER"
+        },
+        {
+          "id": "QID-013",
+          "level": "VERY_HIGH",
+          "category": "insurance_identifier",
+          "elements": [
+            "Noorderlicht Zorgverzekeringen",
+            "NZ-8842"
+          ],
+          "reason": "Insurer plus partial policy number can directly support record linkage.",
+          "action": "REMOVE_POLICY_NUMBER_AND_PSEUDONYMIZE_INSURER"
+        },
+        {
+          "id": "QID-014",
+          "level": "MEDIUM",
+          "category": "neighbor_reference",
+          "elements": [
+            "Ingrid",
+            "nummer 18",
+            "iedere dinsdag soep"
+          ],
+          "reason": "Neighbor name and nearby house number could help infer the patient's address when combined with the street.",
+          "action": "PSEUDONYMIZE_NAME_AND_REMOVE_HOUSE_NUMBER"
+        },
+        {
+          "id": "QID-015",
+          "level": "HIGH",
+          "category": "father_location",
+          "elements": [
+            "vader is 79",
+            "woont alleen",
+            "Gouda",
+            "vlak bij de Karnemelksloot"
+          ],
+          "reason": "Relative age, living situation and precise locality may support identification through family linkage.",
+          "action": "GENERALIZE_AGE_AND_LOCATION"
+        },
+        {
+          "id": "QID-016",
+          "level": "MEDIUM",
+          "category": "rehabilitation_location",
+          "elements": [
+            "oncologische revalidatie",
+            "RevaPlus",
+            "Zeist"
+          ],
+          "reason": "A named rehabilitation provider and city become identifying when combined with the treatment timeline.",
+          "action": "PSEUDONYMIZE_PROVIDER"
+        },
+        {
+          "id": "QID-017",
+          "level": "MEDIUM",
+          "category": "travel_medical_context",
+          "elements": [
+            "vakantie naar Denemarken",
+            "compressiemouw",
+            "na okselklieroperatie",
+            "afgelopen zomer"
+          ],
+          "reason": "Low risk alone, but potentially linkable if travel information is publicly known.",
+          "action": "OPTIONAL_GENERALIZATION"
+        },
+        {
+          "id": "QID-018",
+          "level": "HIGH",
+          "category": "combined_identity_profile",
+          "elements": [
+            "geboren op 3 november 1978 in Gouda",
+            "woont in Driebergen-Rijsenburg",
+            "restauratiearchitect",
+            "twee dochters",
+            "echtgenoot is zelfstandig geluidstechnicus",
+            "borstkanker behandeld in 2024"
+          ],
+          "reason": "This combination approximates a complete identity profile and would be highly vulnerable to external-data linkage.",
+          "action": "GENERALIZE_OR_PSEUDONYMIZE_AT_LEAST_FOUR_COMPONENTS"
+        }
       ]
     }
   ]

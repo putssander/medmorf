@@ -1,0 +1,254 @@
+{
+  "document_id": "synthetic_nl_oncology_interview_001",
+  "language": "nl",
+  "synthetic": true,
+  "annotation_type": "quasi_identifiers_and_reidentification_risk",
+  "risk_groups": [
+    {
+      "id": "QID-001",
+      "risk_level": "HIGH",
+      "category": "demographic_professional_geographic_combination",
+      "elements": [
+        "47 jaar",
+        "restauratiearchitect",
+        "Driebergen-Rijsenburg",
+        "werkt in Utrecht"
+      ],
+      "reason": "The combination of exact age, uncommon profession and relatively specific residence/work locations could substantially narrow the population.",
+      "recommended_action": "GENERALIZE_MULTIPLE_ELEMENTS"
+    },
+    {
+      "id": "QID-002",
+      "risk_level": "VERY_HIGH",
+      "category": "unique_professional_project",
+      "elements": [
+        "restauratiearchitect",
+        "Van Rijn Erfgoedrestauratie",
+        "restauratie van een negentiende-eeuwse watertoren",
+        "in de buurt van Culemborg"
+      ],
+      "reason": "A specialist occupation combined with employer and a distinctive project could allow identification through public professional information.",
+      "recommended_action": "REMOVE_EMPLOYER_AND_GENERALIZE_PROJECT"
+    },
+    {
+      "id": "QID-003",
+      "risk_level": "HIGH",
+      "category": "family_household_structure",
+      "elements": [
+        "echtgenoot Pieter",
+        "dochter Noor woont thuis",
+        "oudste dochter Emma studeert in Groningen",
+        "vader van 79 woont in Gouda"
+      ],
+      "reason": "Household composition plus relatives' ages and locations creates a distinctive family profile.",
+      "recommended_action": "PSEUDONYMIZE_NAMES_AND_GENERALIZE_LOCATIONS_AGES"
+    },
+    {
+      "id": "QID-004",
+      "risk_level": "HIGH",
+      "category": "relative_education_location",
+      "elements": [
+        "Noor",
+        "zestien jaar",
+        "eindexamenjaar havo",
+        "Revius Lyceum"
+      ],
+      "reason": "Name, approximate age, school and educational year could identify both the patient and the relative.",
+      "recommended_action": "REMOVE_SCHOOL_AND_PSEUDONYMIZE_RELATIVE"
+    },
+    {
+      "id": "QID-005",
+      "risk_level": "HIGH",
+      "category": "relative_study_location",
+      "elements": [
+        "Emma",
+        "twintig jaar",
+        "studeert in Groningen",
+        "woont aan de Korreweg"
+      ],
+      "reason": "A relative's name, age, city and street form a strong linkage set.",
+      "recommended_action": "PSEUDONYMIZE_NAME_AND_REMOVE_STREET"
+    },
+    {
+      "id": "QID-006",
+      "risk_level": "HIGH",
+      "category": "medical_timeline",
+      "elements": [
+        "11 maart 2024 huisarts",
+        "19 maart mammografie en echo",
+        "26 maart bioptuitslag",
+        "22 april 2024 start chemotherapie",
+        "27 september 2024 operatie",
+        "18 december 2024 laatste bestraling"
+      ],
+      "reason": "A dense sequence of exact treatment dates can function as a patient fingerprint when linked with hospital records or appointment data.",
+      "recommended_action": "DATE_SHIFT_OR_MONTH_LEVEL_GENERALIZATION"
+    },
+    {
+      "id": "QID-007",
+      "risk_level": "VERY_HIGH",
+      "category": "medical_demographic_geographic_combination",
+      "elements": [
+        "47 jaar",
+        "vrouw",
+        "Driebergen-Rijsenburg",
+        "invasief ductaal mammacarcinoom",
+        "HER2-negatief",
+        "hormoonreceptorpositief",
+        "tumor ongeveer 3,8 cm",
+        "één betrokken lymfeklier"
+      ],
+      "reason": "Rare clinical detail combined with exact age and location may permit linkage even after names are removed.",
+      "recommended_action": "GENERALIZE_AGE_LOCATION_AND_SELECTED_CLINICAL_DETAIL"
+    },
+    {
+      "id": "QID-008",
+      "risk_level": "HIGH",
+      "category": "provider_care_pathway",
+      "elements": [
+        "Huisartsenpraktijk De Eiken",
+        "Judith Vermeer",
+        "Stadshaven Medisch Centrum",
+        "N. van Loon",
+        "Anneke Smit"
+      ],
+      "reason": "Multiple named providers across one care pathway can strongly identify a patient through local or institutional linkage.",
+      "recommended_action": "PSEUDONYMIZE_ALL_PROVIDER_AND_ORGANIZATION_NAMES"
+    },
+    {
+      "id": "QID-009",
+      "risk_level": "MEDIUM",
+      "category": "employment_pattern",
+      "elements": [
+        "32 uur per week voor ziekte",
+        "volledig ziekgemeld vanaf mei",
+        "re-integratie vanaf november",
+        "werkt nu 24 uur per week"
+      ],
+      "reason": "Employment trajectory can become identifying when combined with employer, profession and diagnosis dates.",
+      "recommended_action": "RETAIN_ONLY_IF_EMPLOYER_AND_EXACT_DATES_ARE_REMOVED"
+    },
+    {
+      "id": "QID-010",
+      "risk_level": "HIGH",
+      "category": "spouse_profession_locations",
+      "elements": [
+        "Pieter",
+        "zelfstandig geluidstechnicus",
+        "werkt voor theaters",
+        "Amersfoort",
+        "Hilversum"
+      ],
+      "reason": "A relative's specialist occupation and work locations could permit indirect identification of the patient.",
+      "recommended_action": "PSEUDONYMIZE_NAME_AND_GENERALIZE_OCCUPATION_AND_LOCATIONS"
+    },
+    {
+      "id": "QID-011",
+      "risk_level": "HIGH",
+      "category": "residence_duration_and_location",
+      "elements": [
+        "woont sinds zomer 2012",
+        "Driebergen-Rijsenburg",
+        "wijk bij het oude station",
+        "Lijsterlaan"
+      ],
+      "reason": "Street, neighborhood landmark and residence duration can narrow identification to a very small number of households.",
+      "recommended_action": "REMOVE_STREET_AND_NEIGHBORHOOD_DETAIL"
+    },
+    {
+      "id": "QID-012",
+      "risk_level": "VERY_HIGH",
+      "category": "administrative_identifier",
+      "elements": [
+        "ONC-24-771",
+        "oncologie",
+        "Stadshaven Medisch Centrum"
+      ],
+      "reason": "A patient number is a direct linkage identifier and should never remain in a de-identified release.",
+      "recommended_action": "REMOVE_IDENTIFIER"
+    },
+    {
+      "id": "QID-013",
+      "risk_level": "VERY_HIGH",
+      "category": "insurance_identifier",
+      "elements": [
+        "Noorderlicht Zorgverzekeringen",
+        "NZ-8842"
+      ],
+      "reason": "Insurer plus partial policy number can directly support record linkage.",
+      "recommended_action": "REMOVE_POLICY_NUMBER_AND_PSEUDONYMIZE_INSURER"
+    },
+    {
+      "id": "QID-014",
+      "risk_level": "MEDIUM",
+      "category": "neighbor_reference",
+      "elements": [
+        "Ingrid",
+        "nummer 18",
+        "iedere dinsdag soep"
+      ],
+      "reason": "Neighbor name and nearby house number could help infer the patient's address when combined with the street.",
+      "recommended_action": "PSEUDONYMIZE_NAME_AND_REMOVE_HOUSE_NUMBER"
+    },
+    {
+      "id": "QID-015",
+      "risk_level": "HIGH",
+      "category": "father_location",
+      "elements": [
+        "vader is 79",
+        "woont alleen",
+        "Gouda",
+        "vlak bij de Karnemelksloot"
+      ],
+      "reason": "Relative age, living situation and precise locality may support identification through family linkage.",
+      "recommended_action": "GENERALIZE_AGE_AND_LOCATION"
+    },
+    {
+      "id": "QID-016",
+      "risk_level": "MEDIUM",
+      "category": "rehabilitation_location",
+      "elements": [
+        "oncologische revalidatie",
+        "RevaPlus",
+        "Zeist"
+      ],
+      "reason": "A named rehabilitation provider and city become identifying when combined with the treatment timeline.",
+      "recommended_action": "PSEUDONYMIZE_PROVIDER"
+    },
+    {
+      "id": "QID-017",
+      "risk_level": "MEDIUM",
+      "category": "travel_medical_context",
+      "elements": [
+        "vakantie naar Denemarken",
+        "compressiemouw",
+        "na okselklieroperatie",
+        "afgelopen zomer"
+      ],
+      "reason": "Low risk alone, but potentially linkable if travel information is publicly known.",
+      "recommended_action": "OPTIONAL_GENERALIZATION"
+    },
+    {
+      "id": "QID-018",
+      "risk_level": "HIGH",
+      "category": "combined_identity_profile",
+      "elements": [
+        "geboren op 3 november 1978 in Gouda",
+        "woont in Driebergen-Rijsenburg",
+        "restauratiearchitect",
+        "twee dochters",
+        "echtgenoot is zelfstandig geluidstechnicus",
+        "borstkanker behandeld in 2024"
+      ],
+      "reason": "This combination approximates a complete identity profile and would be highly vulnerable to external-data linkage.",
+      "recommended_action": "GENERALIZE_OR_PSEUDONYMIZE_AT_LEAST_FOUR_COMPONENTS"
+    }
+  ],
+  "benchmark_scoring": {
+    "direct_identifier_recall": "Number of correctly detected direct identifiers divided by total gold direct identifiers.",
+    "quasi_identifier_recall": "Number of correctly detected quasi-identifier elements divided by total gold quasi-identifier elements.",
+    "risk_group_coverage": "Proportion of gold risk groups for which the system neutralizes enough components to substantially reduce linkage risk.",
+    "over_redaction_rate": "Proportion of clinically useful non-identifying information unnecessarily removed.",
+    "clinical_information_retention": "Proportion of designated clinical concepts preserved after de-identification."
+  }
+}

@@ -5,7 +5,7 @@
 // time, inference time, peak JS heap delta and a task quality score
 // (tests/metrics.js). Runs are serialised through the app's heavy-load lock
 // and shown on the memory bar while a model is resident.
-import { wer, chrF, scorePII, scoreFacts, mean } from '../tests/metrics.js';
+import { wer, chrF, scoreAnonDoc, scoreFacts, mean } from '../tests/metrics.js';
 import { getCapabilities, safeModelCeilingMB, getRuntimeMemorySnapshot } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { detectBrowser } from './memory-monitor.js?v=2026-08-31-simple-download-1';
 import { withHeavyLoadLock } from './pre-flight-warn.js?v=2026-08-31-simple-download-1';
@@ -228,8 +228,8 @@ function nerSpecs() {
                 await yieldUI();
             }
             const preds = mergePreds(perChunk);
-            const score = scorePII(doc.pii, preds, doc.allowed);
-            return { output: { chunks: chunks.length, predictions: preds, missed: score.missed, falsePositives: score.falsePositives }, score };
+            const score = scoreAnonDoc(doc, preds);
+            return { output: { chunks: chunks.length, predictions: preds, missed: score.missed, falsePositives: score.falsePositives, reid: score.reid }, score };
         },
         dispose: () => disposeNERPipeline(),
         aggregate: piiAggregate,
@@ -254,7 +254,21 @@ function piiAggregate(scores) {
     const perType = {};
     for (const s of scores) for (const [t, v] of Object.entries(s.perType)) { perType[t] ??= { total: 0, detected: 0 }; perType[t].total += v.total; perType[t].detected += v.detected; }
     const worst = Object.entries(perType).map(([t, v]) => `${t} ${v.detected}/${v.total}`).join(', ');
-    return { value: recall, recall, precision, perType, label: `recall ${pct(recall)} · prec ${pct(precision)}`, detail: `Per type: ${worst}. Recall = leak-safety; a missed item is an un-redacted identifier.` };
+    const out = { value: recall, recall, precision, perType, label: `recall ${pct(recall)} · prec ${pct(precision)}`, detail: `Per type: ${worst}. Recall = leak-safety; a missed item is an un-redacted identifier.` };
+    // Re-identification layer (fixtures with riskGroups / retain, e.g. the oncology interview).
+    const reids = scores.map(s => s.reid).filter(Boolean);
+    if (reids.length) {
+        const q = mean(reids.filter(r => r.quasiRecall != null).map(r => r.quasiRecall));
+        const g = mean(reids.filter(r => r.groupCoverage != null).map(r => r.groupCoverage));
+        const o = mean(reids.filter(r => r.overRedactionRate != null).map(r => r.overRedactionRate));
+        const groups = reids.reduce((n, r) => n + r.groupsCovered, 0), groupsTotal = reids.reduce((n, r) => n + r.groupsTotal, 0);
+        const uncovered = reids.flatMap(r => r.perGroup.filter(x => !x.covered).map(x => `${x.id} ${x.level} ${x.detected}/${x.total}`));
+        const lost = reids.flatMap(r => r.lostConcepts);
+        Object.assign(out, { quasiRecall: q, groupCoverage: g, overRedactionRate: o });
+        out.label += ` · quasi-ID ${pct(q)} · risk groups ${groups}/${groupsTotal} · over-redaction ${pct(o)}`;
+        out.detail += ` Re-identification: quasi-identifier elements neutralised ${pct(q)}; risk groups with ≥ half of their elements neutralised ${groups}/${groupsTotal}${uncovered.length ? ' (not covered: ' + uncovered.join(', ') + ')' : ''}; clinical concepts lost to over-redaction: ${lost.length ? lost.join(', ') : 'none'}.`;
+    }
+    return out;
 }
 
 // ── Section: Anonymize LLM ───────────────────────────────────────────────────
@@ -301,7 +315,7 @@ function anonLlmSpecs() {
                 await yieldUI();
             }
             const preds = mergePreds(perChunk);
-            const score = scorePII(doc.pii, preds, doc.allowed);
+            const score = scoreAnonDoc(doc, preds);
             score.parsed = parsedChunks === chunks.length && preds.length > 0;
             return { output: { chunks: chunks.length, predictions: preds, droppedByFilter: dropped, raw: raws.join('\n---\n').slice(0, 6000), missed: score.missed, falsePositives: score.falsePositives }, score };
         },
@@ -336,7 +350,7 @@ function computeHybrid(set) {
         const scores = ids.map(id => {
             const doc = docsById.get(id);
             const union = mergePreds([n.docs.find(d => d.id === id).output?.predictions, l.docs.find(d => d.id === id).output?.predictions]);
-            return scorePII(doc.pii, union, doc.allowed);
+            return scoreAnonDoc(doc, union);
         });
         const q = piiAggregate(scores);
         rows.push({ set, ner: n.label, nerModel: n.model, llm: l.label, llmModel: l.model, docs: ids.length, q });

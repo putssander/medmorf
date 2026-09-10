@@ -158,6 +158,7 @@ medmorf/
 |-- _headers
 |-- sw.js
 |-- tools/
+|   |-- build-interview-fixture.mjs
 |   |-- convert-meddeid.mjs
 |   |-- deploy-pages.sh
 |   |-- dev-server-isolated.mjs
@@ -226,6 +227,7 @@ medmorf/
     |   |-- anonymize.json
     |   |-- anonymize-interview.json
     |   |-- anonymize-meddeid.json
+    |   |-- interview-gold/ (gold_phi_annotations.json, gold_reidentification_risks.json)
     |   |-- summarize.json
     |   |-- translate.json
     |   |-- speech.json
@@ -312,10 +314,16 @@ Anonymize can be run on three fixture sets (selector in the tab):
 | Set | File | Content |
 | --- | --- | --- |
 | App fixtures | `tests/fixtures/anonymize.json` | 4 short synthetic notes, NL + EN, with `allowed` clinical terms |
-| Oncology interview | `tests/fixtures/anonymize-interview.json` | 1 long synthetic Dutch patient interview (~34k chars, transcript style) with names in several forms, family, employer, clinicians, partial IDs, dates, and quasi-identifiers |
+| Oncology interview | `tests/fixtures/anonymize-interview.json` | 1 long synthetic Dutch patient interview (~34k chars, transcript style) with two gold layers from `tests/fixtures/interview-gold/`: 64 direct and standard identifiers (gold label and recommended action kept per item) for entity-level recall / precision, and 18 re-identification risk groups (77 quasi-identifier elements such as age + profession + town, treatment timeline, household structure) plus 23 clinical concepts that must be retained. Rebuild with `node tools/build-interview-fixture.mjs [transcript.md]`. |
 | MedDeID sample | `tests/fixtures/anonymize-meddeid.json` | 24 documents from the MedDeID Dutch synthetic benchmark (Belgian-Dutch clinical notes, physician-reviewed, no real patients): all 8 "targeted-difficult" documents plus 16 seeded-random ones. Source: Hellemans et al., University of Antwerp / UZA, CC BY 4.0, [doi:10.5281/zenodo.21890965](https://doi.org/10.5281/zenodo.21890965). Regenerate with `node tools/convert-meddeid.mjs <unzipped-archive-dir>`; every item keeps its original MedDeID label. |
 
-Fixture format: `{ types, documents: [{ id, language, text, pii: [{ text, type }], allowed: [] }] }`. Scoring is lenient text overlap (case-insensitive substring either way, type ignored for recall), which is comparable between models but not with span-level evaluations such as MedDeID's. The two new sets include **PROFESSION** items (occupations are quasi-identifiers in both sources); the app does not detect that type yet, so read that row as a known gap.
+Fixture format: `{ types, documents: [{ id, language, text, pii: [{ text, type }], allowed: [], retain?: [], riskGroups?: [] }] }`. Entity scoring is whole-word text overlap either way (case- and diacritic-insensitive; "Noor" does not match "Noorderlicht"), type ignored for recall; comparable between models but not with span-level evaluations such as MedDeID's. Documents with `riskGroups` / `retain` (the interview) additionally get the harder question — could someone still re-identify the person after the obvious identifiers are gone? — via `scoreReidentification` in `tests/metrics.js`:
+
+- **quasi-ID** — share of gold quasi-identifier elements neutralised (an element counts when a prediction overlaps it or is a sub-phrase of it, e.g. flagging "Gouda" neutralises "vader van 79 woont in Gouda");
+- **risk groups** — groups with at least half of their elements neutralised (a heuristic; per-group counts are in the detail text);
+- **over-redaction** — share of the clinical concepts to retain that a detector would replace (lower is better).
+
+A perfect direct-identifier detector neutralises most groups but not those built from profession, employment pattern or clinical detail; the MedDeID set carries **PROFESSION** items for the same reason. The app does not detect professions yet, so read those rows as a known gap.
 - Translate: **chrF** against reference English.
 - Summarize: **fact coverage** from a checklist plus hallucination probes.
 - Speech: **WER** for Dutch and English clips (macOS TTS audio; real dictation scores worse).

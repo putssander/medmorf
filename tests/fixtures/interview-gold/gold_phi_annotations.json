@@ -1,0 +1,353 @@
+{
+  "document_id": "synthetic_nl_oncology_interview_001",
+  "language": "nl",
+  "synthetic": true,
+  "annotation_type": "direct_and_standard_identifiers",
+  "entities": [
+    {
+      "text": "Sanne de Wit",
+      "label": "INTERVIEWER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Marieke van Dalen-Visser",
+      "label": "PATIENT_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Marieke van Dalen",
+      "label": "PATIENT_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Marieke Johanna Visser-van Dalen",
+      "label": "PATIENT_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Van Dalen-Visser",
+      "label": "PATIENT_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Marieke",
+      "label": "PATIENT_FIRST_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "3 november 1978",
+      "label": "DATE_OF_BIRTH",
+      "action": "GENERALIZE_OR_SHIFT"
+    },
+    {
+      "text": "47",
+      "label": "AGE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "Gouda",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Driebergen-Rijsenburg",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Lijsterlaan",
+      "label": "STREET",
+      "action": "REMOVE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Pieter",
+      "label": "RELATIVE_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Noor",
+      "label": "RELATIVE_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Emma",
+      "label": "RELATIVE_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Laura",
+      "label": "RELATIVE_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Judith Vermeer",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "dokter Judith Vermeer",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "N. van Loon",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "dokter N. van Loon",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Anneke",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Anneke Smit",
+      "label": "HEALTHCARE_PROVIDER_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Bas van Leeuwen",
+      "label": "OTHER_PERSON_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Ingrid",
+      "label": "OTHER_PERSON_NAME",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "nummer 18",
+      "label": "HOUSE_NUMBER_REFERENCE",
+      "action": "REMOVE_OR_GENERALIZE"
+    },
+    {
+      "text": "Huisartsenpraktijk De Eiken",
+      "label": "HEALTHCARE_ORGANIZATION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Stadshaven Medisch Centrum",
+      "label": "HOSPITAL",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Van Rijn Erfgoedrestauratie",
+      "label": "EMPLOYER",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Revius Lyceum",
+      "label": "EDUCATIONAL_INSTITUTION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Apotheek De Bosrand",
+      "label": "HEALTHCARE_ORGANIZATION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "RevaPlus",
+      "label": "HEALTHCARE_ORGANIZATION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Vitaal",
+      "label": "HEALTHCARE_ORGANIZATION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "praktijk Vitaal",
+      "label": "HEALTHCARE_ORGANIZATION",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "Traay",
+      "label": "STREET_OR_LOCATION",
+      "action": "REMOVE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Noorderlicht Zorgverzekeringen",
+      "label": "INSURER",
+      "action": "PSEUDONYMIZE"
+    },
+    {
+      "text": "ONC-24-771",
+      "label": "PATIENT_ID",
+      "action": "REMOVE_OR_REPLACE"
+    },
+    {
+      "text": "NZ-8842",
+      "label": "INSURANCE_ID",
+      "action": "REMOVE_OR_REPLACE"
+    },
+    {
+      "text": "17 maart 2026",
+      "label": "INTERVIEW_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "februari 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "11 maart 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "19 maart",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "26 maart",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "22 april 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "8 mei",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "27 september 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "november 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "12 februari",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "18 december 2024",
+      "label": "MEDICAL_DATE",
+      "action": "SHIFT_OR_GENERALIZE"
+    },
+    {
+      "text": "zomer 2012",
+      "label": "RESIDENCE_DATE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "mei",
+      "label": "EMPLOYMENT_DATE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "november",
+      "label": "EMPLOYMENT_DATE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "Groningen",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Korreweg",
+      "label": "STREET",
+      "action": "REMOVE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Woerden",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Karnemelksloot",
+      "label": "STREET_OR_NEIGHBORHOOD",
+      "action": "REMOVE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Utrecht",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Culemborg",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Amersfoort",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Hilversum",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Tiel",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Zeist",
+      "label": "CITY",
+      "action": "GENERALIZE_OR_PSEUDONYMIZE"
+    },
+    {
+      "text": "Denemarken",
+      "label": "TRAVEL_LOCATION",
+      "action": "GENERALIZE_OR_RETAIN_DEPENDING_ON_POLICY"
+    },
+    {
+      "text": "79",
+      "label": "RELATIVE_AGE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "twintig",
+      "label": "RELATIVE_AGE",
+      "action": "GENERALIZE"
+    },
+    {
+      "text": "zestien",
+      "label": "RELATIVE_AGE",
+      "action": "GENERALIZE"
+    }
+  ],
+  "clinical_information_to_retain": [
+    "invasief ductaal mammacarcinoom",
+    "hormoonreceptorpositief",
+    "HER2-negatief",
+    "tumor van ongeveer 3,8 centimeter",
+    "lymfeklier betrokken",
+    "chemotherapie",
+    "AC",
+    "paclitaxel",
+    "tamoxifen",
+    "aromataseremmer",
+    "radiotherapie",
+    "borstsparende operatie",
+    "okselklierdissectie",
+    "neuropathie",
+    "lymfoedeem",
+    "vaginale droogheid",
+    "gewrichtspijn",
+    "opvliegers",
+    "slaapproblemen",
+    "BI-RADS",
+    "partiële respons",
+    "axillaire adenopathie",
+    "pulmonale nodulus van vier millimeter"
+  ]
+}

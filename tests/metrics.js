@@ -78,10 +78,24 @@ function ngramCounts(s, k) {
 // ── PII detection (anonymize) ─────────────────────────────────────────────────
 // groundTruth: [{text, type}], predictions: [{entity, type}], allowed: [string]
 
+// Whole-word overlap either way: "Noor" matches "dochter Noor" but not
+// "Noorderlicht"; "Driebergen" matches "Driebergen-Rijsenburg" (punctuation is
+// normalised to spaces). Comparison is case- and diacritic-insensitive.
+function containsWords(hay, needle) {
+    return (' ' + hay + ' ').includes(' ' + needle + ' ');
+}
 function overlaps(a, b) {
     const x = normalizeText(a), y = normalizeText(b);
     if (!x || !y) return false;
-    return x.includes(y) || y.includes(x);
+    return containsWords(x, y) || containsWords(y, x);
+}
+// Every content token of `pred` (≥3 chars, or numeric) occurs as a word in
+// `phrase`. Used for descriptive gold elements such as "vader van 79 woont in
+// Gouda", which a detector neutralises by flagging "79" or "Gouda".
+function tokensSubset(pred, phrase) {
+    const words = new Set(normalizeText(phrase).split(' '));
+    const toks = normalizeText(pred).split(' ').filter(t => t.length >= 3 || /^\d+$/.test(t));
+    return toks.length > 0 && toks.every(t => words.has(t));
 }
 
 export function scorePII(groundTruth, predictions, allowed = []) {
@@ -104,6 +118,50 @@ export function scorePII(groundTruth, predictions, allowed = []) {
     const precision = preds.length ? (preds.length - falsePositives.length) / preds.length : 1;
     const f1 = precision + recall ? 2 * precision * recall / (precision + recall) : 0;
     return { recall, precision, f1, detected, total: groundTruth.length, missed, falsePositives, perType, predictions: preds.length };
+}
+
+// ── Re-identification risk (anonymize, optional per document) ────────────────
+// doc.riskGroups: [{ id, level, category, elements: [string], reason, action }]
+//   Elements are gold quasi-identifier phrases (not always verbatim). An element
+//   is *neutralised* when some prediction overlaps it or is a sub-phrase of it.
+//   quasiRecall   = neutralised elements / all elements.
+//   groupCoverage = share of groups with at least half their elements neutralised
+//                   (ceil(n/2)); a heuristic for "enough components removed",
+//                   the per-group counts are returned for finer reading.
+// doc.retain: [string] clinical concepts that must survive de-identification.
+//   A concept is *lost* when any prediction overlaps it (it would be replaced).
+//   overRedactionRate = lost / all; retention = 1 − overRedactionRate.
+export function scoreReidentification(doc, predictions) {
+    const preds = (predictions || []).map(p => String(p.entity ?? p.word ?? '').trim()).filter(Boolean);
+    const hit = (phrase) => preds.some(p => overlaps(p, phrase) || tokensSubset(p, phrase));
+    const groups = (doc.riskGroups || []).map(g => {
+        const elements = (g.elements || []).map(e => (typeof e === 'string' ? e : String(e.text ?? '')));
+        const detected = elements.filter(hit);
+        const need = Math.ceil(elements.length / 2);
+        return { id: g.id, level: g.level, category: g.category, total: elements.length, detected: detected.length, covered: elements.length > 0 && detected.length >= need, missed: elements.filter(e => !detected.includes(e)) };
+    });
+    const elementsTotal = groups.reduce((n, g) => n + g.total, 0);
+    const elementsDetected = groups.reduce((n, g) => n + g.detected, 0);
+    const retain = doc.retain || [];
+    const lost = retain.filter(c => preds.some(p => overlaps(p, c) || tokensSubset(p, c)));
+    return {
+        quasiRecall: elementsTotal ? elementsDetected / elementsTotal : null,
+        elementsDetected, elementsTotal,
+        groupCoverage: groups.length ? groups.filter(g => g.covered).length / groups.length : null,
+        groupsCovered: groups.filter(g => g.covered).length, groupsTotal: groups.length,
+        perGroup: groups,
+        overRedactionRate: retain.length ? lost.length / retain.length : null,
+        retention: retain.length ? 1 - lost.length / retain.length : null,
+        lostConcepts: lost, retainTotal: retain.length,
+    };
+}
+
+// Entity-level score plus, when the document carries risk groups or a retain
+// list, the re-identification score under `reid`.
+export function scoreAnonDoc(doc, predictions) {
+    const score = scorePII(doc.pii, predictions, doc.allowed);
+    if ((doc.riskGroups && doc.riskGroups.length) || (doc.retain && doc.retain.length)) score.reid = scoreReidentification(doc, predictions);
+    return score;
 }
 
 // ── Fact coverage (summarize) ─────────────────────────────────────────────────
