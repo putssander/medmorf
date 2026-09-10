@@ -8,6 +8,13 @@ import {
 
 const BUILD_ID = window.MEDMORF_BUILD_ID || 'unknown-build';
 console.log('[BUILD] app.js build', BUILD_ID, 'module url', import.meta.url);
+// Footer label. Deploys are stamped as <commit date>-<sha> by tools/stamp-build.sh;
+// show that as "Version 2026-09-10 · build f8e518a". Anything else is shown raw.
+const footerBuildId = document.getElementById('footerBuildId');
+if (footerBuildId) {
+    const m = /^(\d{4}-\d{2}-\d{2})-([0-9a-f]{7,40})$/.exec(BUILD_ID);
+    footerBuildId.textContent = m ? `${m[1]} · build ${m[2]}` : BUILD_ID;
+}
 console.log('[BUILD] local assets', Array.from(document.querySelectorAll('script[src],link[rel="stylesheet"]')).map(node => node.src || node.href));
 
 function formatLoadError(error) {

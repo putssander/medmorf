@@ -45,7 +45,7 @@ If you add a new top-level folder, a new agent-relevant convention, or a new con
   - `styles/brand.css` — brand layer. Loads after `styles.css` and retokens via CSS variables. Add new component styles here.
   - Tailwind utilities can be authored directly in HTML; brand tokens are exposed via the Tailwind config in `index.html` (`bg-mm-gradient`, `text-clinical`, `rounded-mm-lg`, etc.).
 - **Service worker:**
-  - `CACHE_NAME` versioning: bump `medmorf-app-vN` whenever the app shell changes so users get a new SW.
+  - `CACHE_NAME` is stamped at deploy time by `tools/stamp-build.sh` (`medmorf-app-<date>-<sha>`), so every deploy gets a fresh app-shell cache. The value in the repo is a placeholder; do not bump it by hand.
   - `APP_SHELL` paths must match the real file paths after any reorg.
   - The activate handler only deletes caches matching `medmorf-app-*` — model-weight caches (WebLLM, Transformers.js) survive cache busts. Don't broaden the deletion filter.
 - **Brand assets** live in `assets/brand/`. Reference SVGs from there in `index.html` `<head>`, `manifest.webmanifest`, and `sw.js` APP_SHELL. The brand guide is at `docs/brand/medmorf-brand-guide.md`.
@@ -56,7 +56,7 @@ If you add a new top-level folder, a new agent-relevant convention, or a new con
 
 ## 4. Cache-busting
 
-Most JS/CSS `<script>` and `<link>` tags use `?v=YYYY-MM-DD-tag-N`. When you ship a meaningful change, update the version suffix on the affected references and bump `window.MEDMORF_BUILD_ID` in `index.html`.
+Versioning is automatic. Both deploy paths (the GitHub Actions workflow and `tools/deploy-pages.sh`) run `tools/stamp-build.sh` on a clean copy, which sets `window.MEDMORF_BUILD_ID` to `<commit date>-<short sha>` and rewrites the service-worker `CACHE_NAME` and every `?v=` asset query string to that id. The footer shows it as "Version 2026-09-10 · build f8e518a". Do **not** hand-edit `?v=` tags, `MEDMORF_BUILD_ID` or `CACHE_NAME` any more; the values in the repo are placeholders (`dev-unstamped`) that only matter for local serving. Keep every asset reference in the `?v=<tag>` form so the stamper finds it.
 
 ## 5. Operational safety
 

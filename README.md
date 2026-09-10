@@ -10,9 +10,9 @@ User content is processed locally in the browser. The app has no backend, no ana
 
 ## Live Site
 
-Hosted build:
+Production: **https://medmorf.com** (GitHub Pages, custom domain; deploy-on-push from `main` via GitHub Actions).
 
-https://putssander.github.io/medmorf/
+Cloudflare Pages deployment: https://medmorf.pages.dev — same code, served with the cross-origin isolation headers from `_headers`, so WASM runs multithreaded there (see [Cross-origin isolation](#cross-origin-isolation-multithreaded-wasm)). medmorf.com does not have those headers yet; moving the domain to Cloudflare is the pending step.
 
 After the first visit and model download, the service worker and browser caches allow the app shell and cached models to work offline.
 
@@ -159,7 +159,8 @@ medmorf/
 |-- sw.js
 |-- tools/
 |   |-- deploy-pages.sh
-|   `-- dev-server-isolated.mjs
+|   |-- dev-server-isolated.mjs
+|   `-- stamp-build.sh
 |-- README.md
 |-- AGENTS.md
 |-- .gitignore
@@ -276,7 +277,7 @@ Guidance built into the Speech tab: for long sessions on a phone use **Dictaphon
 
 ## Cross-origin isolation (multithreaded WASM)
 
-**Hosting:** deployed to Cloudflare Pages (`https://medmorf.pages.dev`, project `medmorf`) with the isolation headers from `_headers` active — the page is cross-origin isolated in production. Redeploy with `tools/deploy-pages.sh` (clean `git archive` of HEAD), or connect the repo in the Cloudflare dashboard for deploy-on-push. The repo ships a `_headers` file with the isolation headers. GitHub Pages ignores it (the current medmorf.com host — runs single-threaded). Cloudflare Pages picks it up automatically; migration steps: create a Pages project → connect this repo (no build command, output directory `/`) → add the custom domain → move medmorf.com's nameservers to Cloudflare. After deploy, verify in the console that `crossOriginIsolated === true` and that CDN assets (jsDelivr, HF, cdnjs, Tailwind) still load. Browsers without `COEP: credentialless` support ignore the header and stay single-threaded — never broken.
+**Hosting:** production **medmorf.com** is served by GitHub Pages, which ignores `_headers` — so production currently runs **single-threaded**. The Cloudflare Pages deployment (`https://medmorf.pages.dev`, project `medmorf`) serves the same code with the isolation headers active and is cross-origin isolated. Redeploy it with `tools/deploy-pages.sh` (clean `git archive` of HEAD), or connect the repo in the Cloudflare dashboard for deploy-on-push. Remaining migration steps to make medmorf.com isolated: add the custom domain to the Pages project → move medmorf.com's nameservers to Cloudflare → verify in the console that `crossOriginIsolated === true` and that CDN assets (jsDelivr, HF, cdnjs, Tailwind) still load. Browsers without `COEP: credentialless` support ignore the header and stay single-threaded — never broken.
 
 Without `Cross-Origin-Opener-Policy` / `Cross-Origin-Embedder-Policy` headers a page gets no `SharedArrayBuffer`, so ONNX Runtime WASM runs **single-threaded** — the main reason Whisper small ran slower than real time. Measured on the same machine, same 100 s Dutch clip, Whisper small on WASM:
 
@@ -306,7 +307,32 @@ The **Benchmark** tab in the app (also standalone at `http://localhost:8000/test
 
 Models are run sequentially and disposed between runs; models above the device's safe ceiling are skipped unless overridden. Results can be exported as JSON or copied as a Markdown table. Run it in Chrome/Edge for heap numbers and WebGPU; Safari/Firefox show `n/a` for heap.
 
+## Roadmap: Ollama as an optional local backend (planned, not implemented)
+
+Status: **TODO** — design agreed on 2026-09-10, no code yet. Nothing in the app contacts Ollama today.
+
+**Why:** the browser's per-tab memory ceiling caps the LLM pipeline at Qwen3.5 4B and requires WebGPU. A locally installed [Ollama](https://ollama.com) runs Qwen3.5 9B and larger with native Metal/CUDA acceleration, needs no WebGPU, and would let desktop Safari and low-RAM laptops use the LLM pipeline. Data still never leaves the machine: the app would talk only to the Ollama process on the same computer.
+
+**Where it lives:** an opt-in toggle under **Advanced settings → LLM** in the Anonymize and Summarize tabs (default off). When on, the LLM model cards list the models Ollama has pulled (`/api/tags`), with Qwen3.5 preferred because it is the benchmarked family; the NER / detector panel is unaffected. The Benchmark tab scores Ollama models with the same fixtures and metrics as the in-browser models.
+
+**How it works:** `llmChat()` in `anonymize-handler.js` and `summarize-handler.js` gets a second backend that posts the same messages to `http://localhost:11434/api/chat` (thinking disabled, same temperature / token limits). A two-step probe decides what to show: a `no-cors` request tells whether anything listens on port 11434; a normal request tells whether Ollama accepts this origin. That yields three states — *not running*, *running but rejecting this site* (shows the setup card below), *ready*. Constraints: loopback addresses only (`localhost` / `127.0.0.1`, never a user-typed URL), opt-in per session, unavailable on iPhone/iPad, and documented in `docs/PRIVACY.md` before shipping.
+
+**User setup for medmorf.com (one-time):** Ollama only trusts pages served from `localhost` by default, so users must allow the site's origin. The value is the exact origin, no path or trailing slash; add `https://www.medmorf.com` comma-separated if that host serves the app too.
+
+| Platform | Steps |
+| --- | --- |
+| macOS (menu-bar app) | `launchctl setenv OLLAMA_ORIGINS "https://medmorf.com"`, then quit Ollama from the menu bar and reopen it. Not reboot-persistent; use a LaunchAgent or a shell-profile `export` for permanence. |
+| Linux (systemd) | `sudo systemctl edit ollama` → add `[Service]` / `Environment="OLLAMA_ORIGINS=https://medmorf.com"` → `sudo systemctl restart ollama`. |
+| Windows | Add user environment variable `OLLAMA_ORIGINS` = `https://medmorf.com` in Settings, quit Ollama from the tray, start it again. |
+| Any platform, temporary | `OLLAMA_ORIGINS=https://medmorf.com ollama serve` in a terminal. |
+
+Running Medmorf from localhost (e.g. `node tools/dev-server-isolated.mjs` or a self-hosted copy) needs no configuration. Chrome additionally asks once whether medmorf.com may access devices on the local network; users must click **Allow** (a Block is remembered per site). Firefox has no such prompt; Safari's handling of https-to-localhost requests must be tested before release. Mixed-content rules are not an obstacle: browsers treat `http://localhost` as a trustworthy origin, and `COEP: credentialless` permits uncredentialed cross-origin fetches.
+
+**Implementation order:** probe + setup card + Anonymize adapter first (validate the medmorf.com flow on a real Ollama install), then Summarize, then Benchmark. The same adapter covers LM Studio and llama.cpp's server if ever wanted (OpenAI-style endpoint, different port).
+
 ## Troubleshooting
+
+The version of the code you are running is shown at the bottom of the page as "Version <date> · build <commit>" (also `window.MEDMORF_BUILD_ID` in the console). Deploys stamp it automatically with `tools/stamp-build.sh` (commit date + short sha), which also renames the service-worker cache and every `?v=` asset tag, so each release busts the app-shell cache without manual version bumps. Compare the footer with the latest commit on `main` to see whether a deploy has landed or your browser is holding an old app shell (Storage → force-refresh). A local checkout shows `dev-unstamped`.
 
 - If a model download fails, check the network connection and anything blocking `huggingface.co`, `cdn.jsdelivr.net`, `cdnjs.cloudflare.com`, `esm.sh`, Google Fonts, or `tessdata.projectnaptha.com`.
 - If Chrome reports a `Cache.add()` failure while loading Qwen, clear the LLM/WebLLM cache from the Storage tab, hard refresh, keep the tab in the foreground, and retry.

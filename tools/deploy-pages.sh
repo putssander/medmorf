@@ -6,4 +6,5 @@ cd "$(dirname "$0")/.."
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 git archive HEAD | tar -x -C "$TMP"
+sh tools/stamp-build.sh "$TMP"
 npx --yes wrangler pages deploy "$TMP" --project-name medmorf --branch main --commit-dirty=false

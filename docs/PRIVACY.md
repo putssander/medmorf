@@ -142,6 +142,17 @@ window.medmorfSecurity.clearAll()
 // Check browser DevTools → Network tab - only library/model downloads
 ```
 
+### Planned (not implemented): optional local Ollama backend
+
+A future opt-in setting under **Advanced settings → LLM** in the Anonymize and Summarize tabs will let the app use a locally installed [Ollama](https://ollama.com) for the language-model step. This changes nothing above unless the user switches it on:
+
+- Off by default; nothing in the app contacts Ollama today.
+- When on, the only new connection is to the Ollama process on the **same computer** (`http://localhost:11434`). No data leaves the machine. The app will never accept a remote server address for this.
+- Because medmorf.com is not a localhost page, Ollama must be told to trust it (`OLLAMA_ORIGINS=https://medmorf.com`, see the README roadmap section). Chrome will also ask once whether the site may reach devices on the local network.
+- Not available on iPhone/iPad.
+
+This section will be rewritten as a description of shipped behaviour when the feature lands; until then the sentence "no network transmission of your data" holds without exception.
+
 ### 2. Memory Clearing
 ```javascript
 // Data cleared on:

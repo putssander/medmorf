@@ -1492,6 +1492,20 @@ footer {
     text-align: left;
 }
 
+footer .footer-build {
+    color: var(--mm-label);
+    font-size: .72rem;
+    margin-top: 2px;
+}
+footer .footer-build code {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .7rem;
+    background: rgba(16, 32, 51, .05);
+    padding: 1px 6px;
+    border-radius: 4px;
+    user-select: all;
+}
+
 footer .footer-private {
     color: var(--text-primary);
     font-size: .82rem;

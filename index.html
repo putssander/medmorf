@@ -32,7 +32,7 @@
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap">
 
     <script>
-        window.MEDMORF_BUILD_ID = '2026-09-10-review-1';
+        window.MEDMORF_BUILD_ID = 'dev-unstamped';
         window.MEDMORF_ASSET_VERSION = '?v=' + encodeURIComponent(window.MEDMORF_BUILD_ID);
         console.log('[BUILD] index.html build', window.MEDMORF_BUILD_ID, 'loaded at', new Date().toISOString());
     </script>
@@ -79,7 +79,7 @@
     </script>
 
     <link rel="stylesheet" href="styles/styles.css?v=2026-08-30-wer-docs-1">
-    <link rel="stylesheet" href="styles/brand.css?v=2026-09-10-review-1">
+    <link rel="stylesheet" href="styles/brand.css?v=2026-09-10-review-2">
     <script type="importmap">
     {
         "imports": {
@@ -1965,6 +1965,7 @@
         <footer>
             <p class="footer-private">Your files stay on this device.</p>
             <p><a href="docs/PRIVACY.md" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="docs/SECURITY_AUDIT.md" target="_blank" rel="noopener noreferrer">Security</a> · <a href="https://github.com/putssander/medmorf" target="_blank" rel="noopener noreferrer">Source</a></p>
+            <p class="footer-build" title="Date and commit of the app code you are running (stamped at deploy). If it lags behind the latest release, use Storage → force-refresh.">Version <code id="footerBuildId">…</code></p>
             <details class="app-notes">
                 <summary>Before running larger models</summary>
                 <div class="footer-notes" aria-label="Important processing notes">
@@ -2013,7 +2014,7 @@
         benchBtn?.addEventListener('click', mountBench, { once: true });
         if (benchBtn?.classList.contains('active')) mountBench();
     </script>
-    <script type="module" src="src/app.js?v=2026-08-31-simple-download-1"></script>
+    <script type="module" src="src/app.js?v=2026-09-10-review-2"></script>
     <script type="module" src="src/anonymize-handler.js?v=2026-09-10-review-1"></script>
     <script type="module" src="src/summarize-handler.js?v=2026-08-31-simple-download-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-08-31-simple-download-1"></script>
