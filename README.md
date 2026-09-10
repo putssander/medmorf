@@ -196,6 +196,7 @@ medmorf/
 |   |-- anonymize-handler.js
 |   |-- anonymize-prompts.js
 |   |-- anonymize-filters.js
+|   |-- benchmark-published.js (generated: measured numbers shown in the app)
 |   |-- llm-extract.js
 |   |-- text-chunking.js
 |   |-- benchmark-handler.js
@@ -311,7 +312,7 @@ Note: Safari's support for `credentialless` should be verified on target iOS ver
 
 ## Model Benchmark
 
-**Latest measured results:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (anonymize, 2026-09-10, all detectors × Qwen3.5 2B on three fixture sets, with conclusions). Raw export and notes in `tests/benchmark-results/`; regenerate the page with `node tools/benchmark-report.mjs tests/benchmark-results/2026-09-10-anonymize.json --intro tests/benchmark-results/2026-09-10-anonymize.notes.md > docs/BENCHMARKS.md`.
+**Latest measured results:** [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (anonymize, 2026-09-10, all detectors × Qwen3.5 2B on three fixture sets, with conclusions). Raw export and notes in `tests/benchmark-results/`; regenerate the page **and** the in-app summary (`src/benchmark-published.js`, read by the Anonymize model cards and the Benchmark tab's "Published results" panel) with `node tools/benchmark-report.mjs tests/benchmark-results/2026-09-10-anonymize.json --intro tests/benchmark-results/2026-09-10-anonymize.notes.md --summary-js src/benchmark-published.js > docs/BENCHMARKS.md`. Every place that shows the numbers names the export file they came from.
 
 The **Benchmark** tab in the app (also standalone at `http://localhost:8000/tests/test-models.html`; logic in `src/benchmark-handler.js`) loads every model option per tab — NLLB translation, the four NER detectors, Whisper tiny/base/small, and the WebLLM LLMs for Anonymize and Summarize (the app's Qwen3.5 0.8B/2B/4B plus Qwen3 0.6B/1.7B/4B as reference baselines, all from the pinned WebLLM 0.2.83; anything larger — Qwen3 8B, Qwen3.5 9B, Qwen3.6/3.8 at 27B+ — is excluded as not browser-viable) — and runs each on synthetic fixtures in `tests/fixtures/` (fictional patients, no real data). For every model it records load time, inference time per document, peak JS heap delta (Chromium only) and a task quality score computed by `tests/metrics.js`:
 

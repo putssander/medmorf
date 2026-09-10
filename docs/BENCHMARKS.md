@@ -1,6 +1,8 @@
 # Anonymize benchmark — 2026-09-10
 
-Generated 2026-09-10 with `tools/benchmark-report.mjs` from a Benchmark-tab export.
+Generated 2026-09-10 with `tools/benchmark-report.mjs`.
+
+**Produced from:** raw export `tests/benchmark-results/2026-09-10-anonymize.json` (every model's per-document predictions, misses and timings), conclusions `tests/benchmark-results/2026-09-10-anonymize.notes.md`; fixtures `tests/fixtures/anonymize.json`, `tests/fixtures/anonymize-interview.json` (+ `interview-gold/`), `tests/fixtures/anonymize-meddeid.json`; scoring `tests/metrics.js`. The same numbers are shown in the app (Anonymize → Advanced settings model cards, Benchmark tab) via `src/benchmark-published.js`.
 
 ## What the numbers say
 

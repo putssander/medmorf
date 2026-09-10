@@ -2166,3 +2166,19 @@ mark.anon-hl.is-disabled {
     .mapping-table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
     #mappingTable { min-width: 640px; }
 }
+
+/* Measured benchmark numbers on model cards and under the model grid */
+.anon-model-card-bench {
+    display: block;
+    margin-top: 4px;
+    font-size: .72rem;
+    line-height: 1.35;
+    color: var(--mm-blue, #2563EB);
+    font-weight: 600;
+}
+.anon-model-card-bench.is-unmeasured { color: var(--mm-label); font-weight: 500; }
+.anon-model-card-bench.is-poor { color: #B45309; }
+.anon-bench-note { margin-top: 10px; }
+.anon-bench-note code { font-size: .72rem; }
+.bm-published td, .bm-published th { white-space: nowrap; }
+.bm-published .bm-best td { background: #EFF6FF; font-weight: 600; }

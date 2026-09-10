@@ -15,6 +15,7 @@ import { SYSTEM_PROMPT } from './anonymize-prompts.js?v=2026-09-10-review-1';
 import { chunkText, DEFAULT_MAX_CHUNK_CHARS, DEFAULT_CHUNK_OVERLAP_CHARS } from './text-chunking.js?v=2026-09-10-bench-1';
 import { filterLLMEntities } from './anonymize-filters.js?v=2026-09-10-bench-1';
 import { parseEntityArray, streamEntityExtraction } from './llm-extract.js?v=2026-09-10-bench-1';
+import { PUBLISHED_BENCHMARK } from './benchmark-published.js?v=2026-09-10-bench-1';
 
 const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.83/lib/index.js';
 const ORT_WASM = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.26.0-dev.20260416-b7804b056c/dist/';
@@ -496,6 +497,7 @@ const MARKUP = `
 <li><b>Recall / precision</b> (anonymize) — recall = share of real identifiers found (a miss is a leak, this is the number that matters); precision = share of flagged items that were really identifiers.</li>
 <li><b>Facts / halluc.</b> (summarize) — share of checklist facts present in the summary; share of hallucination probes (things not in the source) that appeared.</li>
 </ul><p class="bm-sub">All models here are sized to run inside a browser tab. Larger self-hosted or cloud models score better on every task — the trade-off Medmorf makes is that data never leaves the device.</p></div>
+<div class="bm-panel" id="bmPublished"></div>
 <div class="bm-panel"><h4>Translate <span class="bm-tag">Transformers.js v2 · WASM</span> <button class="btn btn-ghost btn-small" data-run="translate">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-translate"></table></div></div>
 <div class="bm-panel"><h4>Anonymize — NER detectors <span class="bm-tag">Transformers.js v4 / GLiNER</span> <button class="btn btn-ghost btn-small" data-run="ner">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-ner"></table></div></div>
 <div class="bm-panel"><h4>Anonymize — LLM extraction <span class="bm-tag gpu">WebLLM · WebGPU</span> <button class="btn btn-ghost btn-small" data-run="anonllm">Run section</button></h4><div class="bm-wrap"><table class="bm-table" id="tbl-anonllm"></table></div>
@@ -508,6 +510,25 @@ const MARKUP = `
 <div class="bm-panel"><h4>DICOM · Merge PDF · Storage</h4><p class="bm-sub">No ML models — nothing to benchmark. (OCR via Tesseract is only used inside PDF burn-in and is not model-selectable.)</p></div>
 <div class="bm-panel"><h4>Log</h4><div id="bmLog" class="bm-log"></div><details><summary>Last model output</summary><textarea class="bm-out" id="bmLastOut" readonly></textarea></details></div>
 `;
+
+// ── Published results (src/benchmark-published.js, generated from a raw export) ─
+function renderPublished() {
+    const el = $('#bmPublished'); if (!el) return;
+    const b = PUBLISHED_BENCHMARK;
+    if (!b || !b.models) { el.innerHTML = '<h4>Published results</h4><p class="bm-sub">No published run yet.</p>'; return; }
+    const keys = (b.sets || []).map(s => s.key);
+    const esc = (x) => String(x ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const cell = (r) => (r && typeof r.recall === 'number') ? `${pct(r.recall)} / ${pct(r.precision)}` : (r?.status ? esc(r.status) : '—');
+    const rows = [];
+    for (const [id, m] of Object.entries(b.models)) rows.push({ label: m.label, kind: m.kind === 'ner' ? 'NER' : 'LLM', results: m.results, id });
+    for (const u of b.unions || []) rows.push({ label: u.label, kind: 'NER + LLM (union)', results: u.results, best: b.best && u.ner === b.best.ner && u.llm === b.best.llm });
+    el.innerHTML = `<h4>Published results <span class="bm-tag">${esc(b.date)}</span></h4>
+        <p class="bm-sub">Measured on this app's fixtures with the same code as the tables below (recall / precision; recall = share of identifiers found). Produced from <code>${esc(b.sourceFile)}</code>${b.notesFile ? ` and <code>${esc(b.notesFile)}</code>` : ''} via <code>tools/benchmark-report.mjs</code>; full tables, per-type breakdown and misses in <a href="${esc(b.reportFile)}" target="_blank" rel="noopener noreferrer">${esc(b.reportFile)}</a>. Environment: ${esc(b.environment)}.</p>
+        <div class="bm-wrap"><table class="bm-table bm-published"><thead><tr><th>Model / pipeline</th><th>Kind</th>${keys.map(k => `<th>${esc((b.sets.find(s => s.key === k) || {}).label.split(' — ')[0])}</th>`).join('')}</tr></thead><tbody>
+        ${rows.map(r => `<tr class="${r.best ? 'bm-best' : ''}"><td>${esc(r.label)}${r.best ? ' <span class="bm-tag">best measured</span>' : ''}</td><td>${esc(r.kind)}</td>${keys.map(k => `<td class="bm-num">${cell(r.results?.[k])}</td>`).join('')}</tr>`).join('')}
+        </tbody></table></div>
+        <p class="bm-sub">Run a section below to reproduce on this device; then "Export JSON" and regenerate the published files with the command in README → Model Benchmark.</p>`;
+}
 
 let mounted = false;
 /** Mount the benchmark UI into `container` (idempotent). Fixtures and probes load lazily here, not at import. */
@@ -532,6 +553,7 @@ async function init() {
         'Safe model ceiling': fmtMB(e.safeCeilingMB),
         'Fixtures': `PII sets: ${Object.keys(ANON_SETS).map(k => `${k === 'anonymize' ? 'app' : k.replace('anonymize-', '')} ${fixtures[k].documents.length} docs / ${fixtures[k].documents.reduce((n, d) => n + d.pii.length, 0)} items`).join(' · ')} · ${fixtures.translate.pairs.length} sentence pairs · ${fixtures.summarize.documents.length} notes · ${fixtures.speech.clips.length} audio clips`,
     }).map(([k, v]) => `<span class="k">${k}</span><span>${v}</span>`).join('');
+    renderPublished();
     for (const [s, fn] of Object.entries(SECTIONS)) buildTable(s, fn());
     root.addEventListener('click', (ev) => {
         const one = ev.target.closest('[data-one]'); if (one) { const [s, id] = one.dataset.one.split('|'); runSection(s, id); }
