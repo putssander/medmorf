@@ -1,0 +1,26 @@
+{
+  "provenance": "Handwritten fictional examples, not captured Qwen output or real records.",
+  "columns": [
+    {"alias":"column_1","semanticRole":"identifier","description":"Unique fictional record identifier","units":"unitless","rules":"Preserve four digits and leading zeros; use new values","identifierFormat":"9999"},
+    {"alias":"column_2","semanticRole":"measurement","description":"Age in years","units":"years","rules":"Use whole years; retain missing values","identifierFormat":""},
+    {"alias":"column_3","semanticRole":"boolean","description":"Whether a record is active","units":"unitless","rules":"Use true, false or null","identifierFormat":""},
+    {"alias":"column_4","semanticRole":"free_text","description":"Short notes in English or Dutch","units":"characters","rules":"Write fictional notes without people, organisations or locations","identifierFormat":""}
+  ],
+  "brief": {"purpose":"Create fictional records for testing tabular import","relationships":"Visits may refer to records through parent_id; confirm intended linkage","count":100,"format":"JSON"},
+  "parserCases": [
+    {"name":"plain JSON","text":"{\"description\":\"Fictional records\"}","expected":{"description":"Fictional records"}},
+    {"name":"code fence","text":"```json\n{\"description\":\"Fictional records\"}\n```","expected":{"description":"Fictional records"}},
+    {"name":"reasoning with decoy JSON","text":"<think>Consider {\"description\":\"decoy\"}</think>\n{\"description\":\"Fictional records\"}","expected":{"description":"Fictional records"}},
+    {"name":"prose and escaped quotes","text":"Result: {\"description\":\"A \\\"quoted\\\" {value} and \\\\ path\"} Done.","expected":{"description":"A \"quoted\" {value} and \\ path"}},
+    {"name":"empty output","text":"","reject":true},
+    {"name":"only whitespace","text":" \n ","reject":true},
+    {"name":"refusal prose","text":"I cannot produce the requested JSON.","reject":true},
+    {"name":"truncated four-column batch","text":"{\"columns\":[{\"alias\":\"column_1\",\"description\":\"Record ID\"},{\"alias\":\"column_2","reject":true},
+    {"name":"unfinished thinking containing JSON","text":"<think>{\"description\":\"Not the final answer\"}","reject":true},
+    {"name":"trailing comma","text":"{\"columns\":[],}","reject":true},
+    {"name":"single quotes","text":"{'columns': []}","reject":true},
+    {"name":"two competing objects","text":"{\"description\":\"First\"}\n{\"description\":\"Second\"}","reject":true},
+    {"name":"top-level array","text":"[{\"description\":\"Wrong shape\"}]","reject":true},
+    {"name":"null output","text":"null","reject":true}
+  ]
+}

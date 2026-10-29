@@ -50,7 +50,7 @@ const lines = [`# ${title}`, '', `Generated ${new Date(data.generated || Date.no
 lines.push('Canonical results page: [Medmorf benchmarks](https://medmorf.com/#benchmark). This report and the page are generated from the same raw export.', '');
 if (intro) lines.push(intro, '');
 if (data.env) lines.push(`Environment: ${typeof data.env === 'string' ? data.env : JSON.stringify(data.env)}`, '');
-lines.push('Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output passed through the app\'s sanity filter; entity scoring = whole-word text overlap (recall, precision and F1 per document, averaged; "micro" = pooled over all identifiers); quasi-ID / risk groups / over-redaction only for sets with gold risk groups (see README → Model Benchmark). NER + LLM rows are computed unions of the stored predictions (the app\'s hybrid pipeline; precision is a lower bound because the LLM validation pass is not simulated).', '');
+lines.push('Method: documents chunked as in the app (2400 chars, 240 overlap); LLM output passed through the app\'s sanity filter; entity scoring = whole-word text overlap (recall, precision and F1 per document, averaged; "micro" = pooled over all identifiers); quasi-ID / risk groups / over-redaction only for sets with gold risk groups (see README → Model Benchmark). Rows are ordered by F1 (doc avg), highest first. NER + LLM rows are computed unions of the stored predictions (the app\'s hybrid pipeline; precision is a lower bound because the LLM validation pass is not simulated).', '');
 
 for (const [set, desc] of Object.entries(SETS)) {
     const ners = latest('ner', set), llms = latest('anonllm', set);
@@ -59,16 +59,18 @@ for (const [set, desc] of Object.entries(SETS)) {
     lines.push(`## ${desc}`, '');
     const head = ['Model', 'Kind', 'Load', 'Inference / doc', 'Peak heap Δ', 'Recall (doc avg)', 'Recall (micro)', 'Precision', 'F1 (doc avg)', ...(hasReid ? ['Quasi-ID', 'Risk groups', 'Over-redaction'] : []), 'Per type', 'Status'];
     lines.push(`| ${head.join(' | ')} |`, `| ${head.map(() => '---').join(' | ')} |`);
+    // Rows are ordered by F1 (doc avg), highest first; runs without a result go last.
+    const tableRows = [];
     const row = (r, kind) => {
         const ok = r.status === 'pass';
         const a = ok ? aggregate(r.docs.map(d => d.score)) : null;
         const cells = [r.label || r.model, kind, ms(r.loadMs), ms(r.inferMsPerDoc), r.heapSupported ? '+' + mb(r.heapPeakDeltaMB) : 'n/a', ok ? pct(a.recall) : '—', ok ? pct(a.microRecall) : '—', ok ? pct(a.precision) : '—', ok ? pct(a.f1) : '—'];
         if (hasReid) cells.push(ok ? pct(a.quasi) : '—', ok ? (a.groups ?? '—') : '—', ok ? pct(a.over) + (a.lost.length ? ` (${a.lost.join(', ')})` : '') : '—');
         cells.push(ok ? perTypeCell(a.perType) : '—', ok ? 'pass' : `${r.status}${r.error ? ': ' + r.error : ''}${r.reason ? ': ' + r.reason : ''}`);
-        return `| ${cells.join(' | ')} |`;
+        tableRows.push({ f1: ok ? a.f1 : -1, line: `| ${cells.join(' | ')} |` });
     };
-    for (const r of ners) lines.push(row(r, 'NER'));
-    for (const r of llms) lines.push(row(r, 'LLM'));
+    for (const r of ners) row(r, 'NER');
+    for (const r of llms) row(r, 'LLM');
     // unions
     const docsById = new Map(fixtures[set].documents.map(d => [d.id, d]));
     for (const n of ners.filter(r => r.status === 'pass')) for (const l of llms.filter(r => r.status === 'pass')) {
@@ -82,8 +84,9 @@ for (const [set, desc] of Object.entries(SETS)) {
         const cells = [`${n.label} + ${l.label}`, 'NER + LLM (union)', '—', ms((n.inferMsPerDoc || 0) + (l.inferMsPerDoc || 0)), '—', pct(a.recall), pct(a.microRecall), pct(a.precision), pct(a.f1)];
         if (hasReid) cells.push(pct(a.quasi), a.groups ?? '—', pct(a.over) + (a.lost.length ? ` (${a.lost.join(', ')})` : ''));
         cells.push(perTypeCell(a.perType), `computed on ${ids.length} docs`);
-        lines.push(`| ${cells.join(' | ')} |`);
+        tableRows.push({ f1: a.f1, line: `| ${cells.join(' | ')} |` });
     }
+    for (const { line } of tableRows.sort((x, y) => y.f1 - x.f1)) lines.push(line);
     lines.push('');
     // misses worth reading (interview / small sets): list missed identifiers for the best union
     if (set !== 'anonymize-meddeid') {
@@ -121,7 +124,9 @@ if (summaryJs) {
             u.results[set] = { recall: +a.recall.toFixed(3), precision: +a.precision.toFixed(3), f1: +a.f1.toFixed(3), quasi: a.quasi == null ? null : +a.quasi.toFixed(3), groups: a.groups, over: a.over == null ? null : +a.over.toFixed(3), docs: ids.length };
         }
     }
-    const best = unions.slice().sort((a, b) => setKeys.reduce((n, k) => n + (b.results[k]?.recall || 0), 0) - setKeys.reduce((n, k) => n + (a.results[k]?.recall || 0), 0))[0] || null;
+    // Best = highest F1 averaged over the sets (the app's default anonymize combination follows it).
+    const meanF1 = u => setKeys.reduce((n, k) => n + (u.results[k]?.f1 || 0), 0) / setKeys.length;
+    const best = unions.slice().sort((a, b) => meanF1(b) - meanF1(a))[0] || null;
     const summary = {
         date: new Date(data.generated || Date.now()).toISOString().slice(0, 10),
         sourceFile: rel(file),

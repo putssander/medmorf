@@ -32,6 +32,7 @@ import {
 } from './text-chunking.js?v=2026-09-10-bench-1';
 import { createDetectionKey, isObviousGarbage, filterLLMEntities, normalizeForMatch } from './anonymize-filters.js?v=2026-09-10-bench-1';
 import { parseEntityArray, streamEntityExtraction } from './llm-extract.js?v=2026-09-10-bench-1';
+import { buildExcelCellIndex, summarizeExcelSpans } from './anonymize-excel-stats.js?v=dev-unstamped';
 import {
     classifyModelRisk,
     describeMemoryCeiling,
@@ -41,9 +42,13 @@ import {
 } from './device-capabilities.js?v=2026-05-28-resource-1';
 import { registerLoadedModel, unregisterLoadedModel, markModelUsed } from './lifecycle-manager.js?v=2026-05-21-stability-1';
 
+// Defaults follow the published benchmark (src/benchmark-published.js, ranked by
+// F1 averaged over the three datasets): Multilingual BERT NER + Qwen3.5 2B is the
+// best combination; GLiNER PII Edge is the best detector-only fallback for devices
+// that cannot run Qwen. tests/test-benchmark-published.mjs keeps these in sync.
 const DEFAULT_MODEL = 'Qwen3.5-2B-q4f16_1-MLC';
-const DEFAULT_ANON_NER_MODEL_ID = 'openai_privacy_filter';
-const FALLBACK_ANON_NER_MODEL_ID = 'multilang_pii';
+const DEFAULT_ANON_NER_MODEL_ID = 'multilingual_ner';
+const FALLBACK_ANON_NER_MODEL_ID = 'gliner_pii';
 
 // Qwen3.5 only: same memory class and runtime as Qwen3 but far better PII recall
 // (Benchmark tab, 2026-08-30: 2B 83% vs Qwen3 1.7B 52%). Qwen3.5-0.8B is omitted
@@ -105,6 +110,12 @@ let activeEntity = null;            // entity currently highlighted in table + p
 let occurrenceCursor = new Map();   // entity → occurrence index last shown by jumpToEntity
 const unfoldedEntities = new Set(); // entities whose occurrence list is open in the table
 let anonExcelRunConfig = null;      // { sheetName, selectedCols } captured when an Excel run starts
+let anonExcelIndex = null;          // where each selected cell sits in anonSourceText (Excel runs only)
+let anonExcelStats = null;          // rows / cells / types with PII under the current mapping
+let excelPreviewPinnedRow = null;   // sheet row shown on top after "Show in text" outside the subset
+// Large sheets: the preview lists only rows that contain PII, capped here; the
+// download still contains every row.
+const EXCEL_PREVIEW_ROWS = 50;
 let showSelectionPopover = null;    // set by setupSelectionPopover(); used by jumpToRawText()
 // Undo stack of mapping snapshots (one per user edit) so a mis-click never
 // silently drops a real identifier before download.
@@ -142,6 +153,7 @@ const anonDetectionSummary = document.getElementById('anonDetectionSummary');
 const llmAddedSection = document.getElementById('llmAddedSection');
 const anonPreviewText = document.getElementById('anonPreviewText');
 const anonPreviewMeta = document.getElementById('anonPreviewMeta');
+const anonExcelStatsEl = document.getElementById('anonExcelStats');
 const mappingAddEntity = document.getElementById('mappingAddEntity');
 const mappingAddType = document.getElementById('mappingAddType');
 const mappingAddReplacement = document.getElementById('mappingAddReplacement');
@@ -235,7 +247,7 @@ function getDefaultCombinationFeasibility(snap = getCapabilitiesSync()) {
     if (!webgpuSupported) {
         return {
             feasible: false,
-            reason: 'OpenAI Privacy Filter and Qwen require WebGPU.',
+            reason: `${llmOption?.label || 'Qwen'} requires WebGPU; using ${getNERModelOption(FALLBACK_ANON_NER_MODEL_ID)?.label || 'a CPU detector'} only.`,
             peakMB,
             ceilingMB: 0,
         };
@@ -248,8 +260,8 @@ function getDefaultCombinationFeasibility(snap = getCapabilitiesSync()) {
     return {
         feasible,
         reason: feasible
-            ? 'OpenAI Privacy Filter + Qwen3.5 2B fits the current browser/device estimate.'
-            : `OpenAI Privacy Filter + Qwen3.5 2B needs about ${fmtResourceSize(peakMB)}; safe ceiling is ${fmtResourceSize(ceilingMB)}.`,
+            ? `${nerOption?.label} + ${llmOption?.label} (best measured F1) fits the current browser/device estimate.`
+            : `${nerOption?.label} + ${llmOption?.label} needs about ${fmtResourceSize(peakMB)}; safe ceiling is ${fmtResourceSize(ceilingMB)}.`,
         peakMB,
         ceilingMB,
         risk,
@@ -2027,18 +2039,12 @@ async function anonymizeExcel(pipeline) {
     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
     const selectedCols = getSelectedAnonColumns();
 
-    const textCells = [];
-    const dataRows = jsonData.slice(1);
-    for (const row of dataRows) {
-        for (const colIdx of selectedCols) {
-            const val = row[colIdx];
-            if (val && typeof val === 'string' && val.trim()) {
-                textCells.push(val);
-            }
-        }
-    }
-
-    const allText = textCells.join('\n---\n');
+    // One joined text for detection and review; the index maps every detection
+    // back to its sheet row and column for the summary and the PII-row preview.
+    const origin = worksheet['!ref'] ? XLSX.utils.decode_range(worksheet['!ref']).s : { r: 0, c: 0 };
+    anonExcelIndex = buildExcelCellIndex(jsonData, selectedCols, origin);
+    excelPreviewPinnedRow = null;
+    const allText = anonExcelIndex.text;
     // Keep the joined cell text so the review panel can quote each entity and
     // mapping edits can be re-applied to the workbook without the models.
     anonSourceText = allText;
@@ -2236,6 +2242,10 @@ function renderResults() {
 
     // Occurrence index drives the quotes, counts, click-to-jump and the preview.
     rebuildPreviewIndex();
+    anonExcelStats = (anonDocType === 'excel' && anonExcelIndex && typeof anonSourceText === 'string')
+        ? summarizeExcelSpans(anonExcelIndex, previewSpans)
+        : null;
+    renderExcelStats();
 
     mappingTableBody.innerHTML = '';
     const entries = Object.entries(currentMapping.entities).sort((a, b) => a[1].type.localeCompare(b[1].type));
@@ -2407,7 +2417,15 @@ function jumpToEntity(entity, step = 1, { occurrence = null } = {}) {
         ? Math.max(0, Math.min(occurrence, idxs.length - 1))
         : (((prev + step) % idxs.length) + idxs.length) % idxs.length;
     occurrenceCursor.set(entity, k);
-    const mark = anonPreviewText?.querySelector(`mark[data-span="${idxs[k]}"]`);
+    let mark = anonPreviewText?.querySelector(`mark[data-span="${idxs[k]}"]`);
+    if (!mark && anonDocType === 'excel' && anonExcelStats) {
+        const cellIndex = anonExcelStats.spanCell[idxs[k]];
+        if (cellIndex >= 0) {
+            excelPreviewPinnedRow = anonExcelIndex.cells[cellIndex].row;
+            renderPreview();
+            mark = anonPreviewText?.querySelector(`mark[data-span="${idxs[k]}"]`);
+        }
+    }
     scrollPreviewToElement(mark);
     flashMark(mark);
     refreshOriginalCell(entity);
@@ -2467,6 +2485,10 @@ function renderPreview() {
         if (anonPreviewMeta) anonPreviewMeta.textContent = '';
         return;
     }
+    if (anonDocType === 'excel' && anonExcelStats) {
+        renderExcelPreview();
+        return;
+    }
     const truncated = anonSourceText.length > PREVIEW_MAX_CHARS;
     const text = truncated ? anonSourceText.slice(0, PREVIEW_MAX_CHARS) : anonSourceText;
     const frag = document.createDocumentFragment();
@@ -2475,15 +2497,7 @@ function renderPreview() {
         const span = previewSpans[i];
         if (span.start >= text.length) break;
         if (span.start > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, span.start)));
-        const mark = document.createElement('mark');
-        mark.className = `anon-hl entity-hl-${String(span.type).toLowerCase()}${span.entity === activeEntity ? ' is-active' : ''}${span.disabled ? ' is-disabled' : ''}`;
-        mark.dataset.span = String(i);
-        mark.dataset.entity = span.entity;
-        mark.title = span.disabled
-            ? `${span.entity} (${span.type}) is switched off: it stays in the output as-is. Click to review.`
-            : `${span.entity} → ${span.replacement} (${span.type}). Click to review.`;
-        mark.textContent = (previewMode === 'original' || span.disabled) ? text.slice(span.start, span.end) : span.replacement;
-        frag.appendChild(mark);
+        frag.appendChild(createPreviewMark(span, i, text));
         cursor = Math.min(span.end, text.length);
     }
     if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
@@ -2502,6 +2516,110 @@ function renderPreview() {
         const off = Object.values(currentMapping.entities).filter((info) => !isEntityEnabled(info)).length;
         anonPreviewMeta.textContent = `(${chars.toLocaleString()} chars · ${entryCount} entities${off ? `, ${off} off` : ''} · ${replaced} occurrences replaced${scope})`;
     }
+}
+
+// One clickable highlight for span `i` (index into previewSpans) of `text`.
+function createPreviewMark(span, i, text) {
+    const mark = document.createElement('mark');
+    mark.className = `anon-hl entity-hl-${String(span.type).toLowerCase()}${span.entity === activeEntity ? ' is-active' : ''}${span.disabled ? ' is-disabled' : ''}`;
+    mark.dataset.span = String(i);
+    mark.dataset.entity = span.entity;
+    mark.title = span.disabled
+        ? `${span.entity} (${span.type}) is switched off: it stays in the output as-is. Click to review.`
+        : `${span.entity} → ${span.replacement} (${span.type}). Click to review.`;
+    mark.textContent = (previewMode === 'original' || span.disabled) ? text.slice(span.start, span.end) : span.replacement;
+    return mark;
+}
+
+// Excel preview: only rows that contain PII (first EXCEL_PREVIEW_ROWS, sheet
+// order), each with the cells that hold a detection. A row reached through
+// "Show in text" outside that subset is pinned on top. The marks use the same
+// previewSpans indices as the text preview, so review, popover and undo work
+// unchanged; the download still holds every row.
+function excelPreviewRowBlock(entry, pinned) {
+    const block = document.createElement('div');
+    block.className = `anon-xl-row${pinned ? ' is-pinned' : ''}`;
+    const label = document.createElement('div');
+    label.className = 'anon-xl-row-label';
+    label.textContent = pinned ? `Row ${entry.row} · selected occurrence` : `Row ${entry.row}`;
+    block.appendChild(label);
+    for (const { cellIndex, spans } of entry.cells) {
+        const cell = anonExcelIndex.cells[cellIndex];
+        const column = anonExcelIndex.columns[cell.col];
+        const line = document.createElement('div');
+        line.className = 'anon-xl-cell';
+        const name = document.createElement('span');
+        name.className = 'anon-xl-col';
+        name.textContent = `${column?.name || 'Column'} (${column?.letter || ''})`;
+        line.appendChild(name);
+        const body = document.createElement('span');
+        let cursor = cell.start;
+        for (const i of spans) {
+            const span = previewSpans[i];
+            if (span.start > cursor) body.appendChild(document.createTextNode(anonSourceText.slice(cursor, span.start)));
+            body.appendChild(createPreviewMark(span, i, anonSourceText));
+            cursor = Math.min(span.end, cell.end);
+        }
+        if (cursor < cell.end) body.appendChild(document.createTextNode(anonSourceText.slice(cursor, cell.end)));
+        line.appendChild(body);
+        block.appendChild(line);
+    }
+    return block;
+}
+
+function renderExcelPreview() {
+    const stats = anonExcelStats;
+    const shown = stats.rows.slice(0, EXCEL_PREVIEW_ROWS);
+    const frag = document.createDocumentFragment();
+    const note = document.createElement('div');
+    note.className = 'anon-xl-preview-note';
+    note.textContent = stats.rowsWithPii === 0
+        ? 'No row contains an active detection. The download contains every row unchanged.'
+        : `Showing ${shown.length.toLocaleString()} of ${stats.rowsWithPii.toLocaleString()} rows with PII, in sheet order, and only the cells with detections. The download contains all ${stats.dataRows.toLocaleString()} rows.`;
+    frag.appendChild(note);
+    if (excelPreviewPinnedRow !== null && !shown.some((r) => r.row === excelPreviewPinnedRow)) {
+        const cells = [];
+        anonExcelIndex.cells.forEach((cell, cellIndex) => {
+            if (cell.row !== excelPreviewPinnedRow) return;
+            const spans = stats.spansOfCell(cellIndex);
+            if (spans.length) cells.push({ cellIndex, spans });
+        });
+        if (cells.length) frag.appendChild(excelPreviewRowBlock({ row: excelPreviewPinnedRow, cells }, true));
+    }
+    for (const entry of shown) frag.appendChild(excelPreviewRowBlock(entry, false));
+    anonPreviewText.replaceChildren(frag);
+    anonPreviewText.classList.toggle('is-original', previewMode === 'original');
+    if (anonPreviewMeta) {
+        const entryCount = Object.keys(currentMapping.entities).length;
+        const off = Object.values(currentMapping.entities).filter((info) => !isEntityEnabled(info)).length;
+        anonPreviewMeta.textContent = `(${shown.length.toLocaleString()} of ${stats.rowsWithPii.toLocaleString()} PII rows shown · ${entryCount} entities${off ? `, ${off} off` : ''} · ${stats.occurrences.toLocaleString()} occurrences replaced · selected cells)`;
+    }
+}
+
+// Summary for Excel runs: how many rows / cells hold PII under the current
+// mapping. Recomputed on every mapping edit (toggle, add, delete, undo).
+function renderExcelStats() {
+    if (!anonExcelStatsEl) return;
+    const stats = anonExcelStats;
+    if (!stats) { anonExcelStatsEl.hidden = true; anonExcelStatsEl.replaceChildren(); return; }
+    const n = (x) => x.toLocaleString();
+    const pctOf = (a, b) => b ? `${(100 * a / b).toFixed(a && a / b < 0.001 ? 2 : 1)}%` : '0%';
+    const types = Object.entries(stats.perType).sort((a, b) => b[1] - a[1]);
+    const entities = Object.values(currentMapping.entities).filter(isEntityEnabled).length;
+    anonExcelStatsEl.innerHTML = `
+        <h4>Sheet summary · ${escapeHTML(anonExcelRunConfig?.sheetName || '')}</h4>
+        <div class="anon-xl-tiles">
+            <div><span>Rows with PII</span><strong>${n(stats.rowsWithPii)}</strong><small>of ${n(stats.dataRows)} data rows (${pctOf(stats.rowsWithPii, stats.dataRows)})</small></div>
+            <div><span>Cells changed</span><strong>${n(stats.cellsWithPii)}</strong><small>of ${n(stats.textCells)} text cells in the selected columns</small></div>
+            <div><span>Replacements</span><strong>${n(stats.occurrences)}</strong><small>occurrences of ${n(entities)} active entities</small></div>
+        </div>
+        ${types.length ? `<p class="anon-xl-types">${types.map(([type, count]) => `<span class="entity-tag entity-tag-${escapeHTML(type.toLowerCase())}">${escapeHTML(type)}</span> ${n(count)}`).join(' · ')}</p>` : ''}
+        <div class="mapping-table-scroll"><table class="mapping-table anon-xl-columns">
+            <thead><tr><th>Column</th><th>Cells with PII</th><th>Rows with PII</th></tr></thead>
+            <tbody>${stats.perColumn.map((c) => `<tr><td>${escapeHTML(c.name)} <span class="anon-xl-letter">${escapeHTML(c.letter)}</span></td><td>${n(c.cells)}</td><td>${n(c.rows)} (${pctOf(c.rows, stats.dataRows)})</td></tr>`).join('')}</tbody>
+        </table></div>
+        <p class="storage-hint">Counts follow the current mapping and update when you switch entities off, add or delete them, or undo. They count matches of the detected entities only: identifiers the models missed are not counted. Only text cells in the selected columns are scanned; numeric cells stay as they are.</p>`;
+    anonExcelStatsEl.hidden = false;
 }
 
 // ── Undo ─────────────────────────────────────────────────────────────────────
@@ -3456,18 +3574,32 @@ window.medmorfAnonymizeData = {
     // ?anon-debug=1 only: render a result panel from given text + entities so the
     // review UI (quotes, highlights, toggles, undo) can be tested without loading
     // any model. Never used in normal operation.
-    debugSeed: (!new URLSearchParams(location.search).has('anon-debug')) ? undefined : ({ text, entities = [], source = 'llm' }) => {
-        anonDocument = new File([text], 'debug-seed.txt', { type: 'text/plain' });
-        anonDocType = 'text';
-        anonWorkbook = null;
-        anonSourceText = String(text);
+    // With `rows` (array of arrays, row 0 = header) it seeds an Excel run on the
+    // `columns` indices instead, to exercise the sheet summary and PII-row preview.
+    debugSeed: (!new URLSearchParams(location.search).has('anon-debug')) ? undefined : ({ text, rows = null, columns = null, entities = [], source = 'llm' }) => {
+        if (rows) {
+            anonDocument = new File(['debug'], 'debug-seed.xlsx');
+            anonDocType = 'excel';
+            anonWorkbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(anonWorkbook, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+            const selectedCols = columns || (rows[0] || []).map((_, i) => i);
+            anonExcelRunConfig = { sheetName: 'Sheet1', selectedCols };
+            anonExcelIndex = buildExcelCellIndex(rows, selectedCols);
+            excelPreviewPinnedRow = null;
+            anonSourceText = anonExcelIndex.text;
+        } else {
+            anonDocument = new File([text], 'debug-seed.txt', { type: 'text/plain' });
+            anonDocType = 'text';
+            anonWorkbook = null;
+            anonSourceText = String(text);
+        }
         currentMapping = { version: 1, entities: {}, counters: {} };
         manualEntities = new Set();
         resetDetectionBreakdown(source);
         resetReviewState();
         recordDetectedEntities(source === 'ner' ? 'ner' : 'llm', entities);
         for (const { entity, type } of entities) getOrCreateReplacement(entity, type);
-        anonymizedResult = anonymizeText(anonSourceText);
+        anonymizedResult = rows ? applyMappingToWorkbook() : anonymizeText(anonSourceText);
         if (anonDocInfo) anonDocInfo.style.display = 'block';
         if (anonDocName) anonDocName.textContent = anonDocument.name;
         renderResults();
@@ -3481,6 +3613,10 @@ window.medmorfAnonymizeData = {
         currentMapping = { version: 1, entities: {}, counters: {} };
         anonSourceText = null;
         anonExcelRunConfig = null;
+        anonExcelIndex = null;
+        anonExcelStats = null;
+        excelPreviewPinnedRow = null;
+        renderExcelStats();
         manualEntities = new Set();
         resetDetectionBreakdown(getSelectedPipeline());
         resetReviewState();

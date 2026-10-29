@@ -384,8 +384,8 @@ export const PUBLISHED_BENCHMARK = {
     }
   ],
   "best": {
-    "ner": "gliner_pii",
+    "ner": "multilingual_ner",
     "llm": "Qwen3.5-2B-q4f16_1-MLC",
-    "label": "GLiNER PII Edge (ModernBERT) + Qwen3.5 2B"
+    "label": "Multilingual BERT NER + Qwen3.5 2B"
   }
 };

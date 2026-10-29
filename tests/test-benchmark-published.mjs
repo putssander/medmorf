@@ -30,4 +30,14 @@ for (const set of published.sets) {
         check(union.results[set.key], scores);
     }
 }
-console.log('PASS: published recall, precision and document-averaged F1 match raw runs and recomputed unions.');
+// The published ranking is by F1 averaged over the sets; the app's anonymize defaults must follow it.
+const meanF1 = results => published.sets.reduce((n, set) => n + (results[set.key]?.f1 ?? 0), 0) / published.sets.length;
+const bestUnion = published.unions.slice().sort((a, b) => meanF1(b.results) - meanF1(a.results))[0];
+assert.deepEqual(published.best, { ner: bestUnion.ner, llm: bestUnion.llm, label: bestUnion.label }, 'best must be the union with the highest mean F1');
+const bestDetector = Object.entries(published.models).filter(([, m]) => m.kind === 'ner').sort(([, a], [, b]) => meanF1(b.results) - meanF1(a.results))[0][0];
+const handler = fs.readFileSync(new URL('../src/anonymize-handler.js', import.meta.url), 'utf8');
+const constant = name => handler.match(new RegExp(`const ${name} = '([^']+)'`))?.[1];
+assert.equal(constant('DEFAULT_ANON_NER_MODEL_ID'), published.best.ner, 'default detector must be the best-F1 combination');
+assert.equal(constant('DEFAULT_MODEL'), published.best.llm, 'default LLM must be the best-F1 combination');
+assert.equal(constant('FALLBACK_ANON_NER_MODEL_ID'), bestDetector, 'fallback detector must be the best-F1 detector-only model');
+console.log('PASS: published recall, precision and document-averaged F1 match raw runs and recomputed unions; anonymize defaults follow the best mean F1.');

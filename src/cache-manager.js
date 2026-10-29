@@ -1044,6 +1044,8 @@ function refreshPersonalDataView() {
         if (a.hasMapping()) items.push({ label: 'Entity mapping', detail: `${a.mappingCount()} entities detected`, type: 'data' });
     }
 
+    if (window.medmorfDataPromptData?.hasData()) items.push({ label: 'Data prompt analysis', detail: 'Local profiles, descriptions or prompt draft', type: 'data' });
+
     const s = window.medmorfSummarizeData;
     if (s) {
         if (s.hasDocument()) items.push({ label: 'Summarization document', detail: s.documentName(), type: 'file' });
@@ -1080,6 +1082,7 @@ function refreshPersonalDataView() {
 }
 
 async function clearAllPersonalData() {
+    if (window.medmorfDataPromptData) window.medmorfDataPromptData.clearAll();
     if (window.medmorfTranslationData) await window.medmorfTranslationData.clearAll();
     if (window.medmorfAnonymizeData) await window.medmorfAnonymizeData.clearAll();
     if (window.medmorfSummarizeData) await window.medmorfSummarizeData.clearAll();

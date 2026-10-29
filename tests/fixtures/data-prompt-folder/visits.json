@@ -1,0 +1,5 @@
+[
+  {"visit_id":"VX-001","parent_id":"0001","visit_date":"2025-01-01","score":1.5},
+  {"visit_id":"VX-002","parent_id":"0001","visit_date":"2025-01-02","score":2.5},
+  {"visit_id":"VX-003","parent_id":"0002","visit_date":"2025-01-03","score":null}
+]

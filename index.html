@@ -186,6 +186,7 @@
                 </svg>
                 Summarize
             </button>
+            <button class="tab-btn" data-tab="data-prompt">Data prompt</button>
             <button class="tab-btn" data-tab="speech">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -628,9 +629,9 @@
                                 <option value="ner">NER only</option>
                             </select>
                             <select id="anonNerModelSelect" hidden aria-hidden="true">
-                                <option value="multilang_pii" selected>Multilingual PII NER (XLM-RoBERTa)</option>
+                                <option value="multilang_pii">Multilingual PII NER (XLM-RoBERTa)</option>
                                 <option value="gliner_pii">GLiNER PII Edge (ModernBERT)</option>
-                                <option value="multilingual_ner">Multilingual BERT NER</option>
+                                <option value="multilingual_ner" selected>Multilingual BERT NER</option>
                                 <option value="openai_privacy_filter">OpenAI Privacy Filter (1.5B, WebGPU)</option>
                             </select>
                             <select id="anonModelSelect" hidden aria-hidden="true">
@@ -667,9 +668,9 @@
 
                     <details class="hw-details">
                         <summary>How it works · models &amp; hardware</summary>
-                        <p><strong>LLM only</strong> (recommended on WebGPU devices): Qwen3.5 handles all PII detection in a single pass.</p>
-                        <p><strong>NER + LLM</strong>: Run a NER model first, then let the LLM verify and catch remaining PII. Useful for additional coverage or comparison.</p>
-                        <p><strong>NER only</strong>: Run just the selected NER model. Fastest option, no GPU required, but lower accuracy.</p>
+                        <p><strong>NER + LLM</strong> (default on WebGPU devices): Multilingual BERT NER runs first, then Qwen3.5 2B verifies and catches remaining PII. This pair has the best measured F1 on the <a href="#benchmark-anonymize">Benchmark page</a>.</p>
+                        <p><strong>LLM only</strong>: Qwen3.5 handles all PII detection in a single pass.</p>
+                        <p><strong>NER only</strong> (fallback without WebGPU): Run just the selected NER model, GLiNER PII Edge by default. Fastest option, no GPU required, but lower accuracy.</p>
                         <p><strong>Hardware</strong>: LLM modes need a modern GPU or Apple Silicon Mac with WebGPU (Chrome/Edge 113+, Safari 18+). The 4B model needs ~3.9 GB GPU memory; pick a smaller model on devices with limited VRAM. NER-only mode runs on CPU.</p>
                         <ul>
                             <li><strong>Qwen3.5 2B</strong> (default) — ~2.2 GB VRAM. See the Benchmark page for measured identifier detection scores.</li>
@@ -809,6 +810,7 @@
                         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         Anonymization Complete
                     </h3>
+                    <div id="anonExcelStats" class="anon-preview-container anon-xl-stats" hidden aria-live="polite"></div>
                     <div class="anon-preview-container">
                         <h4>Detection Breakdown</h4>
                         <p id="anonDetectionSummary" class="storage-hint"></p>
@@ -1102,6 +1104,61 @@
             <!-- ═══════════════════════════════════════════ -->
             <!-- SPEECH TAB                                 -->
             <!-- ═══════════════════════════════════════════ -->
+            <div class="tab-panel" id="tab-data-prompt">
+                <header class="dp-hero">
+                    <div><span class="dp-eyebrow">DATA WORKSPACE</span><h2>Know your data.<br><span>Build a better prompt.</span></h2><p>Turn a folder of real data into a clear specification for synthetic data.</p></div>
+                    <div class="dp-local-badge"><span aria-hidden="true">●</span> Analysed on your device</div>
+                </header>
+                <nav class="dp-steps" aria-label="Data prompt workflow"><a href="#dpImport"><span>01</span> Add data</a><a href="#dpExplore"><span>01</span> Descriptors</a><a href="#dpExport"><span>↗</span> Take your prompt</a><a href="#dpConfigure"><span>02</span> Optional enrichment</a></nav>
+                <section class="dp-panel dp-import" id="dpImport">
+                    <div class="dp-section-heading"><div><span class="dp-eyebrow">START HERE</span><h3>Your files. One workspace.</h3><p>Choose a folder to analyse multiple files together, or select individual files.</p></div><button id="dpClear" class="btn dp-secondary" type="button">Clear workspace</button></div>
+                    <div class="dp-upload-grid">
+                        <label class="dp-upload"><span class="dp-upload-icon" aria-hidden="true">▤</span><strong>Read a local data folder</strong><span>Every supported file, organised in one view.</span><input id="dpFolder" type="file" webkitdirectory multiple disabled aria-label="Read a local data folder" aria-describedby="dpLocalFilesNote"></label>
+                        <label class="dp-upload dp-upload-secondary"><span class="dp-upload-icon" aria-hidden="true">＋</span><strong>Read local files</strong><span>Mix spreadsheets and structured data.</span><input id="dpFiles" type="file" accept=".csv,.tsv,.xlsx,.json" multiple disabled aria-label="Read local data files" aria-describedby="dpLocalFilesNote"></label>
+                    </div>
+                    <p class="dp-editor-note" id="dpLocalFilesNote">Files are read into this browser’s memory for local analysis. They are not uploaded or saved in browser storage. Your browser may call folder selection “upload” and ask whether you trust this site; that grants the page access to the selected files. Medmorf processes them locally. Use Clear workspace to discard the analysis.</p>
+                    <div class="dp-import-footer"><span class="dp-formats">CSV <span>·</span> TSV <span>·</span> XLSX <span>·</span> JSON</span><details class="dp-help"><summary>Formats & limits</summary><p>CSV/TSV require unique column headers; JSON must contain flat records. XLSX includes all sheets. Limits: 5 MB/file, 10 MB/selection, 20 tables, 200 columns total, 20,000 rows and 100 columns/table. A new selection replaces the current analysis. Unsupported or oversized files are reported below.</p></details></div>
+                </section>
+                <p id="dpStatus" role="status" aria-live="polite">Loading local file tools…</p>
+                <section class="dp-explore" id="dpExplore" hidden>
+                    <div class="dp-section-heading"><div><span class="dp-eyebrow">PHASE 1 · NO MODEL REQUIRED</span><h3>Measured descriptors</h3></div><span class="dp-pill">Local JavaScript analysis</span></div>
+                    <div class="dp-metrics" aria-live="polite"><div><strong id="dpFileCount">0</strong><span>Files</span></div><div><strong id="dpTableCount">0</strong><span>Tables</span></div><div><strong id="dpRowCount">0</strong><span>Rows across tables</span></div><div><strong id="dpColumnCount">0</strong><span>Columns across tables</span></div></div>
+                    <label class="dp-scope">Prompt scope<select id="dpPhase"><option value="descriptors">Phase 1 only · measured descriptors</option><option value="detailed">Phase 1 + Phase 2 · descriptions & suggestions</option></select></label><p id="dpScopeNote" role="status"></p>
+                    <label class="dp-toggle"><input id="dpAllStatistics" type="checkbox" disabled>Include statistics for all tables</label>
+                    <p class="dp-editor-note">Applies to every column in this analysis. A mixed checkbox means some columns are enabled. Table and column switches still let you choose individually; measured profiles remain visible locally.</p>
+                    <div id="dpTables"></div>
+                    <details class="dp-help dp-guidance"><summary>About the statistics & what gets shared</summary><p>Each table shows column names, data types, missingness, distinct counts and descriptive statistics. Numeric values and text lengths include min, max, mean, sample SD, median, quartiles and IQR. Booleans show counts and percentages. All column settings are editable in the profile table. Directly below it are three illustrative synthetic rows: non-exempt values are checked against their source column, while binary, boolean and empty values can repeat. Generic text categories require explicit approval for reuse. The preview has a separate prompt-export option. Novelty alone is not anonymity; numeric ranges without unused candidates block the preview. Open the text-pattern details in its table row to see structural quirks, generation challenges and fixed fictional examples. These contain no extracted names, organisations, locations or source passages and can be included separately in the prompt. Patterns must occur in at least five non-empty cells; this is not a privacy guarantee or semantic analysis. Numeric-looking identifiers may be inferred as numbers: specify their handling in column rules.</p><p>Prompts include table names by default (filename without extension, or Excel sheet name). Edit Table name in prompt above each table to replace identifying parts; clear it to use the generic table alias. Folder paths stay local. Prompts include original column names by default; uncheck Column name in any row to use its alias. Review headers for identifying information. Measured statistics are included by default; switch off Statistics for any column you want to withhold. Copying or saving requires your review. Exact ranges and small groups can still be sensitive. This is not anonymization. Sample rows are excluded. Observed text values and counts can be included: they default off for rare, highly unique or long text. Review the Observed text values switch in each text column; repeated values can still identify people. Turning off Statistics also withholds text values.</p></details>
+                </section>
+                <section class="dp-panel dp-export" id="dpExport" hidden><div class="dp-section-heading"><div><span class="dp-eyebrow">READY FOR YOUR NEXT MODEL</span><h3>Your prompt</h3><p>Phase 1 is ready without AI. Choose Phase 1 + Phase 2 above to include editable details. Review it here. Save it or copy it to the model of your choice.</p></div><span class="dp-pill">Manual transfer only</span></div>
+                    <label class="dp-editor-label">Editable prompt<textarea id="dpPrompt" rows="15" spellcheck="false" placeholder="Your prompt will take shape here as you add data and describe what you need."></textarea></label>
+                    <p class="dp-editor-note">Changing the fields above rebuilds this draft and replaces direct edits. Nothing is automatically saved in browser storage.</p>
+                    <div class="dp-export-footer"><label class="dp-review"><input id="dpReviewed" type="checkbox"><span>I’ve reviewed this prompt for sensitive information and unsupported assumptions.</span></label><div class="dp-actions"><button id="dpSave" class="btn dp-secondary" type="button" disabled>Save .txt</button><button id="dpCopy" class="btn dp-primary" type="button" disabled>Copy prompt <span aria-hidden="true">↗</span></button></div></div>
+                </section>
+                <div class="dp-ai-workflow" id="dpConfigure">
+                    <section class="dp-panel dp-assistant"><div class="dp-section-heading"><div><span class="dp-eyebrow">PHASE 2 · OPTIONAL</span><h3>Add meaning and harmonisation suggestions.</h3><p>Let Qwen read only short snippets from the first five rows to describe likely content, meaning, column roles (including IDs), and quirks, and draft the editable fields for you. AI first plans the smallest necessary column groups, then drafts meanings and synthetic examples individually or together. Similar topics alone do not justify grouping. Phase 1 stays available while AI works, if it fails, or if you skip it. Completed AI enrichment opens Phase 2 for review. Terminology suggestions are unverified; no SNOMED or LOINC lookup is performed.</p></div></div>
+                        <button id="dpAI" type="button" class="btn dp-primary" disabled>Run optional Phase 2 <span aria-hidden="true">↗</span></button>
+                        <button id="dpAIStop" type="button" class="btn dp-secondary" hidden>Stop analysis</button>
+                        <span class="dp-model-note">Qwen3.5 2B · ~2.2 GB · First 5 rows only · Desktop WebGPU</span>
+                        <details class="dp-help"><summary>How the local assistant works</summary><p>First use downloads app libraries and model files. Offline use requires cached resources. The local model reads headers, statistics and samples from only the first five data rows per table, capped at 120 characters per cell. Samples stay in memory on this device and are excluded from prompt exports. Drafts fill empty fields and refresh untouched AI drafts; your manual edits are preserved. Sampling is not representative, and model output may still contain identifying details or wrong guesses. Review them before copying or saving the prompt. Suggested row counts and use cases are starting points, not knowledge of your actual goal or clinical validity. The model is released after each run. Nothing is sent to a frontier model.</p></details>
+                        <div class="dp-ai-progress" aria-label="Local AI progress">
+                            <p id="dpAIActivity" role="status" aria-live="polite">Ready when your files are loaded.</p>
+                            <progress id="dpAIProgress" value="0" max="1" aria-label="Analysis tasks processed"></progress>
+                            <span id="dpAIElapsed" class="dp-model-note"></span>
+                            <ol class="dp-ai-stages"><li id="dpStagePrepare">1. Prepare local model</li><li id="dpStageFiles">2. Understand files</li><li id="dpStageColumns">3. Plan minimal groups and draft columns</li><li id="dpStageBrief">4. Write generation brief</li><li id="dpStageReview">5. Apply drafts for review</li></ol>
+                        </div>
+                        <details class="dp-help"><summary>Safe model diagnostics</summary><p>Only response sizes, completion status and format flags are shown. No source samples or model text are logged.</p><label>Diagnostic metadata<textarea id="dpAIDiagnostics" rows="5" readonly></textarea></label></details>
+                        <label>Draft status<textarea id="dpSuggestions" rows="3" readonly placeholder="AI drafts appear in the editable table fields. Completion and any failures will be reported here."></textarea></label>
+                        <details class="dp-context" id="dpMissingPanel" open hidden><summary>Context still to add</summary><pre id="dpMissing" aria-live="polite">Add files to see what context is needed.</pre></details>
+                    </section>
+                    <section class="dp-panel" id="dpBrief" hidden><div class="dp-section-heading"><div><span class="dp-eyebrow">GENERATION BRIEF</span><h3>Optional generation brief</h3><p>Local AI can propose purpose, relationships, output format and row count. You can also fill these in yourself. These fields are excluded from Phase 1 prompts.</p></div></div>
+                        <label>Purpose & population<textarea id="dpPurpose" rows="3" placeholder="The local AI will draft a suggested purpose and population here."></textarea></label>
+                        <div class="dp-field-grid"><label>Rows per table<input id="dpCount" type="number" min="1" step="1" placeholder="1,000"></label><label>Output format<select id="dpFormat"><option>CSV</option><option>JSON</option><option>Python generator producing CSV</option></select></label></div>
+                        <label>Relationships & rules<textarea id="dpRelationships" rows="3" placeholder="The local AI will draft relationship assumptions and rules to review."></textarea></label>
+                    </section>
+                </div>
+
+            </div>
+
             <div class="tab-panel" id="tab-speech">
 
                 <div class="stt-header">
@@ -1875,7 +1932,7 @@
                         </div>
                         <div class="auto-clear-info">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            Auto-clears after 30 minutes of inactivity
+                            Use Clear all personal data when you finish
                         </div>
                         <div class="auto-clear-info">
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
@@ -2005,6 +2062,13 @@
     </script>
     <script type="module" src="src/app.js?v=2026-09-10-review-2"></script>
     <script type="module" src="src/anonymize-handler.js?v=2026-09-10-review-1"></script>
+    <script type="module">
+        import('./src/data-prompt-handler.js?v=dev-unstamped').catch(error => {
+            document.getElementById('dpFiles').disabled = true;
+            document.getElementById('dpFolder').disabled = true;
+            document.getElementById('dpStatus').textContent = 'Local file tools could not start. Reload this page while the app is available, then select your files again. No files were read. ' + error.message;
+        });
+    </script>
     <script type="module" src="src/summarize-handler.js?v=2026-08-31-simple-download-1"></script>
     <script type="module" src="src/stt-handler.js?v=2026-08-31-simple-download-1"></script>
     <script type="module" src="src/cache-manager.js?v=2026-08-31-simple-download-1"></script>

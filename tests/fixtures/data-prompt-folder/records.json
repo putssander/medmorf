@@ -1,0 +1,8 @@
+[
+  {"record_id":"0001","age_years":20,"active":true,"note":"Fictional note: no concerns."},
+  {"record_id":"0002","age_years":30,"active":false,"note":"Fictional note: review\nnext week."},
+  {"record_id":"0003","age_years":40,"active":true,"note":"Fictieve notitie: geen klachten."},
+  {"record_id":"0004","age_years":null,"active":null,"note":""},
+  {"record_id":"0005","age_years":50,"active":true,"note":"Fictional note: check \"value\" {later}."},
+  {"record_id":"0006","age_years":60,"active":false,"note":"SIXTH_ROW_SENTINEL_DO_NOT_SAMPLE"}
+]

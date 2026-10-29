@@ -499,7 +499,10 @@ ${runner(runnerTable('ner', 'Detectors') + runnerTable('anonllm', 'LLM extractio
 <details><summary>Run log & last output</summary><div id="bmLog" class="bm-log"></div><textarea class="bm-out" id="bmLastOut" aria-label="Last model output" readonly></textarea></details></div></details>`;
 
 // The generated module and downloadable report share the same raw export.
-function renderPublished(selectedSet = PUBLISHED_BENCHMARK?.sets?.[0]?.key) {
+const SORT_METRICS = [['f1', 'F1'], ['recall', 'Recall'], ['precision', 'Precision']];
+let publishedSort = 'f1'; // F1 first; the app's default anonymize combination is the best mean F1.
+function renderPublished(selectedSet = PUBLISHED_BENCHMARK?.sets?.[0]?.key, sortKey = publishedSort) {
+    publishedSort = sortKey;
     const el = $('#bmPublished'); if (!el) return;
     const b = PUBLISHED_BENCHMARK;
     if (!b?.models) { el.innerHTML = emptyPublished('Recall, precision and F1 measure identifier detection.'); return; }
@@ -508,17 +511,26 @@ function renderPublished(selectedSet = PUBLISHED_BENCHMARK?.sets?.[0]?.key) {
     const rows = [
         ...(b.unions || []).map(u => ({ ...u, kind: 'Detector + LLM · computed union' })),
         ...Object.values(b.models).map(m => ({ ...m, kind: m.kind === 'ner' ? 'Detector only' : 'LLM only' }))
-    ].sort((a, c) => (c.results?.[set.key]?.recall ?? -1) - (a.results?.[set.key]?.recall ?? -1));
-    const scores = r => `<dl class="bm-score-trio">${[['recall', 'Recall'], ['precision', 'Precision'], ['f1', 'F1']].map(([key, label]) => `<div><dt>${label}</dt><dd>${pct(r?.[key])}</dd></div>`).join('')}</dl>`;
+    ];
+    const metric = r => r.results?.[set.key]?.[sortKey] ?? -1;
+    rows.sort((a, c) => metric(c) - metric(a) || (c.results?.[set.key]?.f1 ?? -1) - (a.results?.[set.key]?.f1 ?? -1) || a.label.localeCompare(c.label));
+    const sortLabel = SORT_METRICS.find(([key]) => key === sortKey)[1];
+    const isDefault = r => b.best && r.ner === b.best.ner && r.llm === b.best.llm;
+    const scores = r => `<dl class="bm-score-trio">${[['recall', 'Recall'], ['precision', 'Precision'], ['f1', 'F1']].map(([key, label]) => `<div${key === sortKey ? ' class="bm-score-active"' : ''}><dt>${label}</dt><dd>${pct(r?.[key])}</dd></div>`).join('')}</dl>`;
     const url = file => esc(new URL('../' + file, import.meta.url).href);
     el.innerHTML = `<div class="bm-published-intro"><span class="bm-published-date">Measured ${esc(b.date)}</span><p>How many identifiers were found, how reliable the detections were, and the balance between both.</p></div>
     <div class="bm-metric-guide"><p><strong>Recall</strong>Identifiers found. Misses can expose personal data.</p><p><strong>Precision</strong>Detections that were correct. Lower scores mean more unnecessary redaction.</p><p><strong>F1</strong>Balance of precision and recall. Higher is better for all three metrics.</p></div>
     <label class="bm-dataset-label" for="bmPublishedSet">Published dataset</label><select id="bmPublishedSet" class="bm-dataset-select">${b.sets.map(s => `<option value="${esc(s.key)}"${s.key === set.key ? ' selected' : ''}>${esc(s.label.split(' (')[0])}</option>`).join('')}</select>
     <p class="bm-sub">${esc(set.label)} · ${set.docs} document${set.docs === 1 ? '' : 's'} · ${set.items} annotated identifiers</p>
-    <div class="bm-results-list">${rows.map((r, i) => { const result = r.results?.[set.key]; return `<article class="bm-result${i === 0 && typeof result?.recall === 'number' ? ' bm-result-leading' : ''}"><div class="bm-result-name"><span>${i === 0 && typeof result?.recall === 'number' ? 'Highest recall in this dataset' : esc(r.kind)}</span><h4>${esc(r.label)}</h4>${typeof result?.recall !== 'number' ? `<p>${esc(result?.reason || 'Not measured on this dataset')}</p>` : ''}</div>${scores(result)}</article>`; }).join('')}</div>
+    <div class="bm-sort" role="group" aria-label="Sort results by"><span>Sort by</span>${SORT_METRICS.map(([key, label]) => `<button type="button" class="bm-sort-btn" data-bm-sort="${key}" aria-pressed="${key === sortKey}">${label}</button>`).join('')}</div>
+    <div class="bm-results-list">${rows.map((r, i) => { const result = r.results?.[set.key]; const leading = i === 0 && typeof result?.[sortKey] === 'number'; return `<article class="bm-result${leading ? ' bm-result-leading' : ''}"><div class="bm-result-name"><span>${leading ? `Highest ${sortLabel === 'F1' ? 'F1' : sortLabel.toLowerCase()} in this dataset` : esc(r.kind)}${isDefault(r) ? ' <em class="bm-default-tag">App default</em>' : ''}</span><h4>${esc(r.label)}</h4>${typeof result?.recall !== 'number' ? `<p>${esc(result?.reason || 'Not measured on this dataset')}</p>` : ''}</div>${scores(result)}</article>`; }).join('')}</div>
     <p class="bm-review"><strong>Human review remains essential.</strong> These synthetic results do not guarantee anonymization. Combinations of personal and clinical details can still identify someone.</p>
-    <details class="bm-method"><summary>Method, limitations & source data</summary><p>Scores are document averages, with whole-word overlap matching. F1 is calculated per document as 2 × precision × recall ÷ (precision + recall), then averaged; it is not calculated from the rounded averages shown above. Models are ordered by recall, not F1.</p><p>Detector + LLM results are unions of stored predictions. The app’s LLM validation pass is not simulated, so union precision is a lower bound. These are not directly comparable with scores on other datasets. Re-identification risk and per-type misses are in the detailed report.</p><p>${esc(b.environment)}</p><p><a href="${url(b.reportFile)}" target="_blank" rel="noopener noreferrer">Detailed generated report ↗</a> · <a href="${url(b.sourceFile)}" target="_blank" rel="noopener noreferrer">Raw measured export ↗</a></p></details>`;
+    <details class="bm-method"><summary>Method, limitations & source data</summary><p>Scores are document averages, with whole-word overlap matching. F1 is calculated per document as 2 × precision × recall ÷ (precision + recall), then averaged; it is not calculated from the rounded averages shown above. Results are ordered by F1 unless you choose another metric above. The app's default anonymize combination is the detector + LLM pair with the highest F1 averaged over the three datasets.</p><p>Detector + LLM results are unions of stored predictions. The app’s LLM validation pass is not simulated, so union precision is a lower bound. These are not directly comparable with scores on other datasets. Re-identification risk and per-type misses are in the detailed report.</p><p>${esc(b.environment)}</p><p><a href="${url(b.reportFile)}" target="_blank" rel="noopener noreferrer">Detailed generated report ↗</a> · <a href="${url(b.sourceFile)}" target="_blank" rel="noopener noreferrer">Raw measured export ↗</a></p></details>`;
     $('#bmPublishedSet').addEventListener('change', e => { renderPublished(e.target.value); $('#bmPublishedSet').focus({ preventScroll: true }); });
+    el.querySelectorAll('[data-bm-sort]').forEach(button => button.addEventListener('click', () => {
+        renderPublished(set.key, button.dataset.bmSort);
+        el.querySelector(`[data-bm-sort="${button.dataset.bmSort}"]`)?.focus({ preventScroll: true });
+    }));
 }
 
 let mounted = false;
